@@ -1,0 +1,31 @@
+{
+	"name": "directus-extension-flow-manager-staging",
+	"description": "This is a custom module for managing Flow",
+	"icon": "extension",
+	"version": "0.0.2",
+	"author": "Bagus Andreanto<andreanto.bagus@gmail.com>",
+	"keywords": [
+		"directus",
+		"directus-extension",
+		"directus-custom-module"
+	],
+	"directus:extension": {
+		"type": "module",
+		"path": "dist/index.js",
+		"source": "src/index.ts",
+		"host": "^9.26.0"
+	},
+	"scripts": {
+		"build": "directus-extension build",
+		"dev": "directus-extension build -w --no-minify",
+		"link": "directus-extension link"
+	},
+	"devDependencies": {
+		"@directus/extensions-sdk": "9.26.0",
+		"typescript": "^5.1.6",
+		"vue": "^3.3.4"
+	},
+	"dependencies": {
+		"sass": "^1.63.6"
+	}
+}
