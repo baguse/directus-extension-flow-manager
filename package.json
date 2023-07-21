@@ -2,8 +2,10 @@
 	"name": "directus-extension-flow-manager",
 	"description": "This is a custom module for managing Flow",
 	"icon": "extension",
-	"version": "1.0.1",
-  "author": "Bagus Andreanto<andreanto.bagus@gmail.com>",
+	"version": "1.1.0",
+	"author": "Bagus Andreanto<andreanto.bagus@gmail.com>",
+	"homepage": "https://github.com/baguse/directus-extension-flow-manager",
+	"license": "MIT",
 	"keywords": [
 		"directus",
 		"directus-extension",
@@ -26,6 +28,7 @@
 		"vue": "^3.3.4"
 	},
 	"dependencies": {
-		"sass": "^1.63.6"
+		"sass": "^1.63.6",
+		"vue-router": "^4.2.4"
 	}
 }

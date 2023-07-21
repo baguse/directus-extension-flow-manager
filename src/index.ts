@@ -4,7 +4,7 @@ import ModuleComponent from './module.vue';
 export default defineModule({
 	id: 'flow-manager',
 	name: 'Flow Manager',
-	icon: 'box',
+	icon: 'bolt',
 	routes: [
 		{
 			path: '',

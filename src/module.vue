@@ -1,6 +1,6 @@
 <template>
   <private-view title="Flow Manager">
-    <v-table :items="flows" v-model:headers="headers">
+    <v-table :items="flows" v-model:headers="headers" @click:row="goToFlow">
       <template #[`item.icon`]="{ item }">
         <v-icon v-if="item.icon" :name="item.icon" />
       </template>
@@ -21,16 +21,31 @@
               </v-list-item-icon>
               <v-list-item-content> Duplicate </v-list-item-content>
             </v-list-item>
+            <v-list-item clickable @click="backup(item)">
+              <v-list-item-icon>
+                <v-icon name="file_download" />
+              </v-list-item-icon>
+              <v-list-item-content> Backup </v-list-item-content>
+            </v-list-item>
           </v-list>
         </v-menu>
       </template>
     </v-table>
+
+    <template #actions>
+      <v-button v-tooltip.bottom="'Restore'" rounded icon @click="onRestoreButtonClicked">
+        <v-icon name="file_upload" />
+      </v-button>
+    </template>
+
+    <input ref="restoredFile" type="file" accept="application/json" @change="onRestoredFileChanged" style="display: none" />
   </private-view>
 </template>
 
 <script lang="ts">
 import { defineComponent, ref, unref } from "vue";
 import { useStores, useApi } from "@directus/extensions-sdk";
+import {useRouter} from 'vue-router'
 
 interface IOperation {
   id: string;
@@ -78,8 +93,11 @@ export default defineComponent({
     const flowsStore = useFlowsStore();
     const notificationsStore = useNotificationsStore();
     const api = useApi();
+    const router = useRouter();
 
     const flows = ref(flowsStore.flows);
+
+    const restoredFile = ref(null);
 
     const headers = ref([
       {
@@ -102,13 +120,18 @@ export default defineComponent({
     return {
       headers,
       flows,
+      restoredFile,
       duplicate,
+      backup,
+      onRestoredFileChanged,
+      onRestoreButtonClicked,
+      goToFlow,
     };
 
-    async function duplicate(item: IFlow) {
+    async function duplicate(item: IFlow, isDuplicate = true) {
       try {
         const response = await api.post("/flows", {
-          name: `${item.name} - Copy`,
+          name: isDuplicate ? `${item.name} - Copy` : item.name,
           status: "inactive",
           icon: item.icon,
           accountability: item.accountability,
@@ -169,12 +192,86 @@ export default defineComponent({
 
         notificationsStore.add({
           type: "success",
-          text: "Flow duplicated successfully",
+          title: isDuplicate ? "Flow Duplicated successfully" : `Flow ${item.name} restored successfully`,
           closeable: true,
+          persist: true,
         });
       } catch (error) {
         console.log(error);
       }
+    }
+
+    function getTimestamp() {
+      const date = new Date();
+      const year = date.getFullYear();
+      const month = (date.getMonth() + 1).toString().padStart(2, "0");
+      const day = date.getDate().toString().padStart(2, "0");
+      const hour = date.getHours().toString().padStart(2, "0");
+      const minute = date.getMinutes().toString().padStart(2, "0");
+      const second = date.getSeconds().toString().padStart(2, "0");
+
+      return `${year}${month}${day}${hour}${minute}${second}`;
+    }
+
+    async function backup(item: IFlow) {
+      interface ISanitizedFlow extends Partial<Omit<IFlow, "operations">> {
+        operations: Partial<IOperation>[];
+      }
+      const sanitizedFlow: ISanitizedFlow = {
+        name: item.name,
+        icon: item.icon,
+        color: item.color,
+        description: item.description,
+        trigger: item.trigger,
+        options: item.options,
+        operation: item.operation,
+        operations: item.operations.map((operation) => ({
+          id: operation.id,
+          name: operation.name,
+          key: operation.key,
+          type: operation.type,
+          position_x: operation.position_x,
+          position_y: operation.position_y,
+          options: operation.options,
+          resolve: operation.resolve,
+          reject: operation.reject,
+        })),
+      };
+      const blob = new Blob([JSON.stringify(sanitizedFlow, null, 2)], { type: "application/json" });
+      var fileObj = window.URL.createObjectURL(blob);
+
+      var docUrl = document.createElement("a");
+      docUrl.href = fileObj;
+      docUrl.setAttribute("download", `${getTimestamp()}-${item.name}.json`);
+      document.body.appendChild(docUrl);
+      docUrl.click();
+    }
+
+    function onRestoredFileChanged($event: Event) {
+      const file: File = $event?.target?.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const result = e.target?.result;
+          const parsedResult = JSON.parse(result as string);
+          console.log({ parsedResult });
+          await duplicate(parsedResult, false);
+        } catch (error) {
+          console.log(error);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function onRestoreButtonClicked() {
+      console.log("restore button clicked");
+      restoredFile.value?.click();
+    }
+
+    function goToFlow({ item }: { item: IFlow }) {
+      console.log("go to flow", item);
+      router.push(`/settings/flows/${item.id}`);
     }
   },
 });
