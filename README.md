@@ -16,3 +16,5 @@ Changelogs:
 - 1.1.0: (21 July 2023)
   * Add Backup and Restore feature
   * Allow user to click the flow row and bring to flow detail page
+
+If you want to contribute kindly to create a PR and if you want to request a feature or report of a bug kindly create the Issue
