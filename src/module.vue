@@ -39,13 +39,28 @@
     </template>
 
     <input ref="restoredFile" type="file" accept="application/json" @change="onRestoredFileChanged" style="display: none" />
+    <v-dialog :model-value="restoreConfirmationDialog" :persistent="true" @update:model-value="restoreConfirmationDialog = false">
+      <v-card>
+        <v-card-title>Confirmation Dialog</v-card-title>
+        <v-card-text>
+          <v-error v-for="(error, indexError) in errors" :key="`errorIndex-${indexError}`" :error="{extensions: {code: 'Error'}, message: error}"></v-error>
+          <div style="margin-top: 15px;">
+            There are some errors in the file you are trying to restore. Do you want to continue?
+          </div>
+        </v-card-text>
+        <v-card-actions>
+          <v-button secondary @click="restoreConfirmationDialog = false"> Cancel </v-button>
+          <v-button @click="onConfirmRestore"> Continue </v-button>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </private-view>
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, unref } from "vue";
+import { defineComponent, ref, unref, Ref } from "vue";
 import { useStores, useApi } from "@directus/extensions-sdk";
-import {useRouter} from 'vue-router'
+import { useRouter } from "vue-router";
 
 interface IOperation {
   id: string;
@@ -89,15 +104,28 @@ interface IFlow {
 }
 export default defineComponent({
   setup() {
-    const { useFlowsStore, useNotificationsStore } = useStores();
+    const { useFlowsStore, useNotificationsStore, useCollectionsStore } = useStores();
     const flowsStore = useFlowsStore();
     const notificationsStore = useNotificationsStore();
+    const collectionsStore = useCollectionsStore();
     const api = useApi();
     const router = useRouter();
 
     const flows = ref(flowsStore.flows);
+    const { allCollections } = collectionsStore;
+
+    const collectionMap: Record<string, boolean> = allCollections.reduce(
+      (acc: Record<string, boolean>, collection: { collection: string }) => {
+        acc[collection.collection] = true;
+        return acc;
+      },
+      {}
+    );
 
     const restoredFile = ref(null);
+    const restoredFileObj: Ref<Partial<IFlow>> = ref({});
+    const restoreConfirmationDialog = ref(false);
+    const errors: Ref<string[]> = ref([]);
 
     const headers = ref([
       {
@@ -121,11 +149,14 @@ export default defineComponent({
       headers,
       flows,
       restoredFile,
+      restoreConfirmationDialog,
+      errors,
       duplicate,
       backup,
       onRestoredFileChanged,
       onRestoreButtonClicked,
       goToFlow,
+      onConfirmRestore
     };
 
     async function duplicate(item: IFlow, isDuplicate = true) {
@@ -254,9 +285,34 @@ export default defineComponent({
       reader.onload = async (e) => {
         try {
           const result = e.target?.result;
-          const parsedResult = JSON.parse(result as string);
-          console.log({ parsedResult });
-          await duplicate(parsedResult, false);
+          const parsedResult = JSON.parse(result as string) as IFlow;
+
+          errors.value = [];
+
+          if (!parsedResult?.trigger) {
+            errors.value.push("Trigger is required");
+          }
+
+          if (!parsedResult?.options) {
+            errors.value.push("Flow Options are required");
+          }
+
+          if (parsedResult?.operations) {
+            for (const operation of parsedResult.operations) {
+              if (["item-read", "item-create", "item-update", "item-delete"].includes(operation.type)) {
+                if (!collectionMap[operation.options.collection]) {
+                  errors.value.push(`Collection "${operation.options.collection}"" does not exist on ${operation.name} operation`);
+                }
+              }
+            }
+          }
+
+          if (errors.value.length) {
+            restoreConfirmationDialog.value = true;
+            restoredFileObj.value = parsedResult;
+          } else {
+            await duplicate(parsedResult, false);
+          }
         } catch (error) {
           console.log(error);
         }
@@ -265,13 +321,16 @@ export default defineComponent({
     }
 
     function onRestoreButtonClicked() {
-      console.log("restore button clicked");
       restoredFile.value?.click();
     }
 
     function goToFlow({ item }: { item: IFlow }) {
-      console.log("go to flow", item);
       router.push(`/settings/flows/${item.id}`);
+    }
+
+    function onConfirmRestore() {
+      duplicate(restoredFileObj.value as IFlow, false);
+      restoreConfirmationDialog.value = false;
     }
   },
 });
