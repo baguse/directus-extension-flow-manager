@@ -43,9 +43,24 @@
       <v-card>
         <v-card-title>Confirmation Dialog</v-card-title>
         <v-card-text>
-          <v-error v-for="(error, indexError) in errors" :key="`errorIndex-${indexError}`" :error="{extensions: {code: 'Error'}, message: error}"></v-error>
-          <div style="margin-top: 15px;">
-            There are some errors in the file you are trying to restore. Do you want to continue?
+          <v-input placeholder="Flow Name" v-model="flowDuplicatedName" v-tooltip.bottom="'Flow Name'" />
+          <v-checkbox
+            style="margin-top: 4px"
+            label="Keep the same flow id as the original flow"
+            :model-value="isPreviousIdPersisted"
+            :disabled="restoredFileObj.id ? false : true"
+            @update:model-value="isPreviousIdPersisted = $event"
+          />
+          <div v-if="errors.length">
+            <v-error
+              v-for="(error, indexError) in errors"
+              :key="`errorIndex-${indexError}`"
+              :error="{ extensions: { code: 'Error' }, message: error }"
+            ></v-error>
+            <div style="margin-top: 15px">There are some errors in the file you are trying to restore. Do you want to continue?</div>
+          </div>
+          <div v-else>
+            <div style="margin-top: 15px">Do you want to continue?</div>
           </div>
         </v-card-text>
         <v-card-actions>
@@ -145,6 +160,9 @@ export default defineComponent({
       },
     ]);
 
+    const flowDuplicatedName = ref("");
+    const isPreviousIdPersisted = ref(false);
+
     return {
       headers,
       flows,
@@ -156,13 +174,17 @@ export default defineComponent({
       onRestoredFileChanged,
       onRestoreButtonClicked,
       goToFlow,
-      onConfirmRestore
+      onConfirmRestore,
+      flowDuplicatedName,
+      isPreviousIdPersisted,
+      restoredFileObj,
     };
 
     async function duplicate(item: IFlow, isDuplicate = true) {
       try {
         const response = await api.post("/flows", {
-          name: isDuplicate ? `${item.name} - Copy` : item.name,
+          id: !isDuplicate && isPreviousIdPersisted.value ? item.id : undefined,
+          name: isDuplicate ? item.name : flowDuplicatedName.value,
           status: "inactive",
           icon: item.icon,
           accountability: item.accountability,
@@ -220,15 +242,24 @@ export default defineComponent({
 
         await flowsStore.hydrate();
         flows.value = unref(flowsStore.flows);
+        isPreviousIdPersisted.value = false;
 
         notificationsStore.add({
           type: "success",
-          title: isDuplicate ? "Flow Duplicated successfully" : `Flow ${item.name} restored successfully`,
+          title: isDuplicate ? "Flow Duplicated successfully" : `Flow "${item.name}" restored successfully`,
           closeable: true,
           persist: true,
         });
       } catch (error) {
-        console.log(error);
+        notificationsStore.add({
+          type: "error",
+          title: isDuplicate ? "Flow Duplication failed" : `Failed to restore Flow "${item.name}"`,
+          closeable: true,
+          persist: true,
+        });
+      } finally {
+        if (restoredFile.value)
+          restoredFile.value.value = null;
       }
     }
 
@@ -249,6 +280,7 @@ export default defineComponent({
         operations: Partial<IOperation>[];
       }
       const sanitizedFlow: ISanitizedFlow = {
+        id: item.id,
         name: item.name,
         icon: item.icon,
         color: item.color,
@@ -307,11 +339,14 @@ export default defineComponent({
             }
           }
 
-          if (errors.value.length) {
-            restoreConfirmationDialog.value = true;
-            restoredFileObj.value = parsedResult;
+          restoreConfirmationDialog.value = true;
+          restoredFileObj.value = parsedResult;
+
+          flowDuplicatedName.value = `${parsedResult.name} - Copy`;
+          if (parsedResult.id) {
+            isPreviousIdPersisted.value = true;
           } else {
-            await duplicate(parsedResult, false);
+            isPreviousIdPersisted.value = false;
           }
         } catch (error) {
           console.log(error);
