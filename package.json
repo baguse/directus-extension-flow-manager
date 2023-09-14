@@ -15,7 +15,7 @@
 		"type": "module",
 		"path": "dist/index.js",
 		"source": "src/index.ts",
-		"host": "^9.26.0"
+		"host": "^10.1.9"
 	},
 	"scripts": {
 		"build": "directus-extension build",
@@ -23,10 +23,10 @@
 		"link": "directus-extension link"
 	},
 	"devDependencies": {
-		"@directus/extensions-sdk": "9.26.0",
+		"@directus/extensions-sdk": "^10.1.9",
+		"sass": "^1.63.6",
 		"typescript": "^5.1.6",
 		"vue": "^3.3.4",
-    "sass": "^1.63.6",
-    "vue-router": "^4.2.4"
+		"vue-router": "^4.2.4"
 	}
 }
