@@ -7,7 +7,7 @@ You can install it via ``npm install directus-extension-flow-manager``
 - [x] Export and import flow
 - [x] Add flow validation when Restore
 - [x] Feature for keeping original flow id when restore
-- [ ] Add flow grouping
+- [x] Add flow grouping
 
 Screenshoots
 ![Alt text](https://raw.githubusercontent.com/baguse/directus-extension-flow-manager/634b5085908e9fc33133a78c7578276d1a08e888/screenshoots/image.png)

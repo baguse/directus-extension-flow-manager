@@ -1,6 +1,6 @@
 <template>
   <private-view title="Flow Manager">
-    <v-table :items="flows" v-model:headers="headers" @click:row="goToFlow">
+    <v-table v-if="false" :items="flows" v-model:headers="headers" @click:row="goToFlow">
       <template #[`item.icon`]="{ item }">
         <v-icon v-if="item.icon" :name="item.icon" />
       </template>
@@ -33,6 +33,9 @@
     </v-table>
 
     <template #actions>
+      <v-button v-tooltip.bottom="'Settings'" rounded icon @click="settingDialog = true">
+        <v-icon name="settings" />
+      </v-button>
       <v-button v-tooltip.bottom="'Restore'" rounded icon @click="onRestoreButtonClicked">
         <v-icon name="file_upload" />
       </v-button>
@@ -69,65 +72,131 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <v-dialog :model-value="settingDialog" :persistent="true" @update:model-value="settingDialog = false">
+      <v-card>
+        <v-card-title>Settings</v-card-title>
+        <v-card-text>
+          <v-error
+            v-if="!flowFieldConfiguration.isConfigured || !isSettingFieldConfigured"
+            :error="{ extensions: { code: 'Error' }, message: 'Flow Manager fields are not configured' }"
+          ></v-error>
+          <div v-else>
+            <v-table :headers="folderHeaders" :items="flowCategories">
+              <template #[`item.name`]="{ item }">
+                {{ item }}
+              </template>
+              <template #item-append="{ item }">
+                <v-icon
+                  class="button-delete-category"
+                  name="delete"
+                  color="var(--danger)"
+                  @click="deleteCategory(item)"
+                  v-tooltip.bottom="'Delete Category'"
+                />
+              </template>
+            </v-table>
+            <v-input placeholder="Category Name" v-model="newCategoryName" v-tooltip.bottom="'Category Name'">
+              <template #append>
+                <v-button small icon rounded @click="addCategory">
+                  <v-icon name="add" />
+                </v-button>
+              </template>
+            </v-input>
+          </div>
+        </v-card-text>
+        <v-card-actions>
+          <v-button secondary @click="settingDialog = false"> Close </v-button>
+          <v-button
+            :loading="isConfigurationLoading"
+            :disabled="flowFieldConfiguration.isConfigured && isSettingFieldConfigured"
+            @click="configureFlowManagerField"
+          >
+            Configure
+          </v-button>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-list class="draggable-list">
+      <draggable
+        :force-fallback="true"
+        :model-value="rootFlows"
+        item-key="id"
+        handle=".drag-handle"
+        :swap-threshold="0.3"
+        class="root-drag-container"
+        :group="{ name: 'flows' }"
+        @update:model-value="onSort($event)"
+      >
+        <template #item="{ element }">
+          <div class="list-group-item">
+            <flow-item :item="element" :items="flows" @set-nested-sort="onSort" />
+          </div>
+        </template>
+      </draggable>
+    </v-list>
   </private-view>
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, unref, Ref } from "vue";
+import { defineComponent, ref, unref, Ref, computed, provide } from "vue";
 import { useStores, useApi } from "@directus/extensions-sdk";
 import { useRouter } from "vue-router";
+import Draggable from "vuedraggable";
+import { IFlow, IFolder, IOperation, IPayload } from "./types";
+import FlowItem from "./components/flow-item.vue";
+import { Field } from "@directus/types";
 
-interface IOperation {
-  id: string;
-  name: string;
-  key: string;
-  type: string;
-  position_x: number;
-  position_y: number;
-  options: any;
-  resolve: string | null;
-  reject: string | null;
-  flow: string;
-}
-
-interface IPayload {
-  name: string;
-  key: string;
-  type: string;
-  position_x: number;
-  position_y: number;
-  options: any;
-  resolve: IPayload | null;
-  reject: IPayload | null;
-  flow: string;
-}
-
-interface IFlow {
-  id: string;
-  name: string;
-  icon: string;
-  color: null;
-  description: null;
-  status: string;
-  trigger: string;
-  accountability: string;
-  options: { type: string; scope: string[]; collections: string[] };
-  operation: string;
-  date_created: "2023-06-26T17:09:53.274Z";
-  user_created: "8c4a648e-110d-493f-830a-48054a1d9109";
-  operations: IOperation[];
-}
 export default defineComponent({
+  components: {
+    Draggable,
+    FlowItem,
+  },
   setup() {
-    const { useFlowsStore, useNotificationsStore, useCollectionsStore } = useStores();
+    const { useFlowsStore, useNotificationsStore, useCollectionsStore, useSettingsStore, useFieldsStore } = useStores();
     const flowsStore = useFlowsStore();
     const notificationsStore = useNotificationsStore();
     const collectionsStore = useCollectionsStore();
     const api = useApi();
     const router = useRouter();
+    const settingsStore = useSettingsStore();
+    const fieldsStore = useFieldsStore();
 
-    const flows = ref(flowsStore.flows);
+    const flowCategories = ref<string[]>(settingsStore.settings.flow_manager_categories || []);
+    const flows = ref<IFlow[]>(flowsStore.flows);
     const { allCollections } = collectionsStore;
+    const flowFields: Ref<Field[]> = ref(fieldsStore.getFieldsForCollection("directus_flows"));
+    const settingFields: Ref<Field[]> = ref(fieldsStore.getFieldsForCollection("directus_settings"));
+
+    const flowFieldConfiguration = computed(() => {
+      let isOrderFieldConfigured = false;
+      let isCategoryFieldConfigured = false;
+      for (const field of flowFields.value) {
+        if (field.field === "flow_manager_order") {
+          isOrderFieldConfigured = true;
+        } else if (field.field === "flow_manager_category") {
+          isCategoryFieldConfigured = true;
+        }
+      }
+
+      return {
+        isConfigured: isOrderFieldConfigured && isCategoryFieldConfigured,
+        isOrderFieldConfigured,
+        isCategoryFieldConfigured,
+      };
+    });
+
+    const isSettingFieldConfigured = computed(() => {
+      let isFieldConfigured = false;
+      for (const field of settingFields.value) {
+        if (field.field === "flow_manager_categories") {
+          isFieldConfigured = true;
+        }
+      }
+
+      return isFieldConfigured;
+    });
 
     const collectionMap: Record<string, boolean> = allCollections.reduce(
       (acc: Record<string, boolean>, collection: { collection: string }) => {
@@ -137,7 +206,7 @@ export default defineComponent({
       {}
     );
 
-    const restoredFile = ref(null);
+    const restoredFile = ref<HTMLInputElement | null>(null);
     const restoredFileObj: Ref<Partial<IFlow>> = ref({});
     const restoreConfirmationDialog = ref(false);
     const errors: Ref<string[]> = ref([]);
@@ -160,8 +229,59 @@ export default defineComponent({
       },
     ]);
 
+    const folderHeaders = ref([
+      {
+        text: "Name",
+        value: "name",
+      },
+    ]);
+
     const flowDuplicatedName = ref("");
     const isPreviousIdPersisted = ref(false);
+    const settingDialog = ref(false);
+    const isConfigurationLoading = ref(false);
+    const newCategoryName = ref("");
+
+    const flowIdMap = computed(() => flows.value.reduce((existingMap: Record<string, boolean>, flow: IFlow) => {
+      const map = { ...existingMap }
+      map[flow.id] = true;
+      return map;
+    }, {}));
+
+    const folderMap = computed(() => flowCategories.value.reduce((existingMap: Record<string, boolean>, categoryName: string) => {
+      const map = { ...existingMap };
+      map[categoryName] = true;
+      return map;
+    }, {}));
+
+    const rootFlows = computed<Partial<IFlow & IFolder>[]>(() => {
+      if (!flowFieldConfiguration.value.isConfigured || !isSettingFieldConfigured.value) {
+        return [...flows.value];
+      }
+      return [
+        ...flowCategories.value
+          .sort((a, b) => a.localeCompare(b))
+          .map((category: string) => ({
+            id: category,
+            name: category,
+            type: "category",
+            icon: "folder",
+            flow_manager_order: 0,
+          })),
+        ...flows.value
+          .filter(
+            (flow: IFlow) =>
+              !flow.flow_manager_category ||
+              (!folderMap.value[flow.flow_manager_category] && !flowIdMap.value[flow.flow_manager_category])
+          )
+          .sort((a, b) => (a.flow_manager_order as number) - (b.flow_manager_order as number)),
+      ];
+    });
+
+    provide("flowManagerUtils", {
+      duplicate,
+      backup,
+    });
 
     return {
       headers,
@@ -178,6 +298,18 @@ export default defineComponent({
       flowDuplicatedName,
       isPreviousIdPersisted,
       restoredFileObj,
+      rootFlows,
+      onSort,
+      settingDialog,
+      isSettingFieldConfigured,
+      flowFieldConfiguration,
+      configureFlowManagerField,
+      isConfigurationLoading,
+      folderHeaders,
+      flowCategories,
+      newCategoryName,
+      addCategory,
+      deleteCategory,
     };
 
     async function duplicate(item: IFlow, isDuplicate = true) {
@@ -191,6 +323,7 @@ export default defineComponent({
           description: item.description,
           trigger: item.trigger,
           options: item.options,
+          color: item.color,
         });
 
         function transformData(list: IOperation[]) {
@@ -258,8 +391,7 @@ export default defineComponent({
           persist: true,
         });
       } finally {
-        if (restoredFile.value)
-          restoredFile.value.value = null;
+        if (restoredFile.value) restoredFile.value.value = null;
       }
     }
 
@@ -367,6 +499,99 @@ export default defineComponent({
       duplicate(restoredFileObj.value as IFlow, false);
       restoreConfirmationDialog.value = false;
     }
+
+    async function onSort(updates: (IFlow & IFolder)[], group = null) {
+      const payloads = updates
+        .filter((row) => row.type !== "category")
+        .map((row, index) => ({
+          id: row.id,
+          flow_manager_category: group,
+          flow_manager_order: index + 1,
+        }));
+
+      await api.patch(`/flows`, payloads);
+      await flowsStore.hydrate();
+      flows.value = unref(flowsStore.flows);
+    }
+
+    async function configureFlowManagerField() {
+      isConfigurationLoading.value = true;
+      if (!flowFieldConfiguration.value.isCategoryFieldConfigured) {
+        const payload = {
+          field: "flow_manager_category",
+          type: "string",
+          schema: { default_value: null },
+          meta: { interface: "input", special: null, hidden: true },
+          collection: "directus_flows",
+        };
+        await fieldsStore.createField("directus_flows", payload);
+      }
+
+      if (!flowFieldConfiguration.value.isOrderFieldConfigured) {
+        const payload = {
+          field: "flow_manager_order",
+          type: "integer",
+          schema: { default_value: "0" },
+          meta: { interface: "input", special: null, hidden: true },
+          collection: "directus_flows",
+        };
+        await fieldsStore.createField("directus_flows", payload);
+      }
+
+      if (!isSettingFieldConfigured.value) {
+        const payload = {
+          field: "flow_manager_categories",
+          type: "json",
+          schema: { default_value: "[]" },
+          meta: { interface: "input-code", special: ["cast-json"], hidden: true },
+          collection: "directus_settings",
+        };
+        await fieldsStore.createField("directus_settings", payload);
+      }
+
+      await fieldsStore.hydrate();
+      flowFields.value = fieldsStore.getFieldsForCollection("directus_flows");
+      settingFields.value = fieldsStore.getFieldsForCollection("directus_settings");
+      isConfigurationLoading.value = false;
+    }
+
+    async function addCategory() {
+      if (!newCategoryName.value) return;
+
+      if (flowCategories.value.includes(newCategoryName.value)) {
+        notificationsStore.add({
+          type: "error",
+          title: `Category "${newCategoryName.value}" already exists`,
+          closeable: true,
+          persist: true,
+        });
+        return;
+      }
+      flowCategories.value.push(newCategoryName.value);
+      newCategoryName.value = "";
+
+      settingsStore.updateSettings(
+        {
+          flow_manager_categories: flowCategories.value,
+        },
+        false
+      );
+    }
+
+    async function deleteCategory(categoryName: string) {
+      const deletedIndex = flowCategories.value.findIndex((category) => category === categoryName);
+
+      if (deletedIndex !== -1) {
+        flowCategories.value.splice(deletedIndex, 1);
+      }
+
+      settingsStore.updateSettings(
+        {
+          flow_manager_categories: flowCategories.value,
+        },
+        false
+      );
+    }
   },
 });
 </script>
@@ -378,5 +603,38 @@ export default defineComponent({
 
 .inactive-chip {
   background-color: var(--foreground-subdued);
+}
+
+.handle {
+  float: left;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.root-drag-container {
+  padding: 8px 0;
+  overflow: hidden;
+}
+
+.draggable-list :deep(.sortable-ghost) {
+  .v-list-item {
+    --v-list-item-background-color: var(--primary-alt);
+    --v-list-item-border-color: var(--primary);
+    --v-list-item-background-color-hover: var(--primary-alt);
+    --v-list-item-border-color-hover: var(--primary);
+
+    > * {
+      opacity: 0;
+    }
+  }
+}
+
+.draggable-list {
+  margin-left: 10px;
+  margin-right: 10px;
+}
+
+.button-delete-category {
+  cursor: pointer;
 }
 </style>
