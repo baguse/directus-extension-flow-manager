@@ -22,6 +22,12 @@
         </v-list-item-icon>
         <v-list-item-content> Backup </v-list-item-content>
       </v-list-item>
+      <v-list-item clickable @click="showPushToCloud(item)">
+        <v-list-item-icon>
+          <v-icon name="cloud_upload" />
+        </v-list-item-icon>
+        <v-list-item-content> Push to Cloud </v-list-item-content>
+      </v-list-item>
     </v-list>
   </v-menu>
 </template>
@@ -42,6 +48,7 @@ export default defineComponent({
     const flowManagerUtils = inject<{
       duplicate: (item: IFlow, isDuplicate?: boolean) => Promise<void>;
       backup: (item: IFlow) => Promise<void>;
+      showPushToCloud: (item: IFlow) => Promise<void>;
     }>("flowManagerUtils");
 
     const duplicate = (item: IFlow, isDuplicate?: boolean) => {
@@ -52,10 +59,15 @@ export default defineComponent({
       flowManagerUtils?.backup(item);
     };
 
+    const showPushToCloud = (item: IFlow) => {
+      flowManagerUtils?.showPushToCloud(item);
+    };
+
     return {
       item,
       duplicate,
       backup,
+      showPushToCloud,
     };
   },
 });

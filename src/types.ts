@@ -27,15 +27,15 @@ export interface IFlow {
   id: string;
   name: string;
   icon: string;
-  color: null;
-  description: null;
+  color: string;
+  description: string;
   status: string;
   trigger: string;
   accountability: string;
-  options: { type: string; scope: string[]; collections: string[] };
+  options: { type?: string; scope?: string[]; collections: string[] };
   operation: string;
-  date_created: "2023-06-26T17:09:53.274Z";
-  user_created: "8c4a648e-110d-493f-830a-48054a1d9109";
+  date_created?: string;
+  user_created?: string;
   operations: IOperation[];
   flow_manager_category?: string;
   flow_manager_order?: number;
@@ -46,4 +46,11 @@ export interface IFolder {
   name: string;
   icon: string;
   type: string;
+}
+
+export interface ICredential {
+  id: string;
+  name: string;
+  staticToken: string;
+  url: string;
 }

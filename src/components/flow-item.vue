@@ -40,7 +40,11 @@
         @update:model-value="onGroupSortChange"
       >
         <template #item="{ element }">
-          <flow-item :item="element" :items="items" @set-nested-sort="($event) => $emit('setNestedSort', $event, element.id)" />
+          <flow-item
+            :item="element"
+            :items="items"
+            @set-nested-sort="($event) => $emit('setNestedSort', $event, element.id)"
+          />
         </template>
       </draggable>
     </transition-expand>
@@ -70,7 +74,7 @@ export default defineComponent({
       required: true,
     },
   },
-  emits: ["editCollection", "setNestedSort"],
+  emits: ["setNestedSort"],
   setup(props, { emit }) {
     const router = useRouter();
     const { item, items } = toRefs(props);
