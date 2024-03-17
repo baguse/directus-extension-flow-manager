@@ -11,7 +11,7 @@ You can install it via ``npm install directus-extension-flow-manager``
 - [x] Add feature to import directly to another directus instance
 
 Screenshoots
-![Alt text](https://raw.githubusercontent.com/baguse/directus-extension-flow-manager/101d0356d40602b11d1a2dfb1cc025224cf79fee/screenshoots/image.png)
+![Latest Screenshot](https://raw.githubusercontent.com/baguse/directus-extension-flow-manager/101d0356d40602b11d1a2dfb1cc025224cf79fee/screenshoots/Screenshot_20240317_123438.png)
 
 Changelogs:
 - 1.0.0: (13 July 2023)
@@ -29,5 +29,21 @@ Changelogs:
 - 1.2.3: (13 November 2023)
   * Add feature to import directly to another directus instance
     You need to install the `directus-extension-flow-manager-endpoint` to use this feature
-    
+- 1.3.0: (17 March 2024)
+  * Add feature for search flow on navigation
+    You can search flow by name and your search text will be highlighted and automatically expanded the category
+    Note: Current expanded category will be stored on local storage
+  * Fix deep child flow logic when drag and drop
+    In this version you can unlimitedly drag and drop your flow to another flow or category
+  * Add trigger type on flow row
+    You can see the trigger type on the flow row
+    - `MANUAL` : Flow that can be triggered manually
+    - `OPERATION` : Flow that can be triggered by another flow
+    - `SCHEDULE` : Flow that can be triggered by schedule
+    - `ACTION` : Flow that can be triggered by Event hook
+    - `WEBHOOK` : Flow that can be triggered by Webhook
+  * Add button to go to the directus flow detail page
+    You can click the flow row and it will bring you to the directus flow detail page
+  * Add option to delete the flow
+    You can delete the flow by clicking the delete button on the flow row option or the navigation context menu
 If you want to contribute kindly to create a PR and if you want to request a feature or report of a bug kindly create the Issue

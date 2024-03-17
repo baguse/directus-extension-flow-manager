@@ -46,6 +46,7 @@ export interface IFolder {
   name: string;
   icon: string;
   type: string;
+  color: string;
 }
 
 export interface ICredential {

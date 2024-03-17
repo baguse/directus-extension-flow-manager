@@ -1,5 +1,5 @@
 <template>
-  <private-view title="Flow Manager">
+  <private-view :title="title">
     <v-table v-if="false" :items="flows" v-model:headers="headers" @click:row="goToFlow">
       <template #[`item.icon`]="{ item }">
         <v-icon v-if="item.icon" :name="item.icon" />
@@ -50,6 +50,10 @@
       <v-button v-tooltip.bottom="'Restore'" rounded icon @click="onRestoreButtonClicked">
         <v-icon name="file_upload" />
       </v-button>
+    </template>
+
+    <template #navigation>
+      <content-navigation :root-flows="rootFlows" :flow-child-map="flowChildMap" :all-flows="allFlows" />
     </template>
 
     <input ref="restoredFile" type="file" accept="application/json" @change="onRestoredFileChanged" style="display: none" />
@@ -194,10 +198,24 @@
       </v-card>
     </v-dialog>
 
+    <v-dialog :model-value="deleteFlowDialog" :persistent="true" @update:model-value="deleteFlowDialog = false">
+      <v-card>
+        <v-card-title>Delete Flow</v-card-title>
+        <v-card-text>
+          Are you sure you want to delete [<span class="bold-text">{{ selectedFlow.name }}</span
+          >] flow?
+        </v-card-text>
+        <v-card-actions>
+          <v-button secondary @click="deleteFlowDialog = false"> Close </v-button>
+          <v-button :disabled="!selectedFlow" @click="deleteFlow" :loading="loadingDeleteFlow"> Proceed </v-button>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <v-list class="draggable-list">
       <draggable
         :force-fallback="true"
-        :model-value="rootFlows"
+        :model-value="parentId ? currentFlows : rootFlows"
         item-key="id"
         handle=".drag-handle"
         :swap-threshold="0.3"
@@ -207,7 +225,7 @@
       >
         <template #item="{ element }">
           <div class="list-group-item">
-            <flow-item :item="element" :items="flows" @set-nested-sort="onSort" />
+            <flow-item :item="element" :items="flows" @update:sort="($event: any) => onSort($event)" />
           </div>
         </template>
       </draggable>
@@ -224,14 +242,26 @@ import { ICredential, IFlow, IFolder, IOperation, IPayload } from "./types";
 import FlowItem from "./components/flow-item.vue";
 import { Field } from "@directus/types";
 import SecureLS from "secure-ls";
+import ContentNavigation from "./components/navigation.vue";
+import { toRefs } from "vue";
 
 export default defineComponent({
   components: {
     Draggable,
     FlowItem,
+    ContentNavigation,
   },
-  setup() {
+
+  props: {
+    parentId: {
+      type: String,
+      default: null,
+    },
+  },
+
+  setup(props) {
     const { useFlowsStore, useNotificationsStore, useCollectionsStore, useSettingsStore, useFieldsStore } = useStores();
+    const { parentId } = toRefs(props);
     const flowsStore = useFlowsStore();
     const notificationsStore = useNotificationsStore();
     const collectionsStore = useCollectionsStore();
@@ -245,6 +275,22 @@ export default defineComponent({
     const { allCollections } = collectionsStore;
     const flowFields: Ref<Field[]> = ref(fieldsStore.getFieldsForCollection("directus_flows"));
     const settingFields: Ref<Field[]> = ref(fieldsStore.getFieldsForCollection("directus_settings"));
+    const deleteFlowDialog = ref(false);
+    const loadingDeleteFlow = ref(false);
+
+    const title = computed(() => {
+      if (!parentId.value) {
+        return "Flow Manager";
+      }
+
+      const currentParent = flows.value.find((flow) => flow.id === parentId.value);
+
+      if (!currentParent) {
+        return `Flow Manager - ${parentId.value}`;
+      }
+
+      return `Flow Manager - ${currentParent.name}`;
+    });
 
     const flowFieldConfiguration = computed(() => {
       let isOrderFieldConfigured = false;
@@ -393,20 +439,42 @@ export default defineComponent({
       }, {})
     );
 
+    const flowChildMap = computed(() => {
+      const result: Record<string, IFlow[]> = {};
+
+      for (let i = 0; i < flows.value.length; i++) {
+        const flow = flows.value[i];
+
+        if (flow?.flow_manager_category) {
+          if (!result[flow.flow_manager_category]) {
+            result[flow.flow_manager_category] = [];
+          }
+          result[flow.flow_manager_category]?.push(flow);
+        }
+      }
+
+      return result;
+    });
+
     const rootFlows = computed<Partial<IFlow & IFolder>[]>(() => {
       if (!flowFieldConfiguration.value.isConfigured || !isSettingFieldConfigured.value) {
         return [...flows.value];
       }
+
       return [
         ...flowCategories.value
           .sort((a, b) => a.localeCompare(b))
-          .map((category: string) => ({
-            id: category,
-            name: category,
-            type: "category",
-            icon: "folder",
-            flow_manager_order: 0,
-          })),
+          .map(
+            (category: string) =>
+              ({
+                id: category,
+                name: category,
+                type: "category",
+                icon: "folder",
+                flow_manager_order: 0,
+                color: "",
+              } as IFolder)
+          ),
         ...flows.value
           .filter(
             (flow: IFlow) =>
@@ -416,11 +484,42 @@ export default defineComponent({
       ];
     });
 
+    const currentFlows = computed<Partial<IFlow & IFolder>[]>(() => {
+      if (parentId.value) {
+        const childFlows = flowChildMap.value[parentId.value] || [];
+        return childFlows.sort((a, b) => (a.flow_manager_order as number) - (b.flow_manager_order as number));
+      }
+
+      return [];
+    });
+
+    const allFlows = computed(() => {
+      if (!flowFieldConfiguration.value.isConfigured || !isSettingFieldConfigured.value) {
+        return [...flows.value] as IFlow[];
+      }
+
+      return [
+        ...flowCategories.value.map(
+          (category: string) =>
+            ({
+              id: category,
+              name: category,
+              type: "category",
+              icon: "folder",
+              flow_manager_order: 0,
+              color: "",
+            } as IFolder)
+        ),
+        ...flows.value,
+      ] as IFlow[] | IFolder[];
+    });
     provide("flowManagerUtils", {
       duplicate,
       backup,
       pushToCloud,
       showPushToCloud,
+      onSort,
+      showDeleteFlowDialog,
     });
 
     return {
@@ -438,6 +537,7 @@ export default defineComponent({
       flowDuplicatedName,
       isPreviousIdPersisted,
       restoredFileObj,
+      currentFlows,
       rootFlows,
       onSort,
       settingDialog,
@@ -468,6 +568,14 @@ export default defineComponent({
       maskingText,
       pushToCloud,
       loadingPushToCloud,
+      flowChildMap,
+      title,
+      parentId,
+      allFlows,
+      deleteFlowDialog,
+      selectedFlow,
+      loadingDeleteFlow,
+      deleteFlow,
     };
 
     function transformData(list: IOperation[], flowId: string, flowTriggerId: string) {
@@ -515,7 +623,7 @@ export default defineComponent({
       try {
         const response = await api.post("/flows", {
           id: !isDuplicate && isPreviousIdPersisted.value ? item.id : undefined,
-          name: isDuplicate ? item.name : flowDuplicatedName.value,
+          name: isDuplicate ? `${item.name} - Duplicated` : flowDuplicatedName.value,
           status: "inactive",
           icon: item.icon,
           accountability: item.accountability,
@@ -523,6 +631,7 @@ export default defineComponent({
           trigger: item.trigger,
           options: item.options,
           color: item.color,
+          flow_manager_category: item.flow_manager_category,
         });
 
         const payload = transformData(item.operations, response.data.data.id, item.operation);
@@ -549,7 +658,7 @@ export default defineComponent({
           persist: true,
         });
       } finally {
-        if (restoredFile.value) restoredFile.value.value = null;
+        if (restoredFile.value) restoredFile.value.value = "";
       }
     }
 
@@ -651,8 +760,41 @@ export default defineComponent({
       docUrl.click();
     }
 
+    async function deleteFlow() {
+      if (!selectedFlow.value) return;
+      try {
+        loadingDeleteFlow.value = true;
+        await api.delete(`/flows/${selectedFlow.value.id}`);
+
+        await flowsStore.hydrate();
+        flows.value = unref(flowsStore.flows);
+
+        notificationsStore.add({
+          type: "success",
+          title: "Flow Deleted successfully",
+          closeable: true,
+          persist: true,
+        });
+      } catch (error) {
+        notificationsStore.add({
+          type: "error",
+          title: "Flow Deletion failed",
+          closeable: true,
+          persist: true,
+        });
+      } finally {
+        loadingDeleteFlow.value = false;
+        deleteFlowDialog.value = false;
+      }
+    }
+
+    function showDeleteFlowDialog(item: IFlow) {
+      selectedFlow.value = item;
+      deleteFlowDialog.value = true;
+    }
+
     function onRestoredFileChanged($event: Event) {
-      const file: File = $event?.target?.files[0];
+      const file: File | undefined = ($event?.target as HTMLInputElement)?.files?.[0];
       if (!file) return;
       const reader = new FileReader();
       reader.onload = async (e) => {
@@ -709,7 +851,7 @@ export default defineComponent({
       restoreConfirmationDialog.value = false;
     }
 
-    async function onSort(updates: (IFlow & IFolder)[], group = null) {
+    async function onSort(updates: (IFlow & IFolder)[], group: string | null = null) {
       const payloads = updates
         .filter((row) => row.type !== "category")
         .map((row, index) => ({
@@ -961,5 +1103,9 @@ export default defineComponent({
 
 .ml-2 {
   margin-left: 10px;
+}
+
+.bold-text {
+  font-weight: bold;
 }
 </style>
