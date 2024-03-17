@@ -2,7 +2,7 @@
 	"name": "directus-extension-flow-manager",
 	"description": "This is a custom module for managing Flow",
 	"icon": "extension",
-	"version": "1.3.0",
+	"version": "1.3.1",
 	"author": "Bagus Andreanto<andreanto.bagus@gmail.com>",
 	"homepage": "https://github.com/baguse/directus-extension-flow-manager",
 	"license": "MIT",
