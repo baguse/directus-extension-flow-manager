@@ -11,7 +11,7 @@ You can install it via ``npm install directus-extension-flow-manager``
 - [x] Add feature to import directly to another directus instance
 
 Screenshoots
-![Latest Screenshot](https://raw.githubusercontent.com/baguse/directus-extension-flow-manager/101d0356d40602b11d1a2dfb1cc025224cf79fee/screenshoots/Screenshot_20240317_123438.png)
+![Latest Screenshot](https://raw.githubusercontent.com/baguse/directus-extension-flow-manager/253b1a1418f70b628fa4c742e9ba22ab864d5786/screenshoots/Screenshot_20240317_123438.png)
 
 Changelogs:
 - 1.0.0: (13 July 2023)
