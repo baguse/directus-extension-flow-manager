@@ -3,12 +3,25 @@ This directus module extension allows you to manage your flow content from direc
 
 You can install it via ``npm install directus-extension-flow-manager``
 
+Roadmap:
 - [x] Duplicate flow
 - [x] Export and import flow
 - [x] Add flow validation when Restore
 - [x] Feature for keeping original flow id when restore
 - [x] Add flow grouping
 - [x] Add feature to import directly to another directus instance
+- [x] Add feature for search flow on navigation
+- [x] Fix deep child flow logic when drag and drop
+- [x] Add table view option with search, filter, header reorder, data sorting, and header resize features
+- [x] Add feature to run Manual flow with the ability to pass the payload
+- [x] Add Total Runs, Last Run Time and Last Updated Time on flow row
+- [x] Add ability to bulk delete, duplicate, export, and restore flow
+- [x] Now we can customize the folder icon and color
+- [ ] Pagination on table view
+- [ ] Move the category to a collection for better UX and data structure
+- [ ] Run Another flow ability
+
+
 
 Screenshoots
 ![Latest Screenshot](https://raw.githubusercontent.com/baguse/directus-extension-flow-manager/253b1a1418f70b628fa4c742e9ba22ab864d5786/screenshoots/Screenshot_20240317_123438.png)
@@ -46,4 +59,16 @@ Changelogs:
     You can click the flow row and it will bring you to the directus flow detail page
   * Add option to delete the flow
     You can delete the flow by clicking the delete button on the flow row option or the navigation context menu
+- 1.4.0 (25 May 2024)
+  * Add table view option with search, filter, header reorder, data sorting, and header resize features
+  * Add feature to run Manual flow with the ability to pass the payload
+  * Add Total Runs, Last Run Time and Last Updated Time on flow row
+  * Add ability to bulk delete, duplicate, export, and restore flow
+  * Now we can customize the folder icon and color
+  * Add feature to move to the current opened category from navigation context menu
+  * Fix on MySQL because of the default value of the category
+- 1.4.1 (26 May 2024)
+  * Fix the version parsing from installed by the npm method
+  * Fix the new field creation
+Contributing:
 If you want to contribute kindly to create a PR and if you want to request a feature or report of a bug kindly create the Issue

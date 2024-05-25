@@ -1,0 +1,134 @@
+<template>
+  <v-menu placement="left-start" show-arrow>
+    <template #activator="{ toggle }">
+      <v-icon name="more_vert" clickable class="ctx-toggle" @click.prevent="toggle" />
+    </template>
+    <v-list v-if="item.type !== 'category'">
+      <v-list-item v-if="item.trigger === 'manual' && item.status === 'active'" clickable @click="showRunDialog(item)">
+        <v-list-item-icon>
+          <v-icon name="play_arrow" />
+        </v-list-item-icon>
+        <v-list-item-content> Run </v-list-item-content>
+      </v-list-item>
+      <v-list-item clickable @click="duplicate(item)">
+        <v-list-item-icon>
+          <v-icon name="content_copy" />
+        </v-list-item-icon>
+        <v-list-item-content> Duplicate </v-list-item-content>
+      </v-list-item>
+      <v-list-item clickable @click="backup(item)">
+        <v-list-item-icon>
+          <v-icon name="file_download" />
+        </v-list-item-icon>
+        <v-list-item-content> Backup </v-list-item-content>
+      </v-list-item>
+      <v-list-item clickable @click="showPushToCloud(item)">
+        <v-list-item-icon>
+          <v-icon name="cloud_upload" />
+        </v-list-item-icon>
+        <v-list-item-content> Push to Cloud </v-list-item-content>
+      </v-list-item>
+      <v-list-item clickable @click="showDeleteItemDialog(item)">
+        <v-list-item-icon>
+          <v-icon name="delete" />
+        </v-list-item-icon>
+        <v-list-item-content> Delete </v-list-item-content>
+      </v-list-item>
+    </v-list>
+    <v-list v-else>
+      <v-list-item clickable @click="duplicateFolder(item)">
+        <v-list-item-icon>
+          <v-icon name="content_copy" />
+        </v-list-item-icon>
+        <v-list-item-content> Duplicate Folder </v-list-item-content>
+      </v-list-item>
+      <v-list-item clickable @click="showEditFolderDialog(item)">
+        <v-list-item-icon>
+          <v-icon name="edit" />
+        </v-list-item-icon>
+        <v-list-item-content> Edit Folder </v-list-item-content>
+      </v-list-item>
+      <v-list-item clickable @click="showDeleteItemDialog(item)">
+        <v-list-item-icon>
+          <v-icon name="delete" />
+        </v-list-item-icon>
+        <v-list-item-content> Delete Folder </v-list-item-content>
+      </v-list-item>
+    </v-list>
+  </v-menu>
+</template>
+
+<script lang="ts">
+import { defineComponent, PropType, toRefs, inject } from "vue";
+import { IFlow, IFolder } from "../types";
+
+export default defineComponent({
+  props: {
+    item: {
+      type: Object as PropType<IFlow>,
+      required: true,
+    },
+  },
+  setup(props) {
+    const { item } = toRefs(props);
+    const flowManagerUtils = inject<{
+      duplicate: (item: IFlow, isDuplicate?: boolean) => Promise<void>;
+      backup: (item: IFlow) => Promise<void>;
+      showPushToCloud: (item: IFlow) => Promise<void>;
+      showDeleteItemDialog: (item: IFlow) => Promise<void>;
+      duplicateFolder: (item: IFolder) => Promise<void>;
+      showEditFolderDialog: (item: IFolder) => Promise<void>;
+      showRunDialog: (item: IFlow) => Promise<void>;
+    }>("flowManagerUtils");
+
+    return {
+      item,
+      duplicate,
+      backup,
+      showPushToCloud,
+      showDeleteItemDialog,
+      duplicateFolder,
+      showEditFolderDialog,
+      showRunDialog,
+    };
+
+    function duplicate(item: IFlow, isDuplicate?: boolean) {
+      flowManagerUtils?.duplicate(item, isDuplicate);
+    }
+
+    function backup(item: IFlow) {
+      flowManagerUtils?.backup(item);
+    }
+
+    function showPushToCloud(item: IFlow) {
+      flowManagerUtils?.showPushToCloud(item);
+    }
+
+    function showDeleteItemDialog(item: IFlow) {
+      flowManagerUtils?.showDeleteItemDialog(item);
+    }
+
+    function duplicateFolder(item: IFolder) {
+      flowManagerUtils?.duplicateFolder(item);
+    }
+
+    function showEditFolderDialog(item: IFolder) {
+      flowManagerUtils?.showEditFolderDialog(item);
+    }
+
+    function showRunDialog(item: IFlow) {
+      flowManagerUtils?.showRunDialog(item);
+    }
+  },
+});
+</script>
+
+<style lang="scss" scoped>
+.ctx-toggle {
+  --v-icon-color: var(--foreground-subdued);
+
+  &:hover {
+    --v-icon-color: var(--foreground-normal);
+  }
+}
+</style>
