@@ -471,7 +471,7 @@ import { useStores, useApi, useLayout } from "@directus/extensions-sdk";
 import { useRouter } from "vue-router";
 import Draggable from "vuedraggable";
 import SecureLS from "secure-ls";
-import _ from "lodash";
+import debounce from "lodash/debounce";
 import { Collection, Field, Preset } from "@directus/types";
 
 import { ICredential, IFlow, IFolder, IOperation, ProcessingItem } from "./types";
@@ -797,7 +797,7 @@ export default defineComponent({
       });
     });
 
-    const updateExistingPreset = _.debounce(async () => {
+    const updateExistingPreset = debounce(async () => {
       await presetsStore.update(preset.value.id, {
         layout_options: {
           sort: tableSort.value,
@@ -814,7 +814,7 @@ export default defineComponent({
       reloadTabularFlow();
     }, 500);
 
-    const createNewPreset = _.debounce(async () => {
+    const createNewPreset = debounce(async () => {
       await presetsStore.savePreset({
         bookmark: null,
         collection: "flow-manager",

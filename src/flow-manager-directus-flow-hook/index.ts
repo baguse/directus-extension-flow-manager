@@ -5,14 +5,9 @@ export default defineHook(({ action }, { services }) => {
     const {
       payload: { action, item: flowId },
     } = data;
-    const { RevisionsService, FlowsService } = services;
+    const { RevisionsService } = services;
     if (action === "run") {
       const revisionsService = new RevisionsService({
-        knex: database,
-        schema,
-      });
-
-      const flowsService = new FlowsService({
         knex: database,
         schema,
       });
@@ -48,7 +43,7 @@ export default defineHook(({ action }, { services }) => {
         sort: ["-id"],
       });
 
-      await flowsService.updateMany([flowId], {
+      await database("directus_flows").where({ id: flowId }).update({
         flow_manager_last_run_at: new Date(),
         flow_manager_run_counter: counter.length + 1,
       });

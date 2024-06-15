@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref, toRefs, Ref, computed } from "vue";
+import { ref, toRefs, Ref, computed, watch } from "vue";
 import { IFlow } from "../types";
 import { useStores, useLayout, useApi } from "@directus/extensions-sdk";
 import { Preset, Collection } from "@directus/types";
-import _ from "lodash";
+import debounce from "lodash/debounce";
 import formatTitle from "@directus/format-title";
 
 const props = defineProps<{
@@ -51,22 +51,28 @@ const fields = computed(() => {
   }));
 });
 
-if (requireSelection) {
-  step.value = 1;
-} else if (requireConfirmation) {
-  step.value = 2;
-}
+watch([requireSelection, requireConfirmation], ([isNeedSelection, isNeedConfirmation]) => {
+  if (isNeedSelection) {
+    step.value = 1;
+  } else if (isNeedConfirmation) {
+    step.value = 2;
+  } else {
+    step.value = 3;
+  }
+}, {
+  immediate: true,
+});
 
 const existingTabularPreset: Ref<Partial<Preset>> = ref(
   presetsStore.getPresetForCollection(`flow-manager-${selectedCollectionToRun.value}`)
 );
-const updateExistingTabularPreset = _.debounce(() => {
+const updateExistingTabularPreset = debounce(() => {
   presetsStore.update(existingTabularPreset.value.id, {
     ...existingTabularPreset.value,
   });
 }, 500);
 
-const createNewTabularPreset = _.debounce(() => {
+const createNewTabularPreset = debounce(() => {
   presetsStore.savePreset({
     bookmark: null,
     collection: `flow-manager-${selectedCollectionToRun.value}`,
@@ -222,7 +228,7 @@ function proceed() {
     } else {
       runFlow();
     }
-  } else if (step.value === 2) {
+  } else {
     runFlow();
   }
 }
@@ -238,7 +244,7 @@ function resetConfirm() {
 
 <template>
   <v-dialog :model-value="value" @update:model-value="resetConfirm">
-    <v-card v-if="step === 1">
+    <v-card v-if="step === 1 || step === 3">
       <v-card-title>Run {{ selectedItem?.name }}</v-card-title>
       <v-card-text>
         <div class="mb-2">
@@ -289,7 +295,7 @@ function resetConfirm() {
       </v-card-text>
       <v-card-actions>
         <v-button secondary @click="resetConfirm"> Cancel </v-button>
-        <v-button :disabled="!selectedItemKeys.length || !selectedCollectionToRun" @click="proceed()" :loading="loadingRunFlow">
+        <v-button :disabled="(requireSelection && !selectedItemKeys.length) || !selectedCollectionToRun" @click="proceed()" :loading="loadingRunFlow">
           {{ requireConfirmation ? "Next" : `Run with ${selectedItemKeys.length} ${selectedItemKeys.length > 1 ? "Items" : "Item"}` }}
         </v-button>
       </v-card-actions>

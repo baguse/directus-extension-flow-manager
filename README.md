@@ -70,5 +70,9 @@ Changelogs:
 - 1.4.1 (26 May 2024)
   * Fix the version parsing from installed by the npm method
   * Fix the new field creation
+- 1.4.2 (15 June 2024)
+  * Fix the run flow without require selection
+  * Fix flow hook to use knex directly to avoid the side effect of the directus flowManager.reload()
+  * Optimize the import of lodash
 Contributing:
 If you want to contribute kindly to create a PR and if you want to request a feature or report of a bug kindly create the Issue
