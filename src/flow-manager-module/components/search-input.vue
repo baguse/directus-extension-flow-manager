@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useElementSize } from "@directus/composables";
 import { Filter } from "@directus/types";
-import { isObject } from "lodash";
+import isObject from "lodash/isObject";
 import { Ref, computed, inject, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 

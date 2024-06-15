@@ -2,19 +2,30 @@
 	"name": "directus-extension-flow-manager",
 	"description": "This is a custom module for managing Flow",
 	"icon": "extension",
-	"version": "1.4.1",
-  "author": "Bagus Andreanto<andreanto.bagus@gmail.com>",
+	"version": "1.4.2",
+  "author": {
+    "name": "Bagus Andreanto",
+    "email": "andreanto.bagus@gmail.com"
+  },
 	"homepage": "https://github.com/baguse/directus-extension-flow-manager",
-	"license": "MIT",
+	"license": "gpl-3.0",
 	"keywords": [
 		"directus",
 		"directus-extension",
-		"directus-extension-bundle"
+		"directus-extension-bundle",
+    "directus-extension-flow-manager",
+    "flow-manager",
+    "flow",
+    "directus-flow"
 	],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/baguse/directus-extension-flow-manager.git"
+  },
 	"type": "module",
 	"files": [
-		"dist"
-	],
+    "dist"
+  ],
 	"directus:extension": {
 		"type": "bundle",
 		"path": {
@@ -38,7 +49,12 @@
 				"source": "src/flow-manager-module/index.ts"
 			}
 		],
-		"host": "^10.10.0"
+    "sandbox": {
+      "enabled": true,
+      "requestedScopes": {}
+    },
+		"host": "^10.10.0",
+    "icon": "bolt"
 	},
 	"scripts": {
 		"build": "directus-extension build",
