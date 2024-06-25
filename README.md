@@ -74,5 +74,7 @@ Changelogs:
   * Fix the run flow without require selection
   * Fix flow hook to use knex directly to avoid the side effect of the directus flowManager.reload()
   * Optimize the import of lodash
+- 1.4.3 (25 June 2024)
+  * Add feature to pull flows from another directus instance to the current instance
 Contributing:
 If you want to contribute kindly to create a PR and if you want to request a feature or report of a bug kindly create the Issue

@@ -2,7 +2,7 @@
 	"name": "directus-extension-flow-manager",
 	"description": "This is a custom module for managing Flow",
 	"icon": "extension",
-	"version": "1.4.2",
+	"version": "1.4.3",
   "author": {
     "name": "Bagus Andreanto",
     "email": "andreanto.bagus@gmail.com"

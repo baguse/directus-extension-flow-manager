@@ -1047,6 +1047,9 @@ export default defineComponent({
       selectItemKey,
       parentId,
       showRunDialog,
+      createFlow,
+      reloadFlow,
+      reloadTabularFlow,
     });
 
     return {
@@ -2158,10 +2161,6 @@ export default defineComponent({
 .draggable-list {
   margin-left: 10px;
   margin-right: 10px;
-}
-
-.button-delete-category {
-  cursor: pointer;
 }
 
 .input-form {

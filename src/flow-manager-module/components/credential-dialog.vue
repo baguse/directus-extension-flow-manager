@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { PropType, computed, ref, toRefs } from "vue";
-import { ICredential } from "../types";
+import { PropType, computed, inject, ref, toRefs, watch } from "vue";
+import { ICredential, IFlow } from "../types";
 import { generateRandomString } from "../../utils/string.util";
-
+import { useApi } from "@directus/extensions-sdk";
 const props = withDefaults(
   defineProps<{
     value: boolean;
@@ -17,13 +17,23 @@ const credentials = defineModel("credentials", {
   default: () => [],
 });
 
+const api = useApi();
+
 const { value } = toRefs(props);
 
 const credentialName = ref("");
 const credentialUrl = ref("");
 const credentialStaticToken = ref("");
+const flows = ref<IFlow[]>([]);
+const selectedFlows = ref<IFlow[]>([]);
+const flowDuplicatedName = ref("");
+const pullingProgressValue = ref(0);
 
 const isEdit = ref(false);
+const pullFlowsDialog = ref(false);
+const isPreviousIdPersisted = ref(false);
+const isPullingFlows = ref(false);
+const isPullingFlowError = ref(false);
 
 const selectedCredential = ref<ICredential>({
   id: "",
@@ -35,12 +45,30 @@ const credentialHeaders = ref([
   {
     text: "Name",
     value: "name",
+    width: 300,
   },
   {
     text: "URL",
     value: "url",
+    width: 400,
   },
 ]);
+
+watch(
+  [selectedFlows],
+  ([value]) => {
+    if (value.length === 1) {
+      flowDuplicatedName.value = `${value[0]?.name} - Copy`;
+    } else if (value.length > 1) {
+      flowDuplicatedName.value = "{{original_name}} - Copy";
+    } else {
+      flowDuplicatedName.value = "";
+    }
+  },
+  {
+    immediate: true,
+  }
+);
 
 const isValid = computed(() => {
   if (isEdit.value) {
@@ -48,6 +76,12 @@ const isValid = computed(() => {
   }
   return !!credentialName.value && !!credentialUrl.value && !!credentialStaticToken.value;
 });
+
+const flowManagerUtils = inject<{
+  createFlow: (flow: IFlow) => Promise<void>;
+  reloadFlow: () => Promise<void>;
+  reloadTabularFlow: () => Promise<void>;
+}>("flowManagerUtils");
 
 function saveCredential() {
   if (isEdit.value) {
@@ -136,15 +170,87 @@ function cancelEditCredential() {
   credentialUrl.value = "";
   credentialStaticToken.value = "";
 }
+
+const pullFlowsHeaders = ref([
+  {
+    text: "",
+    value: "icon",
+    width: 50,
+  },
+  {
+    text: "Name",
+    value: "name",
+    width: 300,
+  },
+  {
+    text: "Description",
+    value: "description",
+    width: 400,
+  },
+]);
+
+async function pullFlows(credential: ICredential) {
+  try {
+    flows.value = [];
+    isPullingFlowError.value = false;
+    const fields = ["*", "operations.*"];
+    const {
+      data: { data },
+    } = await api.post("/flow-manager-endpoint/flow-manager/process", {
+      url: `${credential?.url}/flows?fields=${fields.join(",")}`,
+      staticToken: credential?.staticToken,
+      method: "GET",
+    });
+    flows.value = data;
+    pullFlowsDialog.value = true;
+    flowDuplicatedName.value = "";
+    isPreviousIdPersisted.value = false;
+  } catch (error) {
+    isPullingFlowError.value = true;
+  }
+}
+
+async function proceedPull() {
+  try {
+    isPullingFlows.value = true;
+    pullingProgressValue.value = 0;
+    const flowsToPull = selectedFlows.value.map((flow) => {
+      return {
+        ...flow,
+        status: "inactive",
+        name: flowDuplicatedName.value.replace(/{{original_name}}/g, flow.name),
+        id: isPreviousIdPersisted.value ? flow.id : undefined,
+      };
+    });
+
+    for (let i = 0; i < flowsToPull.length; i++) {
+      const flow = flowsToPull[i] as IFlow;
+      await flowManagerUtils?.createFlow(flow);
+      pullingProgressValue.value = Math.round((i / flowsToPull.length) * 100);
+    }
+  } catch (error) {
+  } finally {
+    pullFlowsDialog.value = false;
+    isPullingFlows.value = false;
+    selectedFlows.value = [];
+    flowDuplicatedName.value = "";
+    isPreviousIdPersisted.value = false;
+    pullingProgressValue.value = 0;
+    flowManagerUtils?.reloadFlow();
+    flowManagerUtils?.reloadTabularFlow();
+  }
+}
 </script>
 
 <template>
   <v-dialog :model-value="value" @update:model-value="emit('update:model-value', false)" :persistent="true">
-    <v-card>
+    <v-card class="card-extended">
       <v-card-title>Credentials</v-card-title>
       <v-card-text>
+        <v-error v-if="isPullingFlowError" :error="{ extensions: { code: 'Error' }, message: 'Failed to pull flows' }"></v-error>
         <v-table :headers="credentialHeaders" :items="credentials">
           <template #item-append="{ item }">
+            <v-icon class="button-delete-category" name="download" @click="pullFlows(item)" v-tooltip.bottom="'Pull Flows'" />
             <v-icon
               class="button-delete-category"
               name="edit"
@@ -179,6 +285,31 @@ function cancelEditCredential() {
       </v-card-actions>
     </v-card>
   </v-dialog>
+
+  <v-dialog :model-value="pullFlowsDialog" @update:model-value="pullFlowsDialog = false" :persistent="true">
+    <v-card class="card-extended">
+      <v-card-title>Flows</v-card-title>
+      <v-card-text>
+        <v-table v-model="selectedFlows" show-select="multiple" :headers="pullFlowsHeaders" :items="flows">
+          <template #[`item.icon`]="{ item }">
+            <v-icon v-if="item.icon" :name="item.icon || ''" :color="item.color" />
+          </template>
+        </v-table>
+        <v-input class="input-form" placeholder="Flow Name" v-model="flowDuplicatedName" v-tooltip.bottom="'Flow Name'" />
+        <v-checkbox
+          class="input-form"
+          label="Keep the same flow id as the original flow"
+          :model-value="isPreviousIdPersisted"
+          @update:model-value="isPreviousIdPersisted = $event"
+        />
+        <v-progress-linear v-if="isPullingFlows" :value="pullingProgressValue"></v-progress-linear>
+      </v-card-text>
+      <v-card-actions>
+        <v-button :disabled="!selectedFlows.length" @click="proceedPull()"> Pull </v-button>
+        <v-button secondary @click="pullFlowsDialog = false"> Close </v-button>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
 </template>
 
 <style scoped lang="scss">
@@ -188,6 +319,15 @@ function cancelEditCredential() {
 }
 
 .ml-2 {
+  margin-left: 10px;
+}
+
+.container > .v-card.card-extended {
+  --v-card-min-width: 1000px;
+}
+
+.button-delete-category {
+  cursor: pointer;
   margin-left: 10px;
 }
 </style>
