@@ -39,7 +39,7 @@ function pushToCloud() {
 </script>
 
 <template>
-  <v-dialog :model-value="value" @update:model-value="emit('update:model-value', false)" :persistent="true">
+  <v-dialog :model-value="value" @update:model-value="emit('update:modelValue', false)" :persistent="true">
     <v-card>
       <v-card-title>Push to Cloud</v-card-title>
       <v-card-text>
@@ -48,7 +48,7 @@ function pushToCloud() {
         <div>Static Token: {{ maskingText(selectedItem?.staticToken) || "-" }}</div>
       </v-card-text>
       <v-card-actions>
-        <v-button secondary @click="emit('update:model-value', false)"> Close </v-button>
+        <v-button secondary @click="emit('update:modelValue', false)"> Close </v-button>
         <v-button :disabled="!selectedItem" @click="pushToCloud()" :loading="loading"> Proceed </v-button>
       </v-card-actions>
     </v-card>

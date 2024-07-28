@@ -24,7 +24,7 @@
       }"
     >
       <v-checkbox v-model="showSelect">Show Select</v-checkbox>
-      <v-checkbox v-if="showSelect" v-model="isSelectAll" @update:model-value="($e: boolean) => selectAll($e)">Select All</v-checkbox>
+      <v-checkbox v-if="showSelect" v-model="isSelectAll" @update:model-value="selectAll()">Select All</v-checkbox>
       <v-button
         v-if="showSelect"
         icon
@@ -234,7 +234,7 @@
                   v-for="category in usedCategoryList"
                   :active="selectedShortcutFilter.flow_manager_category === category.id"
                   clickable
-                  @click="setCategoryFilter(category.id)"
+                  @click="setCategoryFilter(category.id as string)"
                 >
                   <v-list-item-icon>
                     <v-icon :name="category.icon || 'folder'" :color="category.color" />
@@ -289,10 +289,7 @@
         v-tooltip.bottom="'Credentials'"
         rounded
         icon
-        @click="
-          credentialDialog = true;
-          isEdit = false;
-        "
+        @click="credentialDialog = true"
       >
         <v-icon name="database" />
       </v-button>
@@ -307,21 +304,21 @@
 
     <template #sidebar>
       <sidebar-detail icon="info" :title="'information'" close>
-        <div v-if="selectedItem?.id && selectedItem.type !== 'category'" style="display: grid">
+        <div v-if="selectedItem?.id && (selectedItem as IFolder).type !== 'category'" style="display: grid">
           <div style="font-weight: bold">Flow ID</div>
           <div>{{ selectedItem.id }}</div>
           <div style="font-weight: bold" class="mt-2">Flow Name</div>
           <div>{{ selectedItem.name }}</div>
           <div style="font-weight: bold" class="mt-2">Status</div>
-          <div>{{ selectedItem.status?.toUpperCase() || "N/A" }}</div>
+          <div>{{ (selectedItem as IFlow).status?.toUpperCase() || "N/A" }}</div>
           <div style="font-weight: bold" class="mt-2">Trigger Type</div>
-          <div>{{ selectedItem.trigger?.toUpperCase() || "N/A" }}</div>
+          <div>{{ (selectedItem as IFlow).trigger?.toUpperCase() || "N/A" }}</div>
           <div style="font-weight: bold" class="mt-2">Description</div>
-          <div>{{ selectedItem.description || "N/A" }}</div>
+          <div>{{ (selectedItem as IFlow).description || "N/A" }}</div>
           <div style="font-weight: bold" class="mt-2">Total Runs</div>
-          <div>{{ selectedItem.flow_manager_run_counter || 0 }}</div>
+          <div>{{ (selectedItem as IFlow).flow_manager_run_counter || 0 }}</div>
           <div style="font-weight: bold" class="mt-2">Last Run</div>
-          <div>{{ formatDateLong(selectedItem.flow_manager_last_run_at) }}</div>
+          <div>{{ formatDateLong((selectedItem as IFlow).flow_manager_last_run_at) }}</div>
         </div>
       </sidebar-detail>
     </template>
@@ -339,11 +336,11 @@
             @update:model-value="isPreviousIdPersisted = $event"
           />
           <v-list v-if="Array.isArray(restoredFileObj)">
-            <v-list-item v-for="item in restoredFileObj" :key="item.id">
+            <v-list-item v-for="item in restoredFileObj" :key="item?.id">
               <v-list-item-icon>
-                <v-icon :color="item.color || 'var(--theme--primary)'" :name="item.icon" />
+                <v-icon :color="item?.color || 'var(--theme--primary)'" :name="item?.icon" />
               </v-list-item-icon>
-              <v-list-item-content>{{ item.name }}</v-list-item-content>
+              <v-list-item-content>{{ item?.name }}</v-list-item-content>
             </v-list-item>
           </v-list>
           <v-list v-else>
@@ -955,7 +952,7 @@ export default defineComponent({
     });
 
     const usedCategoryList = computed(() => {
-      const categories = [];
+      const categories: Partial<IFolder>[] = [];
 
       const categoryKeys = Object.keys(flowChildMap.value);
 

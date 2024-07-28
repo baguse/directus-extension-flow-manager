@@ -163,7 +163,7 @@ function moveTo() {
 
   <v-menu ref="contextMenu" show-arrow placement="bottom-start">
     <v-list v-if="flow.type !== 'category'">
-      <v-list-item v-if="flow.trigger === 'manual' && flow.status === 'active'" clickable @click="showRunDialog(flow)">
+      <v-list-item v-if="flow.trigger === 'manual' && flow.status === 'active'" clickable @click="showRunDialog(flow as IFlow)">
         <v-list-item-icon>
           <v-icon name="play_arrow" />
         </v-list-item-icon>
@@ -211,19 +211,19 @@ function moveTo() {
       </v-list-item>
     </v-list>
     <v-list v-else>
-      <v-list-item clickable @click="duplicateFolder(flow)">
+      <v-list-item clickable @click="duplicateFolder(flow as IFolder)">
         <v-list-item-icon>
           <v-icon name="content_copy" />
         </v-list-item-icon>
         <v-list-item-content> Duplicate Folder </v-list-item-content>
       </v-list-item>
-      <v-list-item clickable @click="showEditFolderDialog(flow)">
+      <v-list-item clickable @click="showEditFolderDialog(flow as IFolder)">
         <v-list-item-icon>
           <v-icon name="edit" />
         </v-list-item-icon>
         <v-list-item-content> Edit Folder </v-list-item-content>
       </v-list-item>
-      <v-list-item clickable @click="showDeleteItemDialog(flow)">
+      <v-list-item clickable @click="showDeleteItemDialog(flow as IFlow)">
         <v-list-item-icon>
           <v-icon name="delete" />
         </v-list-item-icon>

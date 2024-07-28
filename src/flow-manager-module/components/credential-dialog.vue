@@ -243,7 +243,7 @@ async function proceedPull() {
 </script>
 
 <template>
-  <v-dialog :model-value="value" @update:model-value="emit('update:model-value', false)" :persistent="true">
+  <v-dialog :model-value="value" @update:model-value="emit('update:modelValue', false)" :persistent="true">
     <v-card class="card-extended">
       <v-card-title>Credentials</v-card-title>
       <v-card-text>
@@ -281,7 +281,7 @@ async function proceedPull() {
         <v-button secondary v-if="isEdit" class="ml-2" @click="cancelEditCredential"> Cancel </v-button>
       </v-card-text>
       <v-card-actions>
-        <v-button secondary @click="emit('update:model-value', false)"> Close </v-button>
+        <v-button secondary @click="emit('update:modelValue', false)"> Close </v-button>
       </v-card-actions>
     </v-card>
   </v-dialog>

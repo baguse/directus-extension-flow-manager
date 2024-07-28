@@ -24,12 +24,12 @@ const { value, selectedItem, selectedFlows, isBatchAction } = toRefs(props);
 </script>
 
 <template>
-  <v-dialog :model-value="value" @update:model-value="emit('update:model-value', false)" :persistent="true">
+  <v-dialog :model-value="value" @update:model-value="emit('update:modelValue', false)" :persistent="true">
     <v-card>
       <v-card-title>
         <span v-if="isBatchAction">Delete Flows</span>
         <span v-else>
-          <span v-if="selectedItem?.type === 'category'">Delete Folder</span>
+          <span v-if="(selectedItem as IFolder)?.type === 'category'">Delete Folder</span>
           <span v-else>Delete Flow</span>
         </span>
       </v-card-title>
@@ -46,18 +46,18 @@ const { value, selectedItem, selectedFlows, isBatchAction } = toRefs(props);
           </v-list>
         </span>
         <span v-else>
-          <span v-if="selectedItem?.type === 'category'">
-            Are you sure you want to delete folder [<span class="bold-text">{{ selectedItem.name }}</span
+          <span v-if="(selectedItem as IFolder)?.type === 'category'">
+            Are you sure you want to delete folder [<span class="bold-text">{{ selectedItem?.name }}</span
             >]?
           </span>
           <span v-else>
-            Are you sure you want to delete [<span class="bold-text">{{ selectedItem.name }}</span
-            >] {{ selectedItem?.type === "category" ? "Folder" : "Flow" }}?
+            Are you sure you want to delete [<span class="bold-text">{{ selectedItem?.name }}</span
+            >] {{ (selectedItem as IFolder)?.type === "category" ? "Folder" : "Flow" }}?
           </span>
         </span>
       </v-card-text>
       <v-card-actions>
-        <v-button secondary @click="emit('update:model-value', false)"> Close </v-button>
+        <v-button secondary @click="emit('update:modelValue', false)"> Close </v-button>
         <v-button :disabled="!selectedItem" @click="emit('proceed')" :loading="loading"> Proceed </v-button>
       </v-card-actions>
     </v-card>

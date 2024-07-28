@@ -73,12 +73,12 @@ function selectItem() {
 
 <template>
   <div class="row-item">
-    <v-list-item block dense clickable style="height: 49px" :class="{ hidden: !isCategory && !isActive }" @click="selectItem(item)">
+    <v-list-item block dense clickable style="height: 49px" :class="{ hidden: !isCategory && !isActive }" @click="selectItem()">
       <v-list-item-icon>
         <v-icon class="drag-handle" name="drag_handle" />
       </v-list-item-icon>
       <div v-if="!isCategory && showSelect">
-        <v-checkbox v-model="selected" @update:model-value="($e: boolean) => $emit('select-item', $e)" />
+        <v-checkbox v-model="selected" @update:model-value="($e: boolean) => $emit('selectItem', $e)" />
       </div>
       <v-icon
         v-if="isCategory"

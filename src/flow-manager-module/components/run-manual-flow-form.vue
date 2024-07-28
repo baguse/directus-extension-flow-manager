@@ -307,7 +307,7 @@ function resetConfirm() {
 
         <v-card-text class="confirm-form">
           <v-form
-            v-if="confirmDetails.fields?.length > 0"
+            v-if="confirmDetails?.fields?.length"
             :fields="fields"
             :model-value="confirmValues"
             autofocus
