@@ -1,9 +1,9 @@
 <script lang="ts" setup>
 import { toRefs, computed, inject, Ref } from "vue";
-import { IFlow, IFolder } from "../types";
+import { ICredential, IFlow, IFolder } from "../../types";
 import Draggable from "vuedraggable";
 import { useRouter } from "vue-router";
-import { useLocalStorage } from "../composables/use-local-storage";
+import { useLocalStorage } from "../../composables/use-local-storage";
 import itemOptions from "./item-options.vue";
 
 const props = withDefaults(
@@ -28,6 +28,8 @@ const flowManagerUtils = inject<{
   selectItem: (item: IFlow) => void;
   selectItemKey: (key: string, isSelected: boolean) => void;
   selectedItems: Ref<string[]>;
+  selectedCredential: Ref<string>;
+  credentials: Ref<ICredential[]>;
 }>("flowManagerUtils");
 const nestedFlows = computed(() =>
   items.value
@@ -63,7 +65,19 @@ function onGroupSortChange(updates: IFlow[]) {
 
 function goToFlow(item: IFlow & IFolder) {
   if (item.type === "category") return;
-  router.push(`/settings/flows/${item.id}`);
+
+  if (flowManagerUtils?.selectedCredential.value === "local") {
+    router.push(`/settings/flows/${item.id}`);
+  } else {
+    const credential = flowManagerUtils?.credentials.value.find((cred) => cred.id === flowManagerUtils?.selectedCredential.value);
+    if (credential) {
+      const a = document.createElement("a");
+      a.href = `${credential.url}/admin/settings/flows/${item.id}`;
+      a.target = "_blank";
+      a.click();
+      document.body.removeChild(a);
+    }
+  }
 }
 
 function selectItem() {

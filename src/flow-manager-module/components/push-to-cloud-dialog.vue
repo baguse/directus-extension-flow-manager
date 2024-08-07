@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, toRefs } from "vue";
-import { ICredential } from "../types";
+import { ICredential } from "../../types";
 import { maskingText } from "../../utils/string.util";
 
 const props = withDefaults(

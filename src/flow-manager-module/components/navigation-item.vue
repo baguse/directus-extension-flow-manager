@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, toRefs, inject, unref } from "vue";
-import { IFlow, IFolder } from "../types";
+import { computed, toRefs, inject, unref, Ref } from "vue";
+import { ICredential, IFlow, IFolder } from "../../types";
 import NavigationItemContent from "./navigation-item-content.vue";
+import { useRouter } from "vue-router";
 
+const router = useRouter();
 const props = defineProps<{
   flow: Partial<IFlow & IFolder>;
   search?: string;
@@ -15,7 +17,7 @@ const currentPath = computed(() => encodeURIComponent((flow.value.id as string) 
 
 const childFlows = computed(() => {
   const flows = (flowChildMap.value[flow.value.id as string] || []).sort(
-    (a, b) => (a.flow_manager_order || 0) - (b.flow_manager_order || 0)
+    (a, b) => ((a as IFlow).flow_manager_order || 0) - ((b as IFlow).flow_manager_order || 0)
   );
 
   return flows;
@@ -64,7 +66,12 @@ const flowManagerUtils = inject<{
   showEditFolderDialog: (item: IFolder) => Promise<void>;
   parentId: string | null;
   onSort: (event: any[], parentId: string) => void;
+  selectedCredential: Ref<string>;
+  showRunWebhookDialog: (item: IFlow) => Promise<void>;
+  credentials: Ref<ICredential[]>;
 }>("flowManagerUtils");
+
+const selectedCredential = computed(() => flowManagerUtils?.selectedCredential.value);
 
 const parentId = flowManagerUtils?.parentId;
 
@@ -96,6 +103,10 @@ const showEditFolderDialog = (item: IFolder) => {
   flowManagerUtils?.showEditFolderDialog(item);
 };
 
+const showRunWebhookDialog = (item: IFlow) => {
+  flowManagerUtils?.showRunWebhookDialog(item);
+};
+
 function moveTo() {
   const destinationCategory = unref(parentId) || "";
   const destinationFlows = flowChildMap.value[destinationCategory] || [];
@@ -117,6 +128,23 @@ function moveTo() {
   });
   flowManagerUtils?.onSort(destinationFlows, destinationCategory);
   flowManagerUtils?.onSort(reorderSourceFlows, sourceCategory);
+}
+
+function goToFlow(item: IFlow & IFolder) {
+  if (item.type === "category") return;
+
+  if (flowManagerUtils?.selectedCredential.value === "local") {
+    router.push(`/settings/flows/${item.id}`);
+  } else {
+    const credential = flowManagerUtils?.credentials.value.find((cred) => cred.id === flowManagerUtils?.selectedCredential.value);
+    if (credential) {
+      const a = document.createElement("a");
+      a.href = `${credential.url}/admin/settings/flows/${item.id}`;
+      a.target = "_blank";
+      a.click();
+      document.body.removeChild(a);
+    }
+  }
 }
 </script>
 
@@ -163,7 +191,11 @@ function moveTo() {
 
   <v-menu ref="contextMenu" show-arrow placement="bottom-start">
     <v-list v-if="flow.type !== 'category'">
-      <v-list-item v-if="flow.trigger === 'manual' && flow.status === 'active'" clickable @click="showRunDialog(flow as IFlow)">
+      <v-list-item
+        v-if="flow.trigger === 'manual' && flow.status === 'active' && selectedCredential === 'local'"
+        clickable
+        @click="showRunDialog(flow as IFlow)"
+      >
         <v-list-item-icon>
           <v-icon name="play_arrow" />
         </v-list-item-icon>
@@ -171,7 +203,19 @@ function moveTo() {
           <v-text-overflow :text="'Run'" />
         </v-list-item-content>
       </v-list-item>
-      <v-list-item clickable :to="`/settings/flows/${flow.id}`">
+      <v-list-item
+        v-else-if="flow.trigger === 'webhook' && flow.status === 'active'"
+        clickable
+        @click="showRunWebhookDialog(flow as IFlow)"
+      >
+        <v-list-item-icon>
+          <v-icon name="play_arrow" />
+        </v-list-item-icon>
+        <v-list-item-content>
+          <v-text-overflow :text="'Run'" />
+        </v-list-item-content>
+      </v-list-item>
+      <v-list-item clickable @click="goToFlow(flow as IFolder & IFlow)">
         <v-list-item-icon>
           <v-icon name="bolt" />
         </v-list-item-icon>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, toRefs, Ref, computed, watch } from "vue";
-import { IFlow } from "../types";
+import { IFlow } from "../../types";
 import { useStores, useLayout, useApi } from "@directus/extensions-sdk";
 import { Preset, Collection } from "@directus/types";
 import debounce from "lodash/debounce";
@@ -51,17 +51,21 @@ const fields = computed(() => {
   }));
 });
 
-watch([requireSelection, requireConfirmation], ([isNeedSelection, isNeedConfirmation]) => {
-  if (isNeedSelection) {
-    step.value = 1;
-  } else if (isNeedConfirmation) {
-    step.value = 2;
-  } else {
-    step.value = 3;
+watch(
+  [requireSelection, requireConfirmation],
+  ([isNeedSelection, isNeedConfirmation]) => {
+    if (isNeedSelection) {
+      step.value = 1;
+    } else if (isNeedConfirmation) {
+      step.value = 2;
+    } else {
+      step.value = 3;
+    }
+  },
+  {
+    immediate: true,
   }
-}, {
-  immediate: true,
-});
+);
 
 const existingTabularPreset: Ref<Partial<Preset>> = ref(
   presetsStore.getPresetForCollection(`flow-manager-${selectedCollectionToRun.value}`)
@@ -175,10 +179,13 @@ const tabularLayoutQuery = computed({
   },
 });
 
-const collectionMap: Record<string, Collection> = allCollections.reduce((acc: Record<string, Collection>, collection: Collection) => {
-  acc[collection.collection] = collection;
-  return acc;
-}, {});
+const collectionMap: Record<string, Collection> = allCollections.reduce(
+  (acc: Record<string, Collection>, collection: Collection) => {
+    acc[collection.collection] = collection;
+    return acc;
+  },
+  {}
+);
 
 function onSelectCollectionToRun(collection: string) {
   selectedCollectionToRun.value = collection;
@@ -295,7 +302,11 @@ function resetConfirm() {
       </v-card-text>
       <v-card-actions>
         <v-button secondary @click="resetConfirm"> Cancel </v-button>
-        <v-button :disabled="(requireSelection && !selectedItemKeys.length) || !selectedCollectionToRun" @click="proceed()" :loading="loadingRunFlow">
+        <v-button
+          :disabled="(requireSelection && !selectedItemKeys.length) || !selectedCollectionToRun"
+          @click="proceed()"
+          :loading="loadingRunFlow"
+        >
           {{ requireConfirmation ? "Next" : `Run with ${selectedItemKeys.length} ${selectedItemKeys.length > 1 ? "Items" : "Item"}` }}
         </v-button>
       </v-card-actions>

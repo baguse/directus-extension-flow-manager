@@ -1,3 +1,5 @@
+import { Field } from "@directus/types";
+
 export interface IOperation {
   id: string;
   name: string;
@@ -25,6 +27,7 @@ export interface IPayload {
 
 export interface IFlow {
   id: string;
+  type?: string;
   name: string;
   icon: string;
   color: string;
@@ -32,13 +35,25 @@ export interface IFlow {
   status: string;
   trigger: string;
   accountability: string;
-  options: { type?: string; scope?: string[]; collections: string[] };
+  options: {
+    type?: string;
+    scope?: string[];
+    collections: string[];
+    return?: string;
+    requireSelection?: boolean;
+    requireConfirmation?: boolean;
+    confirmationDescription?: string;
+    fields?: Field[];
+    method?: string;
+  };
   operation: string;
   date_created?: string;
   user_created?: string;
   operations: IOperation[];
   flow_manager_category?: string;
   flow_manager_order?: number;
+  flow_manager_run_counter?: number;
+  flow_manager_last_run_at?: Date;
 }
 
 export interface IFolder {
@@ -47,6 +62,8 @@ export interface IFolder {
   icon: string;
   type: string;
   color: string;
+  flow_manager_order?: number;
+  flow_manager_category?: string;
 }
 
 export interface ICredential {
@@ -55,3 +72,9 @@ export interface ICredential {
   staticToken: string;
   url: string;
 }
+
+export type ProcessingItem = {
+  id?: string;
+  status: "success" | "error" | "processing" | "skipped";
+  message: string;
+};

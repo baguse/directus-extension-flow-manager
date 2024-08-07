@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, toRefs, watch } from "vue";
-import { ProcessingItem } from "../types";
+import { ProcessingItem } from "../../types";
 
 const props = withDefaults(
   defineProps<{
@@ -8,15 +8,17 @@ const props = withDefaults(
     progressValue: number;
     listProcessing: ProcessingItem[];
     title: string;
+    indeterminate: boolean;
   }>(),
   {
     title: "Processing",
+    indeterminate: false,
   }
 );
 
 const emit = defineEmits(["update:modelValue"]);
 
-const { value, progressValue, listProcessing, title } = toRefs(props);
+const { value, progressValue, listProcessing, title, indeterminate } = toRefs(props);
 const bottomList = ref<HTMLElement | null>(null);
 
 watch([progressValue], () => {
@@ -25,8 +27,14 @@ watch([progressValue], () => {
 </script>
 
 <template>
-  <v-dialog :model-value="value" @update:model-value="emit('update:model-value', false)">
-    <v-card>
+  <v-dialog :model-value="value" @update:model-value="emit('update:modelValue', false)" :persistent="indeterminate">
+    <v-card v-if="indeterminate">
+      <v-card-title>{{ title }}</v-card-title>
+      <v-card-text>
+        <v-progress-circular indeterminate></v-progress-circular>
+      </v-card-text>
+    </v-card>
+    <v-card v-else>
       <v-card-title>{{ title }}</v-card-title>
       <v-card-text>
         <v-progress-linear :value="progressValue"></v-progress-linear>

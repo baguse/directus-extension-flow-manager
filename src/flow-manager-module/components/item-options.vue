@@ -4,7 +4,17 @@
       <v-icon name="more_vert" clickable class="ctx-toggle" @click.prevent="toggle" />
     </template>
     <v-list v-if="item.type !== 'category'">
-      <v-list-item v-if="item.trigger === 'manual' && item.status === 'active'" clickable @click="showRunDialog(item)">
+      <v-list-item
+        v-if="item.trigger === 'manual' && item.status === 'active' && selectedCredential === 'local'"
+        clickable
+        @click="showRunDialog(item)"
+      >
+        <v-list-item-icon>
+          <v-icon name="play_arrow" />
+        </v-list-item-icon>
+        <v-list-item-content> Run </v-list-item-content>
+      </v-list-item>
+      <v-list-item v-else-if="item.trigger === 'webhook' && item.status === 'active'" clickable @click="showRunWebhookDialog(item)">
         <v-list-item-icon>
           <v-icon name="play_arrow" />
         </v-list-item-icon>
@@ -36,13 +46,13 @@
       </v-list-item>
     </v-list>
     <v-list v-else>
-      <v-list-item clickable @click="duplicateFolder(item)">
+      <v-list-item clickable @click="duplicateFolder(item as IFolder)">
         <v-list-item-icon>
           <v-icon name="content_copy" />
         </v-list-item-icon>
         <v-list-item-content> Duplicate Folder </v-list-item-content>
       </v-list-item>
-      <v-list-item clickable @click="showEditFolderDialog(item)">
+      <v-list-item clickable @click="showEditFolderDialog(item as IFolder)">
         <v-list-item-icon>
           <v-icon name="edit" />
         </v-list-item-icon>
@@ -59,8 +69,8 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, PropType, toRefs, inject } from "vue";
-import { IFlow, IFolder } from "../types";
+import { defineComponent, PropType, toRefs, inject, Ref, computed } from "vue";
+import { IFlow, IFolder } from "../../types";
 
 export default defineComponent({
   props: {
@@ -79,7 +89,11 @@ export default defineComponent({
       duplicateFolder: (item: IFolder) => Promise<void>;
       showEditFolderDialog: (item: IFolder) => Promise<void>;
       showRunDialog: (item: IFlow) => Promise<void>;
+      showRunWebhookDialog: (item: IFlow) => Promise<void>;
+      selectedCredential: Ref<string>;
     }>("flowManagerUtils");
+
+    const selectedCredential = computed(() => flowManagerUtils?.selectedCredential.value);
 
     return {
       item,
@@ -90,6 +104,8 @@ export default defineComponent({
       duplicateFolder,
       showEditFolderDialog,
       showRunDialog,
+      showRunWebhookDialog,
+      selectedCredential,
     };
 
     function duplicate(item: IFlow, isDuplicate?: boolean) {
@@ -118,6 +134,10 @@ export default defineComponent({
 
     function showRunDialog(item: IFlow) {
       flowManagerUtils?.showRunDialog(item);
+    }
+
+    function showRunWebhookDialog(item: IFlow) {
+      flowManagerUtils?.showRunWebhookDialog(item);
     }
   },
 });

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { PropType, computed, inject, ref, toRefs, watch } from "vue";
-import { ICredential, IFlow } from "../types";
+import { ICredential, IFlow } from "../../types";
 import { generateRandomString } from "../../utils/string.util";
 import { useApi } from "@directus/extensions-sdk";
+import { ENDPOINT_EXTENSION_NAME } from "../../constants";
 const props = withDefaults(
   defineProps<{
     value: boolean;
@@ -196,7 +197,7 @@ async function pullFlows(credential: ICredential) {
     const fields = ["*", "operations.*"];
     const {
       data: { data },
-    } = await api.post("/flow-manager-endpoint/flow-manager/process", {
+    } = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
       url: `${credential?.url}/flows?fields=${fields.join(",")}`,
       staticToken: credential?.staticToken,
       method: "GET",

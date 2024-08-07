@@ -1,6 +1,12 @@
 <template>
-  <div class="content-navigation-wrapper">
+  <div v-if="viewMode === 'TABLE'" class="content-navigation-wrapper">
     <div class="action-bar">
+      <v-select class="small" v-model="selectedCredential" :items="credentialOptions"></v-select>
+    </div>
+  </div>
+  <div v-else class="content-navigation-wrapper">
+    <div class="action-bar">
+      <v-select class="small" v-model="selectedCredential" :items="credentialOptions"></v-select>
       <div class="action-button">
         <v-button x-small to="/flow-manager"> Home </v-button>
         <v-button x-small @click="onNavigationAction">
@@ -36,23 +42,34 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, toRefs } from "vue";
+import { computed, ref, toRefs, inject, Ref } from "vue";
 import NavigationItem from "./navigation-item.vue";
-import { IFlow, IFolder } from "../types";
-import { useLocalStorage } from "../composables/use-local-storage";
+import { ICredential, IFlow, IFolder } from "../../types";
+import { useLocalStorage } from "../../composables/use-local-storage";
 
 const props = defineProps<{
   currentCollection?: string;
   rootFlows: Partial<IFlow & IFolder>[];
   flowChildMap: Record<string, (IFlow | IFolder)[]>;
   allFlows: IFolder[] | IFlow[];
+  viewMode: string;
 }>();
 
-const { rootFlows, flowChildMap, allFlows } = toRefs(props);
+const { rootFlows, flowChildMap, allFlows, viewMode } = toRefs(props);
 const search = ref<string>("");
 const tmpSearch = ref<string>("");
 const timeOutId = ref<NodeJS.Timeout | null>(null);
 
+const flowManagerUtils = inject<{
+  credentials: Ref<ICredential[]>;
+  selectedCredential: Ref<string>;
+  setCredential: (credential: string) => void;
+}>("flowManagerUtils");
+
+const selectedCredential = computed({
+  get: () => flowManagerUtils?.selectedCredential.value,
+  set: (value) => flowManagerUtils?.setCredential(value as string),
+});
 /**
  * @description
  * This is a computed property that returns a filtered list of items based on the search value.
@@ -69,6 +86,22 @@ const filteredItemFlag = computed(() => {
   }
 
   return cache;
+});
+
+const credentialOptions = computed(() => {
+  const credentials =
+    flowManagerUtils?.credentials?.value?.map((credential) => ({
+      text: credential.name,
+      value: credential.id,
+    })) || [];
+
+  return [
+    {
+      text: "Local",
+      value: "local",
+    },
+    ...credentials,
+  ];
 });
 
 function checkFlowHaveChildSearched(item: IFlow | IFolder): boolean {
@@ -198,6 +231,7 @@ function onNavigationAction() {
   .action-button {
     display: flex;
     justify-content: space-between;
+    margin-top: 8px;
   }
 
   position: sticky;

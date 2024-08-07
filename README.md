@@ -19,7 +19,8 @@ Roadmap:
 - [x] Now we can customize the folder icon and color
 - [ ] Pagination on table view
 - [ ] Move the category to a collection for better UX and data structure
-- [ ] Run Another flow ability
+- [x] Run webhook flow ability
+- [x] Manage another instance flows
 
 
 
@@ -78,5 +79,10 @@ Changelogs:
   * Add feature to pull flows from another directus instance to the current instance
 - 1.4.4 (28 July 2024)
   * Add admin access checker on the flow manager module registration
+- 1.4.5 (07 August 2024)
+  * Add feature to run webhook flow
+  * Add feature to manage another instance flows (duplicate, backup, restore, categorize, table view, run, and delete)
+  * Add checking for the flow manager field onload
+
 Contributing:
 If you want to contribute kindly to create a PR and if you want to request a feature or report of a bug kindly create the Issue

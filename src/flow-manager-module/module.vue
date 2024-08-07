@@ -126,7 +126,11 @@
               </template>
 
               <v-list>
-                <v-list-item v-if="item.trigger === 'manual' && item.status === 'active'" clickable @click="showRunDialog(item)">
+                <v-list-item
+                  v-if="item.trigger === 'manual' && item.status === 'active' && selectedCredential === 'local'"
+                  clickable
+                  @click="showRunDialog(item)"
+                >
                   <v-list-item-icon>
                     <v-icon name="play_arrow" />
                   </v-list-item-icon>
@@ -285,12 +289,7 @@
       <v-button v-tooltip.bottom="'Settings'" rounded icon @click="settingDialog = true">
         <v-icon name="settings" />
       </v-button>
-      <v-button
-        v-tooltip.bottom="'Credentials'"
-        rounded
-        icon
-        @click="credentialDialog = true"
-      >
+      <v-button v-tooltip.bottom="'Credentials'" rounded icon @click="credentialDialog = true">
         <v-icon name="database" />
       </v-button>
       <v-button v-tooltip.bottom="'Restore'" rounded icon @click="onRestoreButtonClicked">
@@ -298,8 +297,8 @@
       </v-button>
     </template>
 
-    <template v-if="viewListMode" #navigation>
-      <content-navigation :root-flows="rootFlows" :flow-child-map="flowChildMap" :all-flows="allFlows" />
+    <template #navigation>
+      <content-navigation :view-mode="viewListMode ? 'LIST' : 'TABLE'" :root-flows="rootFlows" :flow-child-map="flowChildMap" :all-flows="allFlows" />
     </template>
 
     <template #sidebar>
@@ -452,27 +451,38 @@
       @reload:tabular-flow="reloadTabularFlow"
     />
 
+    <RunWebhookFlowForm
+      :value="runWebhookFlowDialog"
+      :selectedItem="selectedItem"
+      @update:model-value="runWebhookFlowDialog = $event"
+      @reload:flow="reloadFlow"
+      @reload:tabular-flow="reloadTabularFlow"
+    />
+
     <LoadingDialog
       :title="processingDialogTitle"
       :value="processingDialog"
       @update:model-value="processingDialog = $event"
       :progress-value="progressValue"
       :list-processing="listProcessing"
+      :indeterminate="indeterminateProcess"
     />
+
+    <v-overlay :value="true" />
   </private-view>
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, unref, Ref, computed, provide, toRefs } from "vue";
+import { defineComponent, ref, unref, Ref, computed, provide, toRefs, onMounted } from "vue";
 import { useStores, useApi, useLayout } from "@directus/extensions-sdk";
 import { useRouter } from "vue-router";
 import Draggable from "vuedraggable";
 import SecureLS from "secure-ls";
 import debounce from "lodash/debounce";
-import { Collection, Field, Preset } from "@directus/types";
+import { Collection, Field, Preset, User } from "@directus/types";
 
-import { ICredential, IFlow, IFolder, IOperation, ProcessingItem } from "./types";
-import { TRIGGER_TYPES } from "../constants";
+import { ICredential, IFlow, IFolder, IOperation, ProcessingItem } from "../types";
+import { ENDPOINT_EXTENSION_NAME, NPM_LINK, TRIGGER_TYPES } from "../constants";
 
 import { formatDate, formatDateLong, getTimestamp } from "../utils/date.util";
 import { generateRandomString, maskingText } from "../utils/string.util";
@@ -487,6 +497,7 @@ import LoadingDialog from "./components/loading-dialog.vue";
 import CredentialDialog from "./components/credential-dialog.vue";
 import DeleteDialog from "./components/delete-dialog.vue";
 import PushToCloudDialog from "./components/push-to-cloud-dialog.vue";
+import RunWebhookFlowForm from "./components/run-webhook-flow-form.vue";
 
 export default defineComponent({
   components: {
@@ -499,6 +510,7 @@ export default defineComponent({
     CredentialDialog,
     DeleteDialog,
     PushToCloudDialog,
+    RunWebhookFlowForm,
   },
 
   props: {
@@ -597,6 +609,9 @@ export default defineComponent({
     const installedVersion = ref("");
     const latestVersion = ref("");
 
+    const selectedCredential = ref("local");
+    const currentUser = ref<User | null>(null);
+
     /*
       Flags stuff
     */
@@ -606,6 +621,7 @@ export default defineComponent({
     const settingDialog = ref(false);
     const credentialDialog = ref(false);
     const pushToCloudDialog = ref(false);
+    const runWebhookFlowDialog = ref(false);
 
     const loadingDeleteItem = ref(false);
     const loadingRunFlow = ref(false);
@@ -618,6 +634,7 @@ export default defineComponent({
     const isBatchAction = ref(false);
     const isPreviousIdPersisted = ref(false);
     const isEditCategory = ref(false);
+    const indeterminateProcess = ref(false);
 
     const selectedFlows = computed<IFlow[]>(() => {
       return flows.value.filter((flow) => selectedItems.value.includes(flow.id));
@@ -710,7 +727,7 @@ export default defineComponent({
         preset.value = {
           ...(preset.value || {}),
           layout_query: {
-            ...(preset.value.layout_query || {}),
+            ...(preset.value?.layout_query || {}),
             sort: value,
           },
         };
@@ -747,16 +764,16 @@ export default defineComponent({
     // true for list view, false for table view
     const viewListMode = computed({
       get() {
-        if (typeof preset.value.layout_options?.viewListMode === "undefined") {
+        if (typeof preset.value?.layout_options?.viewListMode === "undefined") {
           return true;
         }
-        return preset.value.layout_options?.viewListMode;
+        return preset.value?.layout_options?.viewListMode;
       },
       set(value) {
         preset.value = {
           ...(preset.value || {}),
           layout_options: {
-            ...(preset.value.layout_options || {}),
+            ...(preset.value?.layout_options || {}),
             viewListMode: value,
           },
         };
@@ -795,38 +812,88 @@ export default defineComponent({
     });
 
     const updateExistingPreset = debounce(async () => {
-      await presetsStore.update(preset.value.id, {
-        layout_options: {
-          sort: tableSort.value,
-          headers: headers.value,
-          viewListMode: viewListMode.value,
-        },
-        layout_query: {
-          sort: tableSort.value,
-        },
-        filter: tableFlowFilter.value,
-        search: tableFlowSearch.value,
-      });
-      presetsStore.hydrate();
+      if (selectedCredential.value === "local") {
+        await presetsStore.update(preset.value.id, {
+          layout_options: {
+            sort: tableSort.value,
+            headers: headers.value,
+            viewListMode: viewListMode.value,
+          },
+          layout_query: {
+            sort: tableSort.value,
+          },
+          filter: tableFlowFilter.value,
+          search: tableFlowSearch.value,
+        });
+        presetsStore.hydrate();
+      } else {
+        const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
+        if (credential) {
+          await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+            url: `${credential.url}/presets/${preset.value.id}`,
+            staticToken: credential.staticToken,
+            method: "PATCH",
+            payload: {
+              layout_options: {
+                sort: tableSort.value,
+                headers: headers.value,
+                viewListMode: viewListMode.value,
+              },
+              layout_query: {
+                sort: tableSort.value,
+              },
+              filter: tableFlowFilter.value,
+              search: tableFlowSearch.value,
+            },
+          });
+        }
+      }
       reloadTabularFlow();
     }, 500);
 
     const createNewPreset = debounce(async () => {
-      await presetsStore.savePreset({
-        bookmark: null,
-        collection: "flow-manager",
-        layout_options: {
-          sort: tableSort.value,
-          headers: headers.value,
-          viewListMode: viewListMode.value,
-        },
-        layout_query: {
-          sort: tableSort.value,
-        },
-        filter: tableFlowFilter.value,
-        search: tableFlowSearch.value,
-      });
-      presetsStore.hydrate();
+      if (selectedCredential.value === "local") {
+        await presetsStore.savePreset({
+          bookmark: null,
+          collection: "flow-manager",
+          layout_options: {
+            sort: tableSort.value,
+            headers: headers.value,
+            viewListMode: viewListMode.value,
+          },
+          layout_query: {
+            sort: tableSort.value,
+          },
+          filter: tableFlowFilter.value,
+          search: tableFlowSearch.value,
+        });
+        presetsStore.hydrate();
+      } else {
+        const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
+        if (credential) {
+          await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+            url: `${credential.url}/presets`,
+            staticToken: credential.staticToken,
+            method: "POST",
+            payload: {
+              bookmark: null,
+              collection: "flow-manager",
+              layout_options: {
+                sort: tableSort.value,
+                headers: headers.value,
+                viewListMode: viewListMode.value,
+              },
+              layout_query: {
+                sort: tableSort.value,
+              },
+              filter: tableFlowFilter.value,
+              search: tableFlowSearch.value,
+              user: currentUser.value?.id,
+            },
+          });
+          reloadExternalPreset();
+        }
+      }
       reloadTabularFlow();
     }, 500);
 
@@ -897,7 +964,7 @@ export default defineComponent({
         preset.value = {
           ...(preset.value || {}),
           layout_options: {
-            ...(preset.value.layout_options || {}),
+            ...(preset.value?.layout_options || {}),
             headers: value,
           },
         };
@@ -1047,6 +1114,16 @@ export default defineComponent({
       createFlow,
       reloadFlow,
       reloadTabularFlow,
+      showRunWebhookDialog,
+      credentials,
+      setCredential,
+      selectedCredential,
+    });
+
+    onMounted(() => {
+      if (!flowFieldConfiguration.value.isConfigured || !isSettingFieldConfigured.value) {
+        settingDialog.value = true;
+      }
     });
 
     return {
@@ -1144,28 +1221,61 @@ export default defineComponent({
       isBatchAction,
       selectedFlows,
       showRunDialog,
+      runWebhookFlowDialog,
+      selectedCredential,
+      indeterminateProcess,
     };
 
     async function createFlow(item: Omit<IFlow, "id"> & { id?: string }) {
       try {
-        const response = await api.post("/flows", {
-          id: item.id,
-          name: item.name,
-          status: "inactive",
-          icon: item.icon,
-          accountability: item.accountability,
-          description: item.description,
-          trigger: item.trigger,
-          options: item.options,
-          color: item.color,
-          flow_manager_category: item.flow_manager_category,
-        });
+        if (selectedCredential.value === "local") {
+          const response = await api.post("/flows", {
+            id: item.id,
+            name: item.name,
+            status: "inactive",
+            icon: item.icon,
+            accountability: item.accountability,
+            description: item.description,
+            trigger: item.trigger,
+            options: item.options,
+            color: item.color,
+            flow_manager_category: item.flow_manager_category,
+          });
 
-        const payload = transformData(item.operations, response.data.data.id, item.operation);
+          const payload = transformData(item.operations, response.data.data.id, item.operation);
 
-        await api.patch(`/flows/${response.data.data.id}`, {
-          operation: item.operation ? payload : null,
-        });
+          await api.patch(`/flows/${response.data.data.id}`, {
+            operation: item.operation ? payload : null,
+          });
+        } else {
+          const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
+          const response = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+            url: `${credential?.url}/flows`,
+            staticToken: credential?.staticToken,
+            method: "POST",
+            payload: {
+              name: item.name,
+              status: "inactive",
+              icon: item.icon,
+              accountability: item.accountability,
+              description: item.description,
+              trigger: item.trigger,
+              options: item.options,
+              color: item.color,
+            },
+          });
+
+          const payload = transformData(item.operations, response.data.data.id, item.operation);
+
+          await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+            url: `${credential?.url}/flows/${response.data.data.id}`,
+            staticToken: credential?.staticToken,
+            method: "PATCH",
+            payload: {
+              operation: item.operation ? payload : null,
+            },
+          });
+        }
       } catch (error) {
         throw error;
       }
@@ -1216,7 +1326,7 @@ export default defineComponent({
       const item = selectedItem.value as IFlow;
       loadingPushToCloud.value = true;
       try {
-        const response = await api.post("/flow-manager-endpoint/flow-manager/process", {
+        const response = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
           url: `${credential?.url}/flows`,
           staticToken: credential?.staticToken,
           method: "POST",
@@ -1234,7 +1344,7 @@ export default defineComponent({
 
         const payload = transformData(item.operations, response.data.data.id, item.operation);
 
-        await api.post("/flow-manager-endpoint/flow-manager/process", {
+        await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
           url: `${credential?.url}/flows/${response.data.data.id}`,
           staticToken: credential?.staticToken,
           method: "PATCH",
@@ -1336,18 +1446,33 @@ export default defineComponent({
     }
 
     async function deleteItem() {
+      const deleteFunc =
+        selectedCredential.value === "local"
+          ? async (id: string) => {
+              await api.delete(`/flows/${id}`);
+            }
+          : async (id: string) => {
+              const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
+              await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+                url: `${credential?.url}/flows/${id}`,
+                staticToken: credential?.staticToken,
+                method: "DELETE",
+              });
+            };
       if (isBatchAction.value) {
         if (!selectedItems.value.length) return;
         deleteItemDialog.value = false;
+        indeterminateProcess.value = false;
         processingDialogTitle.value = "Deleting Flows";
         processingDialog.value = true;
         listProcessing.value = [];
         progressValue.value = 0;
         let totalSuccess = 0;
         let totalError = 0;
+
         for (const item of selectedFlows.value) {
           try {
-            await api.delete(`/flows/${item.id}`);
+            await deleteFunc(`${item.id}`);
             listProcessing.value.push({
               status: "success",
               message: `Flow "${item.name}"`,
@@ -1384,10 +1509,10 @@ export default defineComponent({
             type = "Folder";
             deleteCategory(selectedItem.value as IFolder);
           } else {
-            await api.delete(`/flows/${selectedItem.value.id}`);
+            await deleteFunc((selectedItem.value as IFlow).id);
 
-            await flowsStore.hydrate();
-            flows.value = unref(flowsStore.flows);
+            await reloadFlow();
+            await reloadTabularFlow();
           }
 
           notificationsStore.add({
@@ -1489,12 +1614,24 @@ export default defineComponent({
     }
 
     function goToFlow({ item }: { item: IFlow }) {
-      router.push(`/settings/flows/${item.id}`);
+      if (selectedCredential.value === "local") {
+        router.push(`/settings/flows/${item.id}`);
+      } else {
+        const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
+        if (credential) {
+          const a = document.createElement("a");
+          a.href = `${credential.url}/admin/settings/flows/${item.id}`;
+          a.target = "_blank";
+          a.click();
+          document.body.removeChild(a);
+        }
+      }
     }
 
     async function onConfirmRestore() {
       restoreConfirmationDialog.value = false;
       if (Array.isArray(restoredFileObj.value)) {
+        indeterminateProcess.value = false;
         processingDialogTitle.value = "Restoring Flows";
         processingDialog.value = true;
         listProcessing.value = [];
@@ -1580,20 +1717,32 @@ export default defineComponent({
         }
       }
 
-      settingsStore.updateSettings(
-        {
-          flow_manager_categories: flowCategories.value,
-        },
-        false
-      );
+      saveCategories();
 
       if (flowPayload.length) {
-        await api.patch(`/flows`, flowPayload);
+        if (selectedCredential.value === "local") {
+          await api.patch(`/flows`, flowPayload);
+        } else {
+          const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
+          await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+            url: `${credential?.url}/flows`,
+            staticToken: credential?.staticToken,
+            method: "PATCH",
+            payload: flowPayload,
+          });
+        }
         await reloadFlow();
       }
     }
 
     async function configureFlowManagerField() {
+      const fields: {
+        settings: Partial<Field>[];
+        flows: Partial<Field>[];
+      } = {
+        settings: [],
+        flows: [],
+      };
       isConfigurationLoading.value = true;
       if (!flowFieldConfiguration.value.isCategoryFieldConfigured) {
         const payload = {
@@ -1602,8 +1751,8 @@ export default defineComponent({
           schema: { default_value: null },
           meta: { interface: "input", special: null, hidden: true },
           collection: "directus_flows",
-        };
-        await fieldsStore.createField("directus_flows", payload);
+        } as Partial<Field>;
+        fields.flows.push(payload);
       }
 
       if (!flowFieldConfiguration.value.isOrderFieldConfigured) {
@@ -1613,8 +1762,8 @@ export default defineComponent({
           schema: { default_value: "0" },
           meta: { interface: "input", special: null, hidden: true },
           collection: "directus_flows",
-        };
-        await fieldsStore.createField("directus_flows", payload);
+        } as Partial<Field>;
+        fields.flows.push(payload);
       }
 
       if (!isSettingFieldConfigured.value) {
@@ -1623,8 +1772,8 @@ export default defineComponent({
           type: "json",
           meta: { interface: "input-code", special: ["cast-json"], hidden: true },
           collection: "directus_settings",
-        };
-        await fieldsStore.createField("directus_settings", payload);
+        } as Partial<Field>;
+        fields.settings.push(payload);
       }
 
       if (!flowFieldConfiguration.value.isLastRunFieldConfigured) {
@@ -1634,8 +1783,8 @@ export default defineComponent({
           schema: { default_value: null },
           meta: { interface: "input-datetime", special: null, hidden: true },
           collection: "directus_flows",
-        };
-        await fieldsStore.createField("directus_flows", payload);
+        } as Partial<Field>;
+        fields.flows.push(payload);
       }
 
       if (!flowFieldConfiguration.value.isRunCounterFieldConfigured) {
@@ -1645,13 +1794,46 @@ export default defineComponent({
           schema: { default_value: "0" },
           meta: { interface: "input", special: null, hidden: true },
           collection: "directus_flows",
-        };
-        await fieldsStore.createField("directus_flows", payload);
+        } as Partial<Field>;
+        fields.flows.push(payload);
       }
 
-      await fieldsStore.hydrate();
-      flowFields.value = fieldsStore.getFieldsForCollection("directus_flows");
-      settingFields.value = fieldsStore.getFieldsForCollection("directus_settings");
+      if (selectedCredential.value === "local") {
+        for (const field of fields.flows) {
+          await fieldsStore.createField("directus_flows", field);
+        }
+
+        for (const field of fields.settings) {
+          await fieldsStore.createField("directus_settings", field);
+        }
+        await fieldsStore.hydrate();
+        flowFields.value = fieldsStore.getFieldsForCollection("directus_flows");
+        settingFields.value = fieldsStore.getFieldsForCollection("directus_settings");
+      } else {
+        const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
+        if (credential) {
+          for (const field of fields.flows) {
+            await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+              url: `${credential?.url}/fields/directus_flows`,
+              staticToken: credential?.staticToken,
+              method: "POST",
+              payload: field,
+            });
+          }
+
+          for (const field of fields.settings) {
+            await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+              url: `${credential?.url}/fields/directus_settings`,
+              staticToken: credential?.staticToken,
+              method: "POST",
+              payload: field,
+            });
+          }
+
+          flowFields.value = await reloadFields("directus_flows");
+          settingFields.value = await reloadFields("directus_settings");
+        }
+      }
       isConfigurationLoading.value = false;
     }
 
@@ -1737,12 +1919,7 @@ export default defineComponent({
         color: "",
       };
 
-      settingsStore.updateSettings(
-        {
-          flow_manager_categories: flowCategories.value,
-        },
-        false
-      );
+      saveCategories();
     }
 
     async function deleteCategory(category: IFolder) {
@@ -1774,12 +1951,7 @@ export default defineComponent({
 
         flowCategories.value.splice(deletedIndex, 1);
 
-        settingsStore.updateSettings(
-          {
-            flow_manager_categories: flowCategories.value,
-          },
-          false
-        );
+        saveCategories();
       }
     }
 
@@ -1825,12 +1997,7 @@ export default defineComponent({
         },
       ];
 
-      settingsStore.updateSettings(
-        {
-          flow_manager_categories: flowCategories.value,
-        },
-        false
-      );
+      saveCategories();
     }
 
     function showEditFolderDialog(item: IFolder) {
@@ -1850,8 +2017,34 @@ export default defineComponent({
     }
 
     async function reloadFlow() {
-      await flowsStore.hydrate();
-      flows.value = unref(flowsStore.flows);
+      flows.value = [];
+      if (selectedCredential.value === "local") {
+        await flowsStore.hydrate();
+        flows.value = unref(flowsStore.flows);
+      } else {
+        try {
+          const c = credentials.value.find((c) => c.id === selectedCredential.value);
+          if (c) {
+            const fields = ["*", "operations.*"];
+            const {
+              data: { data: flowsResponse },
+            } = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+              url: `${c.url}/flows?fields=${fields.join(",")}`,
+              staticToken: c.staticToken,
+              method: "GET",
+            });
+
+            flows.value = flowsResponse;
+          }
+        } catch (error) {
+          notificationsStore.add({
+            type: "error",
+            title: "Failed to fetch Flows. Please check your credentials",
+            closeable: true,
+            persist: true,
+          });
+        }
+      }
     }
 
     async function reloadTabularFlow() {
@@ -1865,15 +2058,33 @@ export default defineComponent({
         }
         const fields = ["*", "operations.*"];
 
-        const response = await api.get("/flows", {
-          params: {
-            fields: fields.join(","),
-            sort,
-            filter: tableFlowFilter.value,
-            search: tableFlowSearch.value,
-          },
-        });
-
+        let response: { data: { data: IFlow[] } } = { data: { data: [] } };
+        if (selectedCredential.value === "local") {
+          response = await api.get("/flows", {
+            params: {
+              fields: fields.join(","),
+              sort,
+              filter: tableFlowFilter.value,
+              search: tableFlowSearch.value,
+            },
+          });
+        } else {
+          const c = credentials.value.find((c) => c.id === selectedCredential.value);
+          if (c) {
+            const queries = [`fields=${fields.join(",")}`, `sort=${sort}`];
+            if (tableFlowFilter.value) {
+              queries.push(`filter=${JSON.stringify(tableFlowFilter.value)}`);
+            }
+            if (tableFlowSearch.value) {
+              queries.push(`search=${tableFlowSearch.value}`);
+            }
+            response = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+              url: `${c.url}/flows?${queries.join("&")}`,
+              staticToken: c.staticToken,
+              method: "GET",
+            });
+          }
+        }
         tabularFlows.value = response.data.data;
       } catch (error) {
       } finally {
@@ -2005,8 +2216,8 @@ export default defineComponent({
         installedVersion.value = extension?.schema.version;
 
         if (installedVersion.value) {
-          const { data } = await api.post("/flow-manager-endpoint/flow-manager/process", {
-            url: "https://registry.npmjs.org/directus-extension-flow-manager",
+          const { data } = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+            url: NPM_LINK,
           });
 
           const latestTag = data?.["dist-tags"]?.latest;
@@ -2050,6 +2261,7 @@ export default defineComponent({
       if (!selectedItems.value.length) {
         return;
       }
+      indeterminateProcess.value = false;
       processingDialogTitle.value = "Duplicating Flows";
       processingDialog.value = true;
       listProcessing.value = [];
@@ -2125,6 +2337,164 @@ export default defineComponent({
     function showRunDialog(item: IFlow) {
       selectedItem.value = item;
       runFlowDialog.value = true;
+    }
+
+    function showRunWebhookDialog(item: IFlow) {
+      selectedItem.value = item;
+      runWebhookFlowDialog.value = true;
+    }
+
+    async function reloadFields(collectionName: string) {
+      if (selectedCredential.value === "local") {
+        return fieldsStore.getFieldsForCollection(collectionName);
+      } else {
+        const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
+        const {
+          data: { data },
+        } = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+          url: `${credential?.url}/fields/${collectionName}`,
+          staticToken: credential?.staticToken,
+          method: "GET",
+        });
+        return data;
+      }
+    }
+
+    async function reloadFolders() {
+      if (selectedCredential.value === "local") {
+        return (settingsStore.settings?.flow_manager_categories || []).map((category: string | IFolder) => {
+          if (typeof category === "string") {
+            return {
+              id: category,
+              name: category,
+              type: "category",
+              icon: "folder",
+              color: "",
+              flow_manager_order: 0,
+            };
+          }
+
+          return category;
+        });
+      } else {
+        const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
+        const {
+          data: { data },
+        } = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+          url: `${credential?.url}/settings`,
+          staticToken: credential?.staticToken,
+          method: "GET",
+        });
+        return (data?.flow_manager_categories || []).map((category: string | IFolder) => {
+          if (typeof category === "string") {
+            return {
+              id: category,
+              name: category,
+              type: "category",
+              icon: "folder",
+              color: "",
+              flow_manager_order: 0,
+            };
+          }
+
+          return category;
+        });
+      }
+    }
+
+    async function setCredential(credential: string) {
+      indeterminateProcess.value = true;
+      processingDialogTitle.value = "Loading";
+      selectedCredential.value = credential;
+
+      try {
+        await getUser();
+        const isHaveAdminAccess = currentUser.value?.role?.admin_access;
+        if (!isHaveAdminAccess) {
+          notificationsStore.add({
+            type: "error",
+            title: "You don't have permission to access this credential",
+            closeable: true,
+            persist: true,
+          });
+          selectedCredential.value = "local";
+          return;
+        }
+        router.push("/flow-manager");
+        processingDialog.value = true;
+        await reloadExternalPreset();
+        reloadFlow();
+        reloadTabularFlow();
+        flowFields.value = await reloadFields("directus_flows");
+        settingFields.value = await reloadFields("directus_settings");
+  
+        if (!flowFieldConfiguration.value.isConfigured || !isSettingFieldConfigured.value) {
+          settingDialog.value = true;
+        }
+        reloadFolders().then((folders) => {
+          flowCategories.value = folders;
+        });
+      } catch (error) {
+        notificationsStore.add({
+          type: "error",
+          title: "Failed to fetch using the selected credential",
+          closeable: true,
+          persist: true,
+        });
+        selectedCredential.value = "local";
+      }
+      processingDialog.value = false;
+      processingDialogTitle.value = "";
+    }
+
+    async function saveCategories() {
+      if (selectedCredential.value === "local") {
+        settingsStore.updateSettings(
+          {
+            flow_manager_categories: flowCategories.value,
+          },
+          false
+        );
+      } else {
+        const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
+        await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+          url: `${credential?.url}/settings`,
+          staticToken: credential?.staticToken,
+          method: "PATCH",
+          payload: {
+            flow_manager_categories: flowCategories.value,
+          },
+        });
+      }
+    }
+
+    async function getUser() {
+      const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
+      if (credential) {
+        const {
+          data: { data },
+        } = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+          url: `${credential.url}/users/me?fields[]=*&fields[]=role.admin_access&fields[]=role.app_access&fields[]=role.id`,
+          staticToken: credential.staticToken,
+          method: "GET",
+        });
+        currentUser.value = data;
+      }
+    }
+
+    async function reloadExternalPreset() {
+      const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
+      if (credential && currentUser.value) {
+        const {
+          data: { data },
+        } = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+          url: `${credential.url}/presets?filter[user][_eq]=${currentUser.value?.id}&limit=-1`,
+          staticToken: credential.staticToken,
+          method: "GET",
+        });
+        const [selectedPreset] = data.filter((preset: { collection: string }) => preset.collection === "flow-manager");
+        preset.value = selectedPreset;
+      }
     }
   },
 });
@@ -2288,5 +2658,9 @@ export default defineComponent({
 
 .container.right {
   z-index: 600;
+}
+
+.small.v-select > .v-menu-activator > .v-input {
+  height: 38px;
 }
 </style>

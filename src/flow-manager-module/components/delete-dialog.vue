@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { toRefs } from "vue";
-import { IFlow, IFolder } from "../types";
+import { IFlow, IFolder } from "../../types";
 
 const props = withDefaults(
   defineProps<{

@@ -27,6 +27,7 @@ export interface IPayload {
 
 export interface IFlow {
   id: string;
+  type?: string;
   name: string;
   icon: string;
   color: string;
@@ -43,6 +44,7 @@ export interface IFlow {
     requireConfirmation?: boolean;
     confirmationDescription?: string;
     fields?: Field[];
+    method?: string;
   };
   operation: string;
   date_created?: string;
@@ -72,6 +74,7 @@ export interface ICredential {
 }
 
 export type ProcessingItem = {
+  id?: string;
   status: "success" | "error" | "processing" | "skipped";
   message: string;
 };
