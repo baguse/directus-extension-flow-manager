@@ -48,7 +48,7 @@ async function runFlow() {
     return;
   }
 
-  const method = (selectedItem.value?.options?.method || "post").toLowerCase();
+  const method = (selectedItem.value?.options?.method || "get").toLowerCase();
   try {
     let result = { data: {} };
     if (flowManagerUtils?.selectedCredential.value === "local") {
@@ -58,7 +58,7 @@ async function runFlow() {
         url: `${selectedCredential.value.url}/flows/trigger/${selectedItem.value?.id}`,
         staticToken: selectedCredential.value.staticToken,
         payload: parsedPayload,
-        method: selectedItem.value?.options?.method || "POST",
+        method: selectedItem.value?.options?.method || "GET",
       });
     }
 
