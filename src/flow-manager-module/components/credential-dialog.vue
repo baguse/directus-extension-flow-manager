@@ -36,6 +36,8 @@ const isPreviousIdPersisted = ref(false);
 const isPullingFlows = ref(false);
 const isPullingFlowError = ref(false);
 
+const errors = ref<string[]>([]);
+
 const selectedCredential = ref<ICredential>({
   id: "",
   name: "",
@@ -85,12 +87,25 @@ const flowManagerUtils = inject<{
 }>("flowManagerUtils");
 
 function saveCredential() {
+  let credentialUrlParsed = credentialUrl.value;
+  try {
+    const url = new URL(credentialUrlParsed);
+    if (!url.origin || url.origin === "null") {
+      errors.value = ["Invalid URL"];
+      return;
+    }
+    credentialUrlParsed = url.origin;
+    errors.value = [];
+  } catch (error) {
+    errors.value = ["Invalid URL"];
+    return;
+  }
   if (isEdit.value) {
     const newCredentials = [...credentials.value];
     const credentialIndex = newCredentials.findIndex((credential) => credential.id === selectedCredential.value.id);
     if (credentialIndex !== -1) {
       (newCredentials[credentialIndex] as ICredential).name = credentialName.value;
-      (newCredentials[credentialIndex] as ICredential).url = credentialUrl.value;
+      (newCredentials[credentialIndex] as ICredential).url = credentialUrlParsed;
       if (credentialStaticToken.value) {
         (newCredentials[credentialIndex] as ICredential).staticToken = credentialStaticToken.value;
       } else {
@@ -116,7 +131,7 @@ function saveCredential() {
       {
         id: generateRandomString(10),
         name: credentialName.value,
-        url: credentialUrl.value,
+        url: credentialUrlParsed,
         staticToken: credentialStaticToken.value,
       },
     ];
@@ -276,6 +291,12 @@ async function proceedPull() {
           v-tooltip.bottom="'Credential Static Token'"
           class="input-form"
         ></v-input>
+        <v-error
+          v-for="(error, indexError) in errors"
+          class="mb-2"
+          :key="`errorIndex-${indexError}`"
+          :error="{ extensions: { code: 'Error' }, message: error }"
+        ></v-error>
         <v-button :disabled="!isValid" @click="saveCredential">
           {{ isEdit ? "Save" : "Add" }}
         </v-button>
@@ -323,6 +344,9 @@ async function proceedPull() {
   margin-left: 10px;
 }
 
+.mb-2 {
+  margin-bottom: 10px;
+}
 .container > .v-card.card-extended {
   --v-card-min-width: 1000px;
 }
