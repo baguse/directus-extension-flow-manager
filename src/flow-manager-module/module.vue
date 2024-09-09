@@ -2651,7 +2651,7 @@ export default defineComponent({
 }
 </style>
 
-<style lang="scss">
+<style lang="scss" scoped>
 .main-table > .v-table > table > .table-header > tr > .select.cell[scope="col"] > button {
   display: none;
 }

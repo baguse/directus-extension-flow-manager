@@ -89,12 +89,8 @@ const flowManagerUtils = inject<{
 function saveCredential() {
   let credentialUrlParsed = credentialUrl.value;
   try {
-    const url = new URL(credentialUrlParsed);
-    if (!url.origin || url.origin === "null") {
-      errors.value = ["Invalid URL"];
-      return;
-    }
-    credentialUrlParsed = url.origin;
+    const url = parseUrl(credentialUrlParsed);
+    credentialUrlParsed = url;
     errors.value = [];
   } catch (error) {
     errors.value = ["Invalid URL"];
@@ -254,6 +250,24 @@ async function proceedPull() {
     pullingProgressValue.value = 0;
     flowManagerUtils?.reloadFlow();
     flowManagerUtils?.reloadTabularFlow();
+  }
+}
+
+function parseUrl(url: string) {
+  try {
+    const urlParsed = new URL(url);
+    if (!urlParsed.origin || urlParsed.origin === "null") {
+      throw new Error("Invalid URL");
+    }
+    const regex = /^\/([^/]+)(\/admin\/)/;
+    const match = urlParsed.pathname.match(regex);
+
+    if (match) {
+      return urlParsed.origin + "/" + match[1];
+    }
+    return urlParsed.origin;
+  } catch (error) {
+    throw new Error("Invalid URL");
   }
 }
 </script>

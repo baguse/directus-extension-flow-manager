@@ -88,6 +88,8 @@ Changelogs:
   * Fix run flow webhook wrong method
 - 1.4.7 (25 August 2024)
   * Fix URL parsing and validation on Credentials. Now you can use the full URL with the protocol and it will be validated and parsed correctly
-
+- 1.4.8 (09 September 2024)
+  * Fix URL Parsing when the URL using custom domain pointing to the directus instance
+  * Fix the z-index of container right causing the filter on all page not working
 Contributing:
 If you want to contribute kindly to create a PR and if you want to request a feature or report of a bug kindly create the Issue
