@@ -91,5 +91,8 @@ Changelogs:
 - 1.4.8 (09 September 2024)
   * Fix URL Parsing when the URL using custom domain pointing to the directus instance
   * Fix the z-index of container right causing the filter on all page not working
+- 1.4.9 (22 November 2024)
+  * Add feature for batch Activate and Deactivate flow
+
 Contributing:
 If you want to contribute kindly to create a PR and if you want to request a feature or report of a bug kindly create the Issue

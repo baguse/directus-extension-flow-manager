@@ -30,6 +30,28 @@
         icon
         rounded
         small
+        :disabled="!selectedFlowsInactive.length"
+        v-tooltip.bottom="'Activate Selected'"
+        @click="() => changeFlowStatus('active')"
+      >
+        <v-icon name="play_circle" />
+      </v-button>
+      <v-button
+        v-if="showSelect"
+        icon
+        rounded
+        small
+        :disabled="!selectedFlowsActive.length"
+        v-tooltip.bottom="'Deactivate Selected'"
+        @click="() => changeFlowStatus('inactive')"
+      >
+        <v-icon name="pause_circle" />
+      </v-button>
+      <v-button
+        v-if="showSelect"
+        icon
+        rounded
+        small
         :disabled="!selectedItems.length"
         v-tooltip.bottom="'Backup Selected'"
         @click="backupSelectedItems"
@@ -639,6 +661,14 @@ export default defineComponent({
     const selectedFlows = computed<IFlow[]>(() => {
       return flows.value.filter((flow) => selectedItems.value.includes(flow.id));
     });
+
+    const selectedFlowsActive = computed<IFlow[]>(() => {
+      return selectedFlows.value.filter((flow) => flow.status === "active");
+    });
+
+    const selectedFlowsInactive = computed<IFlow[]>(() => {
+      return selectedFlows.value.filter((flow) => flow.status === "inactive");
+    });
     const title = computed(() => {
       if (!parentId.value) {
         return "Flow Manager";
@@ -1224,6 +1254,9 @@ export default defineComponent({
       runWebhookFlowDialog,
       selectedCredential,
       indeterminateProcess,
+      changeFlowStatus,
+      selectedFlowsActive,
+      selectedFlowsInactive,
     };
 
     async function createFlow(item: Omit<IFlow, "id"> & { id?: string }) {
@@ -2494,6 +2527,60 @@ export default defineComponent({
         });
         const [selectedPreset] = data.filter((preset: { collection: string }) => preset.collection === "flow-manager");
         preset.value = selectedPreset;
+      }
+    }
+
+    async function changeFlowStatus(status: string) {
+      if (!selectedItems.value.length) {
+        return;
+      }
+      indeterminateProcess.value = false;
+      processingDialogTitle.value = status === 'active' ? "Activating Flows" : "Deactivating Flows";
+      processingDialog.value = true;
+      listProcessing.value = [];
+      progressValue.value = 0;
+      let totalSuccess = 0;
+      let totalError = 0;
+      try {
+        const filtered = selectedFlows.value.filter((flow) => flow.status !== status);
+        for (const item of filtered) {
+          if (item) {
+            try {
+              await api.patch(`/flows/${item.id}`, {
+                status,
+              });
+              listProcessing.value.push({
+                status: "success",
+                message: `Flow "${item.name}"`,
+              });
+              totalSuccess++;
+            } catch {
+              listProcessing.value.push({
+                status: "error",
+                message: `Flow "${item.name}"`,
+              });
+              totalError++;
+            }
+            progressValue.value = Math.round((listProcessing.value.length / filtered.length) * 100);
+          }
+        }
+        notificationsStore.add({
+          type: "success",
+          title: status === 'active' ?
+            `Successfully activated ${totalSuccess} Flows. Failed to activate ${totalError} Flows` :
+            `Successfully deactivated ${totalSuccess} Flows. Failed to deactivate ${totalError} Flows`,
+          closeable: true,
+          persist: true,
+        });
+      } catch {
+      } finally {
+        reloadFlow();
+        reloadTabularFlow();
+        selectedItems.value = [];
+        isSelectAll.value = false;
+        sleep(3000).then(() => {
+          processingDialog.value = false;
+        });
       }
     }
   },
