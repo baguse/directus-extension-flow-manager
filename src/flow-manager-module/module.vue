@@ -320,7 +320,12 @@
     </template>
 
     <template #navigation>
-      <content-navigation :view-mode="viewListMode ? 'LIST' : 'TABLE'" :root-flows="rootFlows" :flow-child-map="flowChildMap" :all-flows="allFlows" />
+      <content-navigation
+        :view-mode="viewListMode ? 'LIST' : 'TABLE'"
+        :root-flows="rootFlows"
+        :flow-child-map="flowChildMap"
+        :all-flows="allFlows"
+      />
     </template>
 
     <template #sidebar>
@@ -1278,7 +1283,10 @@ export default defineComponent({
           const payload = transformData(item.operations, response.data.data.id, item.operation);
 
           await api.patch(`/flows/${response.data.data.id}`, {
-            operation: item.operation ? payload : null,
+            operation: item.operation ? payload.operation : null,
+            operations: {
+              create: payload.operations,
+            },
           });
         } else {
           const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
@@ -1305,7 +1313,10 @@ export default defineComponent({
             staticToken: credential?.staticToken,
             method: "PATCH",
             payload: {
-              operation: item.operation ? payload : null,
+              operation: item.operation ? payload.operation : null,
+              operations: {
+                create: payload.operations,
+              },
             },
           });
         }
@@ -1382,7 +1393,10 @@ export default defineComponent({
           staticToken: credential?.staticToken,
           method: "PATCH",
           payload: {
-            operation: item.operation ? payload : null,
+            operation: item.operation ? payload.operation : null,
+            operations: {
+              create: payload.operations,
+            },
           },
         });
 
@@ -2460,7 +2474,7 @@ export default defineComponent({
         reloadTabularFlow();
         flowFields.value = await reloadFields("directus_flows");
         settingFields.value = await reloadFields("directus_settings");
-  
+
         if (!flowFieldConfiguration.value.isConfigured || !isSettingFieldConfigured.value) {
           settingDialog.value = true;
         }
@@ -2535,7 +2549,7 @@ export default defineComponent({
         return;
       }
       indeterminateProcess.value = false;
-      processingDialogTitle.value = status === 'active' ? "Activating Flows" : "Deactivating Flows";
+      processingDialogTitle.value = status === "active" ? "Activating Flows" : "Deactivating Flows";
       processingDialog.value = true;
       listProcessing.value = [];
       progressValue.value = 0;
@@ -2566,9 +2580,10 @@ export default defineComponent({
         }
         notificationsStore.add({
           type: "success",
-          title: status === 'active' ?
-            `Successfully activated ${totalSuccess} Flows. Failed to activate ${totalError} Flows` :
-            `Successfully deactivated ${totalSuccess} Flows. Failed to deactivate ${totalError} Flows`,
+          title:
+            status === "active"
+              ? `Successfully activated ${totalSuccess} Flows. Failed to activate ${totalError} Flows`
+              : `Successfully deactivated ${totalSuccess} Flows. Failed to deactivate ${totalError} Flows`,
           closeable: true,
           persist: true,
         });

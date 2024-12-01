@@ -93,6 +93,8 @@ Changelogs:
   * Fix the z-index of container right causing the filter on all page not working
 - 1.4.9 (22 November 2024)
   * Add feature for batch Activate and Deactivate flow
+- 1.4.10 (01 December 2024)
+  * Fix duplicate and restore flow with unused operations
 
 Contributing:
 If you want to contribute kindly to create a PR and if you want to request a feature or report of a bug kindly create the Issue
