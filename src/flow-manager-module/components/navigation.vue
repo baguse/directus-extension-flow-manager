@@ -2,32 +2,44 @@
   <div v-if="viewMode === 'TABLE'" class="content-navigation-wrapper">
     <div class="action-bar">
       <v-select class="small" v-model="selectedCredential" :items="credentialOptions"></v-select>
+      <div class="version">
+        Directus Version <v-chip x-small active class="trigger-chip">
+          {{ serverInfo?.version || "N/A" }}
+        </v-chip>
+      </div>
     </div>
   </div>
   <div v-else class="content-navigation-wrapper">
     <div class="action-bar">
       <v-select class="small" v-model="selectedCredential" :items="credentialOptions"></v-select>
-      <div class="action-button">
-        <v-button x-small to="/flow-manager"> Home </v-button>
-        <v-button x-small @click="onNavigationAction">
-          {{ activeGroups?.length ? "Collapse All" : "Expand All" }}
-        </v-button>
+      <div class="version">
+        Directus Version <v-chip x-small active class="trigger-chip">
+          {{ serverInfo?.version || "N/A" }}
+        </v-chip>
       </div>
-      <div class="search-input">
-        <v-input type="search" small :placeholder="'Search Flow'" v-model="tmpSearch" @input="debounce(onSearchChange, 500)">
-          <template v-slot:append>
-            <v-icon
-              v-if="tmpSearch"
-              name="close"
-              clickable
-              @click="
-                search = '';
-                tmpSearch = '';
-              "
-            />
-          </template>
-        </v-input>
-      </div>
+      <template v-if="allFlows.length">
+        <div class="action-button">
+          <v-button x-small to="/flow-manager"> Home </v-button>
+          <v-button x-small @click="onNavigationAction">
+            {{ activeGroups?.length ? "Collapse All" : "Expand All" }}
+          </v-button>
+        </div>
+        <div class="search-input">
+          <v-input type="search" small :placeholder="'Search Flow'" v-model="tmpSearch" @input="debounce(onSearchChange, 500)">
+            <template v-slot:append>
+              <v-icon
+                v-if="tmpSearch"
+                name="close"
+                clickable
+                @click="
+                  search = '';
+                  tmpSearch = '';
+                "
+              />
+            </template>
+          </v-input>
+        </div>
+      </template>
     </div>
     <v-list v-model="activeGroups" scope="content-navigation" class="content-navigation" tabindex="-1" nav :mandatory="false">
       <navigation-item
@@ -44,7 +56,7 @@
 <script setup lang="ts">
 import { computed, ref, toRefs, inject, Ref } from "vue";
 import NavigationItem from "./navigation-item.vue";
-import { ICredential, IFlow, IFolder } from "../../types";
+import { ICredential, IFlow, IFolder, IServerInfo } from "../../types";
 import { useLocalStorage } from "../../composables/use-local-storage";
 
 const props = defineProps<{
@@ -53,6 +65,7 @@ const props = defineProps<{
   flowChildMap: Record<string, (IFlow | IFolder)[]>;
   allFlows: IFolder[] | IFlow[];
   viewMode: string;
+  serverInfo?: IServerInfo;
 }>();
 
 const { rootFlows, flowChildMap, allFlows, viewMode } = toRefs(props);
@@ -232,6 +245,17 @@ function onNavigationAction() {
     display: flex;
     justify-content: space-between;
     margin-top: 8px;
+  }
+
+  .version {
+    margin-left: 4px;
+    margin-top: 8px;
+    display: flex;
+    font-size: 14px;
+
+    .trigger-chip {
+      margin-left: 8px;
+    }
   }
 
   position: sticky;

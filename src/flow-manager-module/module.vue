@@ -325,6 +325,7 @@
         :root-flows="rootFlows"
         :flow-child-map="flowChildMap"
         :all-flows="allFlows"
+        :server-info="serverInfo"
       />
     </template>
 
@@ -508,7 +509,7 @@ import SecureLS from "secure-ls";
 import debounce from "lodash/debounce";
 import { Collection, Field, Preset, User } from "@directus/types";
 
-import { ICredential, IFlow, IFolder, IOperation, ProcessingItem } from "../types";
+import { ICredential, IFlow, IFolder, IOperation, IServerInfo, ProcessingItem } from "../types";
 import { ENDPOINT_EXTENSION_NAME, NPM_LINK, TRIGGER_TYPES } from "../constants";
 
 import { formatDate, formatDateLong, getTimestamp } from "../utils/date.util";
@@ -638,6 +639,7 @@ export default defineComponent({
 
     const selectedCredential = ref("local");
     const currentUser = ref<User | null>(null);
+    const serverInfo = ref<IServerInfo>();
 
     /*
       Flags stuff
@@ -1159,6 +1161,7 @@ export default defineComponent({
       if (!flowFieldConfiguration.value.isConfigured || !isSettingFieldConfigured.value) {
         settingDialog.value = true;
       }
+      getServerInfo();
     });
 
     return {
@@ -1262,6 +1265,7 @@ export default defineComponent({
       changeFlowStatus,
       selectedFlowsActive,
       selectedFlowsInactive,
+      serverInfo,
     };
 
     async function createFlow(item: Omit<IFlow, "id"> & { id?: string }) {
@@ -2450,13 +2454,14 @@ export default defineComponent({
     }
 
     async function setCredential(credential: string) {
+      const oldCredential = selectedCredential.value;
       indeterminateProcess.value = true;
       processingDialogTitle.value = "Loading";
       selectedCredential.value = credential;
 
       try {
-        await getUser();
-        const isHaveAdminAccess = currentUser.value?.role?.admin_access;
+        getServerInfo();
+        const isHaveAdminAccess = await getUserPermission();
         if (!isHaveAdminAccess) {
           notificationsStore.add({
             type: "error",
@@ -2488,7 +2493,8 @@ export default defineComponent({
           closeable: true,
           persist: true,
         });
-        selectedCredential.value = "local";
+        selectedCredential.value = oldCredential;
+        getServerInfo();
       }
       processingDialog.value = false;
       processingDialogTitle.value = "";
@@ -2515,17 +2521,56 @@ export default defineComponent({
       }
     }
 
-    async function getUser() {
+    async function getUser(isHasPolicyField = false) {
       const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
-      if (credential) {
+      const queries: string[] = ["fields[]=*"];
+      if (isHasPolicyField) {
+        queries.push("fields[]=policies.policy.*");
+        queries.push("fields[]=role.policies.policy.*");
+      } else {
+        queries.push("fields[]=role.*");
+      }
+      if (selectedCredential.value === "local") {
         const {
           data: { data },
-        } = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
-          url: `${credential.url}/users/me?fields[]=*&fields[]=role.admin_access&fields[]=role.app_access&fields[]=role.id`,
-          staticToken: credential.staticToken,
-          method: "GET",
-        });
+        } = await api.get(`/users/me?${queries.join("&")}`);
         currentUser.value = data;
+      } else {
+        if (credential) {
+          const {
+            data: { data },
+          } = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+            url: `${credential.url}/users/me?${queries.join("&")}`,
+            staticToken: credential.staticToken,
+            method: "GET",
+          });
+          currentUser.value = data;
+        }
+      }
+    }
+
+    async function getServerInfo() {
+      try {
+        if (selectedCredential.value === "local") {
+          const {
+            data: { data },
+          } = await api.get(`/server/info`);
+          serverInfo.value = data;
+        } else {
+          const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
+          if (credential) {
+            const {
+              data: { data },
+            } = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+              url: `${credential.url}/server/info`,
+              staticToken: credential.staticToken,
+              method: "GET",
+            });
+            serverInfo.value = data;
+          }
+        }
+      } catch {
+        serverInfo.value = undefined;
       }
     }
 
@@ -2555,14 +2600,30 @@ export default defineComponent({
       progressValue.value = 0;
       let totalSuccess = 0;
       let totalError = 0;
+      const func =
+        selectedCredential.value === "local"
+          ? async (id: string) => {
+              await api.patch(`/flows/${id}`, {
+                status,
+              });
+            }
+          : async (id: string) => {
+              const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
+              await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+                url: `${credential?.url}/flows/${id}`,
+                staticToken: credential?.staticToken,
+                method: "PATCH",
+                payload: {
+                  status,
+                },
+              });
+            };
       try {
         const filtered = selectedFlows.value.filter((flow) => flow.status !== status);
         for (const item of filtered) {
           if (item) {
             try {
-              await api.patch(`/flows/${item.id}`, {
-                status,
-              });
+              await func(item.id);
               listProcessing.value.push({
                 status: "success",
                 message: `Flow "${item.name}"`,
@@ -2596,6 +2657,19 @@ export default defineComponent({
         sleep(3000).then(() => {
           processingDialog.value = false;
         });
+      }
+    }
+
+    async function getUserPermission() {
+      const permissionFields = await reloadFields("directus_permissions");
+      const permissionHasPolicy = permissionFields.some((f: Field) => f.field === "policy");
+      await getUser(permissionHasPolicy);
+      if (permissionHasPolicy) {
+        const policies = [...(currentUser.value?.policies || []), ...(currentUser.value?.role?.policies || [])];
+
+        return policies.some((policy) => policy.policy.admin_access);
+      } else {
+        return currentUser.value?.role?.admin_access;
       }
     }
   },
