@@ -78,3 +78,7 @@ export type ProcessingItem = {
   status: "success" | "error" | "processing" | "skipped";
   message: string;
 };
+
+export interface IServerInfo {
+  version?: string;
+}
