@@ -54,6 +54,8 @@ export interface IFlow {
   flow_manager_order?: number;
   flow_manager_run_counter?: number;
   flow_manager_last_run_at?: Date;
+  flow_manager_last_run_message?: string;
+  flow_manager_last_run_operation?: string;
 }
 
 export interface IFolder {

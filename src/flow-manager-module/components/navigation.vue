@@ -11,7 +11,7 @@
   </div>
   <div v-else class="content-navigation-wrapper">
     <div class="action-bar">
-      <v-select class="small" v-model="selectedCredential" :items="credentialOptions"></v-select>
+      <v-select v-model="selectedCredential" :items="credentialOptions"></v-select>
       <div class="version">
         Directus Version <v-chip x-small active class="trigger-chip">
           {{ serverInfo?.version || "N/A" }}

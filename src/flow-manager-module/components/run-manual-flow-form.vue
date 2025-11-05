@@ -51,6 +51,17 @@ const fields = computed(() => {
   }));
 });
 
+const flowId = computed(() => selectedItem.value?.id);
+
+watch([flowId, value], ([newFlowId, newValue]) => {
+  if (newValue && newFlowId) {
+    step.value = 1;
+    confirmValues.value = {};
+    selectedCollectionToRun.value = null;
+    selectedItemKeys.value = [];
+  }
+});
+
 watch(
   [requireSelection, requireConfirmation],
   ([isNeedSelection, isNeedConfirmation]) => {
@@ -207,8 +218,6 @@ async function runFlow() {
       ...confirmValues.value,
     });
 
-    emit("reload:flow");
-    emit("reload:tabularFlow");
     notificationsStore.add({
       type: "success",
       title: `Flow "${selectedItem.value.name}" has been run successfully`,
@@ -223,6 +232,8 @@ async function runFlow() {
       persist: true,
     });
   } finally {
+    emit("reload:flow");
+    emit("reload:tabularFlow");
     loadingRunFlow.value = false;
     emit("update:modelValue", false);
   }
@@ -230,7 +241,7 @@ async function runFlow() {
 
 function proceed() {
   if (step.value === 1) {
-    if (requireConfirmation) {
+    if (requireConfirmation.value) {
       step.value = 2;
     } else {
       runFlow();

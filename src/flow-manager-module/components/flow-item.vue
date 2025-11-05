@@ -108,14 +108,21 @@ function selectItem() {
         v-tooltip.bottom="item.status === 'active' ? 'Active' : 'Inactive'"
       />
       <div v-if="!isCategory && !isActive" class="item-detail">
-        <v-badge :value="item.flow_manager_run_counter || 0" class="notifications-badge">
+        <v-badge
+          :value="item.flow_manager_run_counter || 0"
+          :class="{ 'badge-success': !item.flow_manager_last_run_message, 'badge-error': !!item.flow_manager_last_run_message }"
+        >
           <v-chip x-small class="item-name text-gray mr-4 trigger-chip">{{ triggerType }}</v-chip>
         </v-badge>
         <span ref="itemName" class="item-name text-gray">{{ item.name }}</span>
         <span v-if="item.description" class="item-note text-gray">{{ item.description }}</span>
       </div>
       <div v-else class="item-detail">
-        <v-badge v-if="triggerType" :value="item.flow_manager_run_counter || 0" class="notifications-badge">
+        <v-badge
+          v-if="triggerType"
+          :value="item.flow_manager_run_counter || 0"
+          :class="{ 'badge-success': !item.flow_manager_last_run_message, 'badge-error': !!item.flow_manager_last_run_message }"
+        >
           <v-chip x-small active class="item-name mr-4 trigger-chip">{{ triggerType }} </v-chip>
         </v-badge>
         <span ref="itemName" class="item-name">{{ item.name }}</span>
@@ -210,5 +217,13 @@ function selectItem() {
 .trigger-chip {
   --v-chip-color: white;
   --v-chip-background-color: var(--theme--primary, var(--primary));
+}
+
+.badge-error {
+  --v-badge-background-color: #fa284b;
+}
+
+.badge-success {
+  --v-badge-background-color: #4a9e35;
 }
 </style>

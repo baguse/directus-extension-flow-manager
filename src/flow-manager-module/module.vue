@@ -333,19 +333,23 @@
       <sidebar-detail icon="info" :title="'information'" close>
         <div v-if="selectedItem?.id && (selectedItem as IFolder).type !== 'category'" style="display: grid">
           <div style="font-weight: bold">Flow ID</div>
-          <div>{{ selectedItem.id }}</div>
-          <div style="font-weight: bold" class="mt-2">Flow Name</div>
+          <div class="sidebar-text">{{ selectedItem.id }}</div>
+          <div style="font-weight: bold" class="mt-2 sidebar-text">Flow Name</div>
           <div>{{ selectedItem.name }}</div>
-          <div style="font-weight: bold" class="mt-2">Status</div>
+          <div style="font-weight: bold" class="mt-2 sidebar-text">Status</div>
           <div>{{ (selectedItem as IFlow).status?.toUpperCase() || "N/A" }}</div>
-          <div style="font-weight: bold" class="mt-2">Trigger Type</div>
+          <div style="font-weight: bold" class="mt-2 sidebar-text">Trigger Type</div>
           <div>{{ (selectedItem as IFlow).trigger?.toUpperCase() || "N/A" }}</div>
-          <div style="font-weight: bold" class="mt-2">Description</div>
+          <div style="font-weight: bold" class="mt-2 sidebar-text">Description</div>
           <div>{{ (selectedItem as IFlow).description || "N/A" }}</div>
-          <div style="font-weight: bold" class="mt-2">Total Runs</div>
+          <div style="font-weight: bold" class="mt-2 sidebar-text">Total Runs</div>
           <div>{{ (selectedItem as IFlow).flow_manager_run_counter || 0 }}</div>
-          <div style="font-weight: bold" class="mt-2">Last Run</div>
+          <div style="font-weight: bold" class="mt-2 sidebar-text">Last Run</div>
           <div>{{ formatDateLong((selectedItem as IFlow).flow_manager_last_run_at) }}</div>
+          <div style="font-weight: bold" class="mt-2 sidebar-text">Last Error Message</div>
+          <div>{{ (selectedItem as IFlow).flow_manager_last_run_message || "N/A" }}</div>
+          <div style="font-weight: bold" class="mt-2 sidebar-text">Failed Operation Name</div>
+          <div>{{ getOperationNameById((selectedItem as IFlow).flow_manager_last_run_operation || "")?.name || "N/A" }}</div>
         </div>
       </sidebar-detail>
     </template>
@@ -401,10 +405,19 @@
       <v-card>
         <v-card-title>Settings</v-card-title>
         <v-card-text>
-          <v-error
-            v-if="!flowFieldConfiguration.isConfigured || !isSettingFieldConfigured"
-            :error="{ extensions: { code: 'Error' }, message: 'Flow Manager fields are not configured' }"
-          ></v-error>
+          <div v-if="notCreatedFields.length">
+            <v-error
+              :error="{ extensions: { code: 'Error' }, message: `Flow Manager fields are not configured. By clicking the 'Configure' button, you will create the necessary fields.` }"
+            ></v-error>
+            <div style="margin-top: 15px">
+              <div style="font-weight: bold">Fields to be created:</div>
+              <ul>
+                <li v-for="field in notCreatedFields" :key="field.field">
+                  <strong>{{ field.field }}</strong> on <strong>{{ field.collection }}</strong>
+                </li>
+              </ul>
+            </div>
+          </div>
           <div v-else>
             <v-table :headers="folderHeaders" :items="flowCategories" @click:row="selectCategoryForEdit">
               <template #[`item.name`]="{ item }">
@@ -440,11 +453,7 @@
         </v-card-text>
         <v-card-actions>
           <v-button secondary @click="settingDialog = false"> Close </v-button>
-          <v-button
-            :loading="isConfigurationLoading"
-            :disabled="flowFieldConfiguration.isConfigured && isSettingFieldConfigured"
-            @click="configureFlowManagerField"
-          >
+          <v-button v-if="notCreatedFields.length" :loading="isConfigurationLoading" @click="configureFlowManagerField">
             Configure
           </v-button>
         </v-card-actions>
@@ -526,6 +535,7 @@ import CredentialDialog from "./components/credential-dialog.vue";
 import DeleteDialog from "./components/delete-dialog.vue";
 import PushToCloudDialog from "./components/push-to-cloud-dialog.vue";
 import RunWebhookFlowForm from "./components/run-webhook-flow-form.vue";
+import useFields from "../utils/field.util";
 
 export default defineComponent({
   components: {
@@ -640,6 +650,25 @@ export default defineComponent({
     const selectedCredential = ref("local");
     const currentUser = ref<User | null>(null);
     const serverInfo = ref<IServerInfo>();
+    const ls = new SecureLS({ encodingType: "aes" });
+    const storedCredentials = ref<ICredential[]>(ls.get("flow_manager_credentials") || []);
+    const credentials = computed({
+      get() {
+        return storedCredentials.value;
+      },
+      set(value) {
+        ls.set("flow_manager_credentials", value);
+        storedCredentials.value = value;
+      },
+    });
+    const notCreatedFields = ref<Partial<Field>[]>([]);
+
+    const { ensureFields } = useFields({
+      api,
+      fieldsStore,
+      credentials,
+      selectedCredential,
+    });
 
     /*
       Flags stuff
@@ -1112,17 +1141,6 @@ export default defineComponent({
       return [...flowCategories.value, ...flows.value] as IFlow[] | IFolder[];
     });
 
-    const ls = new SecureLS({ encodingType: "aes" });
-    const storedCredentials = ref<ICredential[]>(ls.get("flow_manager_credentials") || []);
-    const credentials = computed({
-      get() {
-        return storedCredentials.value;
-      },
-      set(value) {
-        ls.set("flow_manager_credentials", value);
-        storedCredentials.value = value;
-      },
-    });
     const credentialOptions = computed(() => {
       return credentials.value.map((credential) => ({
         text: credential.name,
@@ -1162,6 +1180,12 @@ export default defineComponent({
         settingDialog.value = true;
       }
       getServerInfo();
+      ensureFields().then((fields) => {
+        notCreatedFields.value = fields;
+        if (fields.length) {
+          settingDialog.value = true;
+        }
+      });
     });
 
     return {
@@ -1266,6 +1290,8 @@ export default defineComponent({
       selectedFlowsActive,
       selectedFlowsInactive,
       serverInfo,
+      getOperationNameById,
+      notCreatedFields,
     };
 
     async function createFlow(item: Omit<IFlow, "id"> & { id?: string }) {
@@ -1787,75 +1813,11 @@ export default defineComponent({
     }
 
     async function configureFlowManagerField() {
-      const fields: {
-        settings: Partial<Field>[];
-        flows: Partial<Field>[];
-      } = {
-        settings: [],
-        flows: [],
-      };
       isConfigurationLoading.value = true;
-      if (!flowFieldConfiguration.value.isCategoryFieldConfigured) {
-        const payload = {
-          field: "flow_manager_category",
-          type: "string",
-          schema: { default_value: null },
-          meta: { interface: "input", special: null, hidden: true },
-          collection: "directus_flows",
-        } as Partial<Field>;
-        fields.flows.push(payload);
-      }
-
-      if (!flowFieldConfiguration.value.isOrderFieldConfigured) {
-        const payload = {
-          field: "flow_manager_order",
-          type: "integer",
-          schema: { default_value: "0" },
-          meta: { interface: "input", special: null, hidden: true },
-          collection: "directus_flows",
-        } as Partial<Field>;
-        fields.flows.push(payload);
-      }
-
-      if (!isSettingFieldConfigured.value) {
-        const payload = {
-          field: "flow_manager_categories",
-          type: "json",
-          meta: { interface: "input-code", special: ["cast-json"], hidden: true },
-          collection: "directus_settings",
-        } as Partial<Field>;
-        fields.settings.push(payload);
-      }
-
-      if (!flowFieldConfiguration.value.isLastRunFieldConfigured) {
-        const payload = {
-          field: "flow_manager_last_run_at",
-          type: "dateTime",
-          schema: { default_value: null },
-          meta: { interface: "input-datetime", special: null, hidden: true },
-          collection: "directus_flows",
-        } as Partial<Field>;
-        fields.flows.push(payload);
-      }
-
-      if (!flowFieldConfiguration.value.isRunCounterFieldConfigured) {
-        const payload = {
-          field: "flow_manager_run_counter",
-          type: "integer",
-          schema: { default_value: "0" },
-          meta: { interface: "input", special: null, hidden: true },
-          collection: "directus_flows",
-        } as Partial<Field>;
-        fields.flows.push(payload);
-      }
 
       if (selectedCredential.value === "local") {
-        for (const field of fields.flows) {
-          await fieldsStore.createField("directus_flows", field);
-        }
-
-        for (const field of fields.settings) {
-          await fieldsStore.createField("directus_settings", field);
+        for (const field of notCreatedFields.value) {
+          await fieldsStore.createField(field.collection, field);
         }
         await fieldsStore.hydrate();
         flowFields.value = fieldsStore.getFieldsForCollection("directus_flows");
@@ -1863,18 +1825,9 @@ export default defineComponent({
       } else {
         const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
         if (credential) {
-          for (const field of fields.flows) {
+          for (const field of notCreatedFields.value) {
             await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
-              url: `${credential?.url}/fields/directus_flows`,
-              staticToken: credential?.staticToken,
-              method: "POST",
-              payload: field,
-            });
-          }
-
-          for (const field of fields.settings) {
-            await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
-              url: `${credential?.url}/fields/directus_settings`,
+              url: `${credential?.url}/fields/${field.collection}`,
               staticToken: credential?.staticToken,
               method: "POST",
               payload: field,
@@ -1885,6 +1838,7 @@ export default defineComponent({
           settingFields.value = await reloadFields("directus_settings");
         }
       }
+      settingDialog.value = false;
       isConfigurationLoading.value = false;
     }
 
@@ -2094,6 +2048,31 @@ export default defineComponent({
             closeable: true,
             persist: true,
           });
+        }
+      }
+
+      if (selectedItem.value?.id) {
+        const updatedItem = flows.value.find((flow) => flow.id === selectedItem.value?.id);
+        if (updatedItem) {
+          selectedItem.value = updatedItem;
+        } else {
+          selectedItem.value = {
+            id: "",
+            name: "",
+            icon: "",
+            color: "",
+            description: "",
+            trigger: "",
+            options: {
+              collections: [],
+            },
+            operations: [],
+            operation: "",
+            status: "",
+            accountability: "",
+            flow_manager_order: 0,
+            flow_manager_category: "",
+          };
         }
       }
     }
@@ -2452,12 +2431,18 @@ export default defineComponent({
         });
       }
     }
-
     async function setCredential(credential: string) {
       const oldCredential = selectedCredential.value;
       indeterminateProcess.value = true;
       processingDialogTitle.value = "Loading";
       selectedCredential.value = credential;
+
+      ensureFields().then((fields) => {
+        notCreatedFields.value = fields;
+        if (fields.length) {
+          settingDialog.value = true;
+        }
+      });
 
       try {
         getServerInfo();
@@ -2480,9 +2465,6 @@ export default defineComponent({
         flowFields.value = await reloadFields("directus_flows");
         settingFields.value = await reloadFields("directus_settings");
 
-        if (!flowFieldConfiguration.value.isConfigured || !isSettingFieldConfigured.value) {
-          settingDialog.value = true;
-        }
         reloadFolders().then((folders) => {
           flowCategories.value = folders;
         });
@@ -2672,6 +2654,12 @@ export default defineComponent({
         return currentUser.value?.role?.admin_access;
       }
     }
+
+    function getOperationNameById(id: string) {
+      if (!id) return undefined;
+      const { operations } = selectedItem.value as IFlow;
+      return operations?.find((o) => o.id === id);
+    }
   },
 });
 </script>
@@ -2838,5 +2826,10 @@ export default defineComponent({
 
 .small.v-select > .v-menu-activator > .v-input {
   height: 38px;
+}
+
+.sidebar-text {
+  overflow-x: hidden;
+  text-wrap: wrap;
 }
 </style>

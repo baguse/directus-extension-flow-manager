@@ -95,7 +95,13 @@ Changelogs:
   * Add feature for batch Activate and Deactivate flow
 - 1.4.10 (01 December 2024)
   * Fix duplicate and restore flow with unused operations
-
+- 1.4.11 (30 September 2025)
+  * Fix directus policy checker for newer directus version
+  * Add directus version label
+- 1.4.12 (5 November 2025)
+  * Add ability to get the last error of a flow
+  * Fix the flow run counter
+  * Fix the logic when run flow w/o confirmation dialog
 Contributing:
 If you want to contribute kindly to create a PR and if you want to request a feature or report of a bug kindly create the Issue
 ##### Buy me a coffee
