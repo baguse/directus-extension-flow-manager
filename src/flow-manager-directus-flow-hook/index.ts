@@ -109,7 +109,10 @@ export default defineHook(({ action }, { services }) => {
 
       await setupDirectusFlowsFields(fieldsService);
 
-      const counter = await revisionsService.readByQuery({
+      const [countResult] = await revisionsService.readByQuery({
+        aggregate: {
+          countDistinct: ["id"]
+        },
         filter: {
           _and: [
             {
@@ -136,8 +139,6 @@ export default defineHook(({ action }, { services }) => {
             },
           ],
         },
-        fields: ["activity.revisions.data"],
-        sort: ["-id"],
       });
 
       let lastExecutionData = data.payload.data;
@@ -166,7 +167,7 @@ export default defineHook(({ action }, { services }) => {
         .where({ id: data.payload.item })
         .update({
           flow_manager_last_run_at: new Date(),
-          flow_manager_run_counter: counter.length,
+          flow_manager_run_counter: countResult.countDistinct.id,
           flow_manager_last_run_message: lastStepErrorMessage,
           flow_manager_last_run_operation: lastStepOperation,
         });

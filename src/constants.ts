@@ -41,9 +41,9 @@ export const REQUIRED_FIELDS = [
   },
   {
     field: "flow_manager_last_run_message",
-    type: "string",
+    type: "text",
     schema: { default_value: "" },
-    meta: { interface: "input", special: null, hidden: true },
+    meta: { interface: "input-multiline", special: null, hidden: true, options: { softLength: 1024 } },
     collection: "directus_flows",
   },
   {
@@ -53,4 +53,4 @@ export const REQUIRED_FIELDS = [
     meta: { interface: "input", special: null, hidden: true },
     collection: "directus_flows",
   },
-] as Array<Partial<Field>>;
+] as unknown as Array<Partial<Field>>;

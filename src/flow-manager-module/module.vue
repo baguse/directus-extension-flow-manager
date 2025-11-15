@@ -405,14 +405,22 @@
       <v-card>
         <v-card-title>Settings</v-card-title>
         <v-card-text>
-          <div v-if="notCreatedFields.length">
+          <div v-if="notCreatedFields.length || differentFields.length">
             <v-error
-              :error="{ extensions: { code: 'Error' }, message: `Flow Manager fields are not configured. By clicking the 'Configure' button, you will create the necessary fields.` }"
+              :error="{ extensions: { code: 'Error' }, message: `Flow Manager fields are not configured. By clicking the 'Configure' button, you will create the necessary fields or re-create the existing fields.` }"
             ></v-error>
-            <div style="margin-top: 15px">
+            <div v-if="notCreatedFields.length" style="margin-top: 15px">
               <div style="font-weight: bold">Fields to be created:</div>
               <ul>
                 <li v-for="field in notCreatedFields" :key="field.field">
+                  <strong>{{ field.field }}</strong> on <strong>{{ field.collection }}</strong>
+                </li>
+              </ul>
+            </div>
+            <div v-if="differentFields.length" style="margin-top: 15px">
+              <div style="font-weight: bold">Fields to be re-created:</div>
+              <ul>
+                <li v-for="field in differentFields" :key="field.field">
                   <strong>{{ field.field }}</strong> on <strong>{{ field.collection }}</strong>
                 </li>
               </ul>
@@ -662,6 +670,7 @@ export default defineComponent({
       },
     });
     const notCreatedFields = ref<Partial<Field>[]>([]);
+    const differentFields = ref<Partial<Field>[]>([]);
 
     const { ensureFields } = useFields({
       api,
@@ -1180,9 +1189,10 @@ export default defineComponent({
         settingDialog.value = true;
       }
       getServerInfo();
-      ensureFields().then((fields) => {
-        notCreatedFields.value = fields;
-        if (fields.length) {
+      ensureFields().then(({ notExistsFields, differentFields: differentFieldsResult }) => {
+        notCreatedFields.value = notExistsFields;
+        differentFields.value = differentFieldsResult;
+        if (notExistsFields.length || differentFields.value.length) {
           settingDialog.value = true;
         }
       });
@@ -1292,6 +1302,7 @@ export default defineComponent({
       serverInfo,
       getOperationNameById,
       notCreatedFields,
+      differentFields,
     };
 
     async function createFlow(item: Omit<IFlow, "id"> & { id?: string }) {
@@ -1819,6 +1830,10 @@ export default defineComponent({
         for (const field of notCreatedFields.value) {
           await fieldsStore.createField(field.collection, field);
         }
+        for (const field of differentFields.value) {
+          await fieldsStore.deleteField(field.collection, field.field);
+          await fieldsStore.createField(field.collection, field);
+        }
         await fieldsStore.hydrate();
         flowFields.value = fieldsStore.getFieldsForCollection("directus_flows");
         settingFields.value = fieldsStore.getFieldsForCollection("directus_settings");
@@ -1826,6 +1841,19 @@ export default defineComponent({
         const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
         if (credential) {
           for (const field of notCreatedFields.value) {
+            await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+              url: `${credential?.url}/fields/${field.collection}`,
+              staticToken: credential?.staticToken,
+              method: "POST",
+              payload: field,
+            });
+          }
+          for (const field of differentFields.value) {
+            await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+              url: `${credential?.url}/fields/${field.collection}/${field.field}`,
+              staticToken: credential?.staticToken,
+              method: "DELETE",
+            });
             await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
               url: `${credential?.url}/fields/${field.collection}`,
               staticToken: credential?.staticToken,
@@ -2437,9 +2465,10 @@ export default defineComponent({
       processingDialogTitle.value = "Loading";
       selectedCredential.value = credential;
 
-      ensureFields().then((fields) => {
-        notCreatedFields.value = fields;
-        if (fields.length) {
+      ensureFields().then(({ notExistsFields, differentFields: differentFieldsResult }) => {
+        notCreatedFields.value = notExistsFields;
+        differentFields.value = differentFieldsResult;
+        if (notExistsFields.length || differentFields.value.length) {
           settingDialog.value = true;
         }
       });

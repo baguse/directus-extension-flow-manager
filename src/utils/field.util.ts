@@ -16,7 +16,8 @@ const useFields = ({
   api: ReturnType<typeof useApi>;
 }) => {
   const ensureFields = async () => {
-    const fields: Array<Partial<Field>> = [];
+    const notExistsFields: Array<Partial<Field>> = [];
+    const differentFields: Array<Partial<Field>> = [];
     const fieldMap: Record<string, Partial<Field>[]> = REQUIRED_FIELDS.reduce((acc: Record<string, Partial<Field>[]>, field) => {
       if (!acc[`${field.collection}`]) {
         acc[`${field.collection}`] = [];
@@ -27,12 +28,15 @@ const useFields = ({
 
     if (selectedCredential.value === "local") {
       for (const collectionName in fieldMap) {
-        const existingFields: string[] = fieldsStore.getFieldsForCollection(collectionName).map((f: Field) => f.field);
+        const existingFields = fieldsStore.getFieldsForCollection(collectionName);
         const requiredFields = fieldMap[collectionName] || [];
 
         for (const requiredField of requiredFields) {
-          if (!existingFields.includes(requiredField.field!)) {
-            fields.push(requiredField);
+          const existingField = existingFields.find((f: Field) => f.field === requiredField.field);
+          if (!existingField) {
+            notExistsFields.push(requiredField);
+          } else if (existingField.type !== requiredField.type) {
+            differentFields.push(requiredField);
           }
         }
       }
@@ -47,18 +51,24 @@ const useFields = ({
             staticToken: credential?.staticToken,
             method: "GET",
           });
-          const existingFields: string[] = data.map((f: Field) => f.field);
+          const existingFields: Field[] = data;
           const requiredFields = fieldMap[collectionName] || [];
           for (const requiredField of requiredFields) {
-            if (!existingFields.includes(requiredField.field!)) {
-              fields.push(requiredField);
+            const existingField = existingFields.find((f: Field) => f.field === requiredField.field);
+            if (!existingField) {
+              notExistsFields.push(requiredField);
+            } else if (existingField.type !== requiredField.type) {
+              differentFields.push(requiredField);
             }
           }
         }
       }
     }
 
-    return fields;
+    return {
+      notExistsFields,
+      differentFields,
+    };
   };
   return {
     ensureFields,
