@@ -461,7 +461,7 @@
         </v-card-text>
         <v-card-actions>
           <v-button secondary @click="settingDialog = false"> Close </v-button>
-          <v-button v-if="notCreatedFields.length" :loading="isConfigurationLoading" @click="configureFlowManagerField">
+          <v-button v-if="notCreatedFields.length || differentFields.length" :loading="isConfigurationLoading" @click="configureFlowManagerField">
             Configure
           </v-button>
         </v-card-actions>

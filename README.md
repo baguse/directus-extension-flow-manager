@@ -105,6 +105,9 @@ Changelogs:
 - 1.4.13 (15 November 2025)
   * Fix flow run counter limited for 100 [#23](https://github.com/baguse/directus-extension-flow-manager/issues/23)
   * Fix the flow run error message exceeded length [#24](https://github.com/baguse/directus-extension-flow-manager/issues/24)
+- 1.4.14 (23 November 2025)
+  * Fix issue when different fields are exists but Configure button was not shown [#25](https://github.com/baguse/directus-extension-flow-manager/issues/25)
+
 Contributing:
 If you want to contribute kindly to create a PR and if you want to request a feature or report of a bug kindly create the Issue
 ##### Buy me a coffee
