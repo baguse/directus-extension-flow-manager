@@ -110,12 +110,12 @@ export default defineComponent({
     function getChartColors() {
       const el = document.body || document.documentElement;
       const style = getComputedStyle(el);
-      const primary = style.getPropertyValue("--theme--primary").trim() || style.getPropertyValue("--primary").trim() || "#6644ff";
+      const success = style.getPropertyValue("--theme--success").trim() || style.getPropertyValue("--success").trim() || "#6644ff";
       const danger = style.getPropertyValue("--theme--danger").trim() || style.getPropertyValue("--danger").trim() || "#e54d42";
       const foreground = style.getPropertyValue("--theme--foreground").trim() || style.getPropertyValue("--foreground").trim();
       const isLight = document.body.classList.contains("light");
       const foregroundFallback = isLight ? "#1a1a1a" : "#e6e6e6";
-      return { primary, danger, foreground: foreground || foregroundFallback };
+      return { success, danger, foreground: foreground || foregroundFallback };
     }
 
     /** Convert CSS color to rgba with given alpha (0–1) for chart fills */
@@ -135,9 +135,9 @@ export default defineComponent({
     }
 
     function buildChartConfig(type: ChartTypeValue): ChartConfiguration {
-      const { primary, danger, foreground } = getChartColors();
+      const { success, danger, foreground } = getChartColors();
       const isBar = type === "bar";
-      const primaryFill = isBar ? primary : colorWithAlpha(primary, 0.25);
+      const successFill = isBar ? success : colorWithAlpha(success, 0.25);
       const dangerFill = isBar ? danger : colorWithAlpha(danger, 0.25);
       const labels = flowStats.value.map((f) => (f.name.length > 20 ? f.name.slice(0, 17) + "…" : f.name));
       const successData = flowStats.value.map((f) => f.flow_manager_success_counter ?? 0);
@@ -151,8 +151,8 @@ export default defineComponent({
             {
               label: "Success",
               data: successData,
-              borderColor: primary,
-              backgroundColor: primaryFill,
+              borderColor: success,
+              backgroundColor: successFill,
               fill: type === "line",
               tension: type === "line" ? 0.3 : 0,
             },
@@ -376,8 +376,8 @@ export default defineComponent({
   border: 1px solid var(--theme--border-normal, var(--border-normal));
 
   &.success {
-    background: color-mix(in srgb, var(--theme--primary, var(--primary)) 12%, transparent);
-    .summary-label { color: var(--theme--primary, var(--primary)); }
+    background: color-mix(in srgb, var(--theme--success, var(--success)) 12%, transparent);
+    .summary-label { color: var(--theme--success, var(--success)); }
   }
 
   &.error {

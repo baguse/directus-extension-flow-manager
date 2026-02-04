@@ -5,18 +5,18 @@
   <v-list-item-content>
     <div class="flex">
       <div v-if="type !== 'category'">
-        <v-chip
-          v-if="status !== 'active'"
-          x-small
-          class="item-name mr-4 trigger-chip"
-          :style="{
-            '--v-chip-background-color': '#d0cece',
-          }"
-          >{{ triggerType }}</v-chip
-        >
-        <v-chip v-else x-small active class="item-name mr-4 trigger-chip">{{ triggerType }} </v-chip>
+        <v-chip v-if="status !== 'active'" x-small class="item-name mr-4 trigger-chip" :style="{
+          '--v-chip-color': 'var(--foreground-inverted, var(--theme--foreground))',
+          '--v-chip-background-color': 'var(--theme--primary)'
+        }">{{ triggerType }}</v-chip>
+        <v-chip v-else x-small active class="item-name mr-4 trigger-chip" :style="{
+          '--v-chip-color': 'var(--foreground-inverted, var(--theme--foreground))',
+          '--v-chip-background-color': 'var(--theme--primary)'
+        }">
+          {{ triggerType }}
+        </v-chip>
       </div>
-      <v-text-overflow :text="name" :highlight="search" />
+      <v-text-overflow :style="{ color: status !== 'active' ? 'var(--foreground-subdued, var(--theme--foreground-subdued))' : 'var(--foreground, var(--theme--foreground))' }" :text="name" :highlight="search" />
     </div>
   </v-list-item-content>
 </template>

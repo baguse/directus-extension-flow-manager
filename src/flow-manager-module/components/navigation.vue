@@ -256,6 +256,8 @@ function onNavigationAction() {
 
     .trigger-chip {
       margin-left: 8px;
+      --v-chip-color: var(--foreground-inverted, var(--theme--foreground));
+      --v-chip-background-color: var(--theme--primary);
     }
   }
 

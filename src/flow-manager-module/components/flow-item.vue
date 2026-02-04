@@ -215,8 +215,8 @@ function selectItem() {
 }
 
 .trigger-chip {
-  --v-chip-color: white;
-  --v-chip-background-color: var(--theme--primary, var(--primary));
+  --v-chip-color: var(--foreground-inverted, var(--theme--foreground));
+  --v-chip-background-color: var(--theme--primary);
 }
 
 .badge-error {
