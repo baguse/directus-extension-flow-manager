@@ -80,7 +80,7 @@ async function setupDirectusFlowsFields(fieldsService: any) {
 
 export default defineHook(({ action }, { services }) => {
   action("revisions.create", async (data: any, { database, schema }) => {
-    const { RevisionsService, FieldsService, ActivityService } = services;
+    const { RevisionsService, ActivityService } = services;
     const activityService = new ActivityService({
       knex: database,
       schema,
@@ -101,13 +101,6 @@ export default defineHook(({ action }, { services }) => {
         knex: database,
         schema,
       });
-
-      const fieldsService = new FieldsService({
-        knex: database,
-        schema,
-      });
-
-      await setupDirectusFlowsFields(fieldsService);
 
       const [countResult] = await revisionsService.readByQuery({
         aggregate: {
@@ -141,6 +134,16 @@ export default defineHook(({ action }, { services }) => {
         },
       });
 
+      const flow = await database("directus_flows")
+      .where({ id: data.payload.item })
+      .first();
+
+      if (!flow) {
+        return;
+      }
+
+      let { flow_manager_success_counter: successCounter, flow_manager_error_counter: errorCounter } = flow;
+
       let lastExecutionData = data.payload.data;
       if (typeof lastExecutionData === "string") {
         try {
@@ -150,9 +153,10 @@ export default defineHook(({ action }, { services }) => {
 
       let lastStepErrorMessage = "";
       let lastStepOperation = "";
+      let lastStepStatus = "";
       if (lastExecutionData) {
         const lastStep = lastExecutionData.steps?.[lastExecutionData.steps?.length - 1];
-        const lastStepStatus = lastStep?.status;
+        lastStepStatus = lastStep?.status;
         if (lastStepStatus === "reject") {  
           if (Array.isArray(lastExecutionData.data.$last)) {
             lastStepErrorMessage = lastExecutionData.data.$last[0].message;
@@ -170,6 +174,8 @@ export default defineHook(({ action }, { services }) => {
           flow_manager_run_counter: countResult.countDistinct.id,
           flow_manager_last_run_message: lastStepErrorMessage,
           flow_manager_last_run_operation: lastStepOperation,
+          flow_manager_success_counter: lastStepStatus === "resolve" ? successCounter + 1 : successCounter,
+          flow_manager_error_counter: lastStepStatus === "reject" ? errorCounter + 1 : errorCounter,
         });
     }
   });

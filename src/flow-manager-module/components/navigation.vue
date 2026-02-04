@@ -20,6 +20,7 @@
       <template v-if="allFlows.length">
         <div class="action-button">
           <v-button x-small to="/flow-manager"> Home </v-button>
+          <v-button x-small to="/flow-manager/dashboard"> Dashboard </v-button>
           <v-button x-small @click="onNavigationAction">
             {{ activeGroups?.length ? "Collapse All" : "Expand All" }}
           </v-button>

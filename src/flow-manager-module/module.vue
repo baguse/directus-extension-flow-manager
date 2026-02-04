@@ -308,6 +308,9 @@
     <template #actions>
       <v-checkbox v-model="viewListMode" label="List View" />
       <search-input v-if="!viewListMode" :collection="'directus_flows'" v-model="tableFlowSearch" v-model:filter="tableFlowFilter" />
+      <v-button to="/flow-manager/dashboard" rounded icon v-tooltip.bottom="'Dashboard'">
+        <v-icon name="insights" />
+      </v-button>
       <v-button v-tooltip.bottom="'Settings'" rounded icon @click="settingDialog = true">
         <v-icon name="settings" />
       </v-button>
@@ -464,6 +467,7 @@
           <v-button v-if="notCreatedFields.length || differentFields.length" :loading="isConfigurationLoading" @click="configureFlowManagerField">
             Configure
           </v-button>
+          <v-button @click="syncFlowCounters" class="input-form ml-2" :loading="isSyncingFlowCountersLoading"> Sync Flow Counters </v-button>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -695,6 +699,7 @@ export default defineComponent({
     const loadingPushToCloud = ref(false);
     const isConfigurationLoading = ref(false);
     const isTabularFlowLoading = ref(false);
+    const isSyncingFlowCountersLoading = ref(false);
 
     const showSelect = ref(false);
     const isSelectAll = ref(false);
@@ -1303,6 +1308,8 @@ export default defineComponent({
       getOperationNameById,
       notCreatedFields,
       differentFields,
+      syncFlowCounters,
+      isSyncingFlowCountersLoading,
     };
 
     async function createFlow(item: Omit<IFlow, "id"> & { id?: string }) {
@@ -2688,6 +2695,25 @@ export default defineComponent({
       if (!id) return undefined;
       const { operations } = selectedItem.value as IFlow;
       return operations?.find((o) => o.id === id);
+    }
+
+    async function syncFlowCounters() {
+      isSyncingFlowCountersLoading.value = true;
+      try {
+        await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/sync-counters`);
+      } catch {
+      } finally {
+        isSyncingFlowCountersLoading.value = false;
+        notificationsStore.add({
+          type: "success",
+          title: "Flow counters synced successfully",
+          closeable: true,
+          persist: true,
+        });
+        reloadFlow();
+        reloadTabularFlow();
+        settingDialog.value = false;
+      }
     }
   },
 });

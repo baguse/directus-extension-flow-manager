@@ -53,4 +53,18 @@ export const REQUIRED_FIELDS = [
     meta: { interface: "input", special: null, hidden: true },
     collection: "directus_flows",
   },
+  {
+    field: "flow_manager_success_counter",
+    type: "integer",
+    schema: { default_value: "0" },
+    meta: { interface: "input", special: null, hidden: true },
+    collection: "directus_flows",
+  },
+  {
+    field: "flow_manager_error_counter",
+    type: "integer",
+    schema: { default_value: "0" },
+    meta: { interface: "input", special: null, hidden: true },
+    collection: "directus_flows",
+  },
 ] as unknown as Array<Partial<Field>>;

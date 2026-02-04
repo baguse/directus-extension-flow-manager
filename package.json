@@ -64,6 +64,7 @@
 		"add": "directus-extension add"
 	},
 	"devDependencies": {
+		"chart.js": "^4.4.6",
 		"@directus/composables": "^10.1.12",
 		"@directus/extensions-sdk": "11.0.2",
 		"@directus/format-title": "^10.1.2",

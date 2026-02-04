@@ -1,5 +1,7 @@
 import { defineModule } from "@directus/extensions-sdk";
 import ModuleComponent from "./module.vue";
+import DashboardComponent from "./dashboard.vue";
+import FlowDashboardDetailComponent from "./flow-dashboard-detail.vue";
 import { User } from "@directus/types";
 
 export default defineModule({
@@ -10,6 +12,15 @@ export default defineModule({
     {
       path: "",
       component: ModuleComponent,
+    },
+    {
+      path: "dashboard",
+      component: DashboardComponent,
+    },
+    {
+      path: "dashboard/:flowId",
+      component: FlowDashboardDetailComponent,
+      props: (route) => ({ flowId: route.params.flowId }),
     },
     {
       path: ":parentId",
