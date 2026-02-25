@@ -22,7 +22,7 @@ function getChildKeys(item: IPayload) {
   return childKeys;
 }
 
-export function transformData(list: IOperation[], flowId: string, flowTriggerId: string) {
+export function transformData(list: IOperation[], flowId: string, flowTriggerId: string, isPreserveId = false) {
   const result: Partial<IPayload> = {};
 
   function findItemById(id: string | null) {
@@ -50,6 +50,9 @@ export function transformData(list: IOperation[], flowId: string, flowTriggerId:
       resolve: buildNestedObject(findItemById(item.resolve)),
       reject: buildNestedObject(findItemById(item.reject)),
     };
+    if (isPreserveId) {
+      nestedObject.id = item.id;
+    }
 
     return nestedObject;
   }
@@ -64,6 +67,9 @@ export function transformData(list: IOperation[], flowId: string, flowTriggerId:
   result.flow = flowId;
   result.resolve = buildNestedObject(findItemById(firstItem?.resolve || null));
   result.reject = buildNestedObject(findItemById(firstItem?.reject || null));
+  if (isPreserveId) {
+    result.id = flowTriggerId;
+  }
 
   function buildUnconnectedOperation(items: IOperation[], flowId: string) {
     const processedItemIds: string[] = [];

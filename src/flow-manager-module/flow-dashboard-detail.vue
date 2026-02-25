@@ -4,9 +4,6 @@
       <v-button to="/flow-manager/dashboard" class="mr-4" icon rounded v-tooltip.bottom="'Back to Dashboard'">
         <v-icon name="arrow_back" />
       </v-button>
-      <v-button class="header-icon" rounded disabled icon secondary>
-        <v-icon name="insights" />
-      </v-button>
     </template>
 
     <template #actions>
@@ -104,7 +101,19 @@
               <span>Options</span>
             </div>
             <div v-if="expandedSections.options" class="collapsible-content">
-              <pre class="json-content">{{ formatJSON(logDetail.trigger.options) }}</pre>
+              <div class="json-block">
+                <v-button
+                  class="json-copy-button"
+                  icon
+                  rounded
+                  small
+                  v-tooltip.bottom="'Copy JSON'"
+                  @click.stop="copyJSON(logDetail.trigger.options)"
+                >
+                  <v-icon name="content_copy" />
+                </v-button>
+                <pre class="json-content">{{ formatJSON(logDetail.trigger.options) }}</pre>
+              </div>
             </div>
           </div>
 
@@ -114,7 +123,19 @@
               <span>Payload</span>
             </div>
             <div v-if="expandedSections.payload" class="collapsible-content">
-              <pre class="json-content">{{ formatJSON(logDetail.trigger.payload) }}</pre>
+              <div class="json-block">
+                <v-button
+                  class="json-copy-button"
+                  icon
+                  rounded
+                  small
+                  v-tooltip.bottom="'Copy JSON'"
+                  @click.stop="copyJSON(logDetail.trigger.payload)"
+                >
+                  <v-icon name="content_copy" />
+                </v-button>
+                <pre class="json-content">{{ formatJSON(logDetail.trigger.payload) }}</pre>
+              </div>
             </div>
           </div>
 
@@ -125,7 +146,19 @@
               <span>Accountability</span>
             </div>
             <div v-if="expandedSections.accountability" class="collapsible-content">
-              <pre class="json-content">{{ formatJSON(logDetail.trigger.accountability) }}</pre>
+              <div class="json-block">
+                <v-button
+                  class="json-copy-button"
+                  icon
+                  rounded
+                  small
+                  v-tooltip.bottom="'Copy JSON'"
+                  @click.stop="copyJSON(logDetail.trigger.accountability)"
+                >
+                  <v-icon name="content_copy" />
+                </v-button>
+                <pre class="json-content">{{ formatJSON(logDetail.trigger.accountability) }}</pre>
+              </div>
             </div>
           </div>
         </div>
@@ -165,7 +198,19 @@
               <span>Options</span>
             </div>
             <div v-if="isStepSectionExpanded(index, 'options')" class="collapsible-content">
-              <pre class="json-content">{{ formatJSON(step.options) }}</pre>
+              <div class="json-block">
+                <v-button
+                  class="json-copy-button"
+                  icon
+                  rounded
+                  small
+                  v-tooltip.bottom="'Copy JSON'"
+                  @click.stop="copyJSON(step.options)"
+                >
+                  <v-icon name="content_copy" />
+                </v-button>
+                <pre class="json-content">{{ formatJSON(step.options) }}</pre>
+              </div>
             </div>
           </div>
 
@@ -175,7 +220,19 @@
               <span>Payload</span>
             </div>
             <div v-if="isStepSectionExpanded(index, 'payload')" class="collapsible-content">
-              <pre class="json-content">{{ formatJSON(step.payload) }}</pre>
+              <div class="json-block">
+                <v-button
+                  class="json-copy-button"
+                  icon
+                  rounded
+                  small
+                  v-tooltip.bottom="'Copy JSON'"
+                  @click.stop="copyJSON(step.payload)"
+                >
+                  <v-icon name="content_copy" />
+                </v-button>
+                <pre class="json-content">{{ formatJSON(step.payload) }}</pre>
+              </div>
             </div>
           </div>
         </div>
@@ -263,7 +320,7 @@ export default defineComponent({
       accountability: false,
     });
     const expandedStepSections = ref<Record<string, { options: boolean; payload: boolean; }>>({});
-    const LIMIT = 5;
+    const LIMIT = 10;
     const flow = ref<{
       id: string;
       name: string;
@@ -321,6 +378,36 @@ export default defineComponent({
       }
     }
 
+    async function copyJSON(obj: any): Promise<void> {
+      const text = formatJSON(obj);
+      if (!text) return;
+
+      if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+          await navigator.clipboard.writeText(text);
+          return;
+        } catch {
+          // Fallback to legacy method below
+        }
+      }
+
+      if (typeof document !== "undefined") {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        textarea.style.left = "-9999px";
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        try {
+          document.execCommand("copy");
+        } finally {
+          document.body.removeChild(textarea);
+        }
+      }
+    }
+
     const paginationLabel = computed(() => {
       const start = totalCount.value === 0 ? 0 : (page.value - 1) * LIMIT + 1;
       const end = Math.min(page.value * LIMIT, totalCount.value);
@@ -331,7 +418,7 @@ export default defineComponent({
       { text: "ID", value: "id", sortable: false },
       { text: "Type", value: "type", sortable: false },
       { text: "Date", value: "date", sortable: true, width: 200 },
-      { text: "Operation", value: "operation", sortable: false },
+      { text: "Last Error Operation", value: "operation", width: 300, sortable: false },
       { text: "Message", value: "message", sortable: false, width: 500 },
     ];
 
@@ -479,6 +566,7 @@ export default defineComponent({
       formatJSON,
       isStepSectionExpanded,
       toggleStepSection,
+      copyJSON,
     };
   },
 });
@@ -746,6 +834,17 @@ export default defineComponent({
   border-top: 1px solid var(--theme--border-subdued, var(--border-subdued));
 }
 
+.json-block {
+  position: relative;
+}
+
+.json-copy-button {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  z-index: 1;
+}
+
 .json-content {
   margin: 0;
   font-family: "Monaco", "Menlo", "Ubuntu Mono", "Consolas", "source-code-pro", monospace;
@@ -755,6 +854,10 @@ export default defineComponent({
   white-space: pre-wrap;
   word-break: break-word;
   overflow-x: auto;
+  padding: 22px 12px 10px;
+  border-radius: 6px;
+  background: var(--theme--background-subdued, var(--background-subdued));
+  border: 1px solid var(--theme--border-subdued, var(--border-subdued));
 }
 
 .drawer-content {

@@ -1,21 +1,21 @@
 <script setup lang="ts">
-import { PropType, computed, inject, ref, toRefs, watch } from "vue";
-import { ICredential, IFlow } from "../../types";
+import { type PropType, computed, inject, ref, toRefs, watch } from "vue";
+import type { ICredential, IFlow } from "../../types";
 import { generateRandomString } from "../../utils/string.util";
 import { useApi } from "@directus/extensions-sdk";
 import { ENDPOINT_EXTENSION_NAME } from "../../constants";
 const props = withDefaults(
-  defineProps<{
-    value: boolean;
-  }>(),
-  {}
+	defineProps<{
+		value: boolean;
+	}>(),
+	{},
 );
 
 const emit = defineEmits(["update:modelValue"]);
 
 const credentials = defineModel("credentials", {
-  type: Array as PropType<ICredential[]>,
-  default: () => [],
+	type: Array as PropType<ICredential[]>,
+	default: () => [],
 });
 
 const api = useApi();
@@ -39,242 +39,255 @@ const isPullingFlowError = ref(false);
 const errors = ref<string[]>([]);
 
 const selectedCredential = ref<ICredential>({
-  id: "",
-  name: "",
-  url: "",
-  staticToken: "",
+	id: "",
+	name: "",
+	url: "",
+	staticToken: "",
 });
 const credentialHeaders = ref([
-  {
-    text: "Name",
-    value: "name",
-    width: 300,
-  },
-  {
-    text: "URL",
-    value: "url",
-    width: 400,
-  },
+	{
+		text: "Name",
+		value: "name",
+		width: 300,
+	},
+	{
+		text: "URL",
+		value: "url",
+		width: 400,
+	},
 ]);
 
 watch(
-  [selectedFlows],
-  ([value]) => {
-    if (value.length === 1) {
-      flowDuplicatedName.value = `${value[0]?.name} - Copy`;
-    } else if (value.length > 1) {
-      flowDuplicatedName.value = "{{original_name}} - Copy";
-    } else {
-      flowDuplicatedName.value = "";
-    }
-  },
-  {
-    immediate: true,
-  }
+	[selectedFlows],
+	([value]) => {
+		if (value.length === 1) {
+			flowDuplicatedName.value = `${value[0]?.name} - Copy`;
+		} else if (value.length > 1) {
+			flowDuplicatedName.value = "{{original_name}} - Copy";
+		} else {
+			flowDuplicatedName.value = "";
+		}
+	},
+	{
+		immediate: true,
+	},
 );
 
 const isValid = computed(() => {
-  if (isEdit.value) {
-    return !!credentialName.value && !!credentialUrl.value;
-  }
-  return !!credentialName.value && !!credentialUrl.value && !!credentialStaticToken.value;
+	if (isEdit.value) {
+		return !!credentialName.value && !!credentialUrl.value;
+	}
+	return (
+		!!credentialName.value &&
+		!!credentialUrl.value &&
+		!!credentialStaticToken.value
+	);
 });
 
 const flowManagerUtils = inject<{
-  createFlow: (flow: IFlow) => Promise<void>;
-  reloadFlow: () => Promise<void>;
-  reloadTabularFlow: () => Promise<void>;
+	createFlow: (flow: IFlow) => Promise<void>;
+	reloadFlow: () => Promise<void>;
+	reloadTabularFlow: () => Promise<void>;
 }>("flowManagerUtils");
 
 function saveCredential() {
-  let credentialUrlParsed = credentialUrl.value;
-  try {
-    const url = parseUrl(credentialUrlParsed);
-    credentialUrlParsed = url;
-    errors.value = [];
-  } catch (error) {
-    errors.value = ["Invalid URL"];
-    return;
-  }
-  if (isEdit.value) {
-    const newCredentials = [...credentials.value];
-    const credentialIndex = newCredentials.findIndex((credential) => credential.id === selectedCredential.value.id);
-    if (credentialIndex !== -1) {
-      (newCredentials[credentialIndex] as ICredential).name = credentialName.value;
-      (newCredentials[credentialIndex] as ICredential).url = credentialUrlParsed;
-      if (credentialStaticToken.value) {
-        (newCredentials[credentialIndex] as ICredential).staticToken = credentialStaticToken.value;
-      } else {
-        (newCredentials[credentialIndex] as ICredential).staticToken = selectedCredential.value.staticToken;
-      }
+	let credentialUrlParsed = credentialUrl.value;
+	try {
+		const url = parseUrl(credentialUrlParsed);
+		credentialUrlParsed = url;
+		errors.value = [];
+	} catch {
+		errors.value = ["Invalid URL"];
+		return;
+	}
+	if (isEdit.value) {
+		const newCredentials = [...credentials.value];
+		const credentialIndex = newCredentials.findIndex(
+			(credential) => credential.id === selectedCredential.value.id,
+		);
+		if (credentialIndex !== -1) {
+			(newCredentials[credentialIndex] as ICredential).name =
+				credentialName.value;
+			(newCredentials[credentialIndex] as ICredential).url =
+				credentialUrlParsed;
+			if (credentialStaticToken.value) {
+				(newCredentials[credentialIndex] as ICredential).staticToken =
+					credentialStaticToken.value;
+			} else {
+				(newCredentials[credentialIndex] as ICredential).staticToken =
+					selectedCredential.value.staticToken;
+			}
 
-      credentials.value = newCredentials;
-    }
+			credentials.value = newCredentials;
+		}
 
-    credentialName.value = "";
-    credentialUrl.value = "";
-    credentialStaticToken.value = "";
-    isEdit.value = false;
-    selectedCredential.value = {
-      id: "",
-      name: "",
-      url: "",
-      staticToken: "",
-    };
-  } else {
-    const newCredentials = [
-      ...credentials.value,
-      {
-        id: generateRandomString(10),
-        name: credentialName.value,
-        url: credentialUrlParsed,
-        staticToken: credentialStaticToken.value,
-      },
-    ];
+		credentialName.value = "";
+		credentialUrl.value = "";
+		credentialStaticToken.value = "";
+		isEdit.value = false;
+		selectedCredential.value = {
+			id: "",
+			name: "",
+			url: "",
+			staticToken: "",
+		};
+	} else {
+		const newCredentials = [
+			...credentials.value,
+			{
+				id: generateRandomString(10),
+				name: credentialName.value,
+				url: credentialUrlParsed,
+				staticToken: credentialStaticToken.value,
+			},
+		];
 
-    credentials.value = newCredentials;
+		credentials.value = newCredentials;
 
-    credentialName.value = "";
-    credentialUrl.value = "";
-    credentialStaticToken.value = "";
-  }
+		credentialName.value = "";
+		credentialUrl.value = "";
+		credentialStaticToken.value = "";
+	}
 }
 
 function deleteCredential(item: ICredential) {
-  const newCredentials = [...credentials.value];
-  const credentialIndex = newCredentials.findIndex((credential) => credential.id === item.id);
-  if (credentialIndex !== -1) {
-    const credential = newCredentials[credentialIndex];
-    if (credential?.id === selectedCredential.value.id) {
-      isEdit.value = false;
-      selectedCredential.value = {
-        id: "",
-        name: "",
-        url: "",
-        staticToken: "",
-      };
-      credentialName.value = "";
-      credentialUrl.value = "";
-      credentialStaticToken.value = "";
-    }
-    newCredentials.splice(credentialIndex, 1);
-  }
+	const newCredentials = [...credentials.value];
+	const credentialIndex = newCredentials.findIndex(
+		(credential) => credential.id === item.id,
+	);
+	if (credentialIndex !== -1) {
+		const credential = newCredentials[credentialIndex];
+		if (credential?.id === selectedCredential.value.id) {
+			isEdit.value = false;
+			selectedCredential.value = {
+				id: "",
+				name: "",
+				url: "",
+				staticToken: "",
+			};
+			credentialName.value = "";
+			credentialUrl.value = "";
+			credentialStaticToken.value = "";
+		}
+		newCredentials.splice(credentialIndex, 1);
+	}
 
-  credentials.value = newCredentials;
+	credentials.value = newCredentials;
 }
 
 function selectCredential(item: ICredential) {
-  isEdit.value = true;
-  selectedCredential.value = item;
-  credentialName.value = item.name;
-  credentialUrl.value = item.url;
+	isEdit.value = true;
+	selectedCredential.value = item;
+	credentialName.value = item.name;
+	credentialUrl.value = item.url;
 }
 
 function cancelEditCredential() {
-  isEdit.value = false;
-  selectedCredential.value = {
-    id: "",
-    name: "",
-    url: "",
-    staticToken: "",
-  };
-  credentialName.value = "";
-  credentialUrl.value = "";
-  credentialStaticToken.value = "";
+	isEdit.value = false;
+	selectedCredential.value = {
+		id: "",
+		name: "",
+		url: "",
+		staticToken: "",
+	};
+	credentialName.value = "";
+	credentialUrl.value = "";
+	credentialStaticToken.value = "";
 }
 
 const pullFlowsHeaders = ref([
-  {
-    text: "",
-    value: "icon",
-    width: 50,
-  },
-  {
-    text: "Name",
-    value: "name",
-    width: 300,
-  },
-  {
-    text: "Description",
-    value: "description",
-    width: 400,
-  },
+	{
+		text: "",
+		value: "icon",
+		width: 50,
+	},
+	{
+		text: "Name",
+		value: "name",
+		width: 300,
+	},
+	{
+		text: "Description",
+		value: "description",
+		width: 400,
+	},
 ]);
 
 async function pullFlows(credential: ICredential) {
-  try {
-    flows.value = [];
-    isPullingFlowError.value = false;
-    const fields = ["*", "operations.*"];
-    const {
-      data: { data },
-    } = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
-      url: `${credential?.url}/flows?fields=${fields.join(",")}`,
-      staticToken: credential?.staticToken,
-      method: "GET",
-    });
-    flows.value = data;
-    pullFlowsDialog.value = true;
-    flowDuplicatedName.value = "";
-    isPreviousIdPersisted.value = false;
-  } catch (error) {
-    isPullingFlowError.value = true;
-  }
+	try {
+		flows.value = [];
+		isPullingFlowError.value = false;
+		const fields = ["*", "operations.*"];
+		const {
+			data: { data },
+		} = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+			url: `${credential?.url}/flows?fields=${fields.join(",")}`,
+			staticToken: credential?.staticToken,
+			method: "GET",
+		});
+		flows.value = data;
+		pullFlowsDialog.value = true;
+		flowDuplicatedName.value = "";
+		isPreviousIdPersisted.value = false;
+	} catch {
+		isPullingFlowError.value = true;
+	}
 }
 
 async function proceedPull() {
-  try {
-    isPullingFlows.value = true;
-    pullingProgressValue.value = 0;
-    const flowsToPull = selectedFlows.value.map((flow) => {
-      return {
-        ...flow,
-        status: "inactive",
-        name: flowDuplicatedName.value.replace(/{{original_name}}/g, flow.name),
-        id: isPreviousIdPersisted.value ? flow.id : undefined,
-      };
-    });
+	try {
+		isPullingFlows.value = true;
+		pullingProgressValue.value = 0;
+		const flowsToPull = selectedFlows.value.map((flow) => {
+			return {
+				...flow,
+				status: "inactive",
+				name: flowDuplicatedName.value.replace(/{{original_name}}/g, flow.name),
+				id: isPreviousIdPersisted.value ? flow.id : undefined,
+			};
+		});
 
-    for (let i = 0; i < flowsToPull.length; i++) {
-      const flow = flowsToPull[i] as IFlow;
-      await flowManagerUtils?.createFlow(flow);
-      pullingProgressValue.value = Math.round((i / flowsToPull.length) * 100);
-    }
-  } catch (error) {
-  } finally {
-    pullFlowsDialog.value = false;
-    isPullingFlows.value = false;
-    selectedFlows.value = [];
-    flowDuplicatedName.value = "";
-    isPreviousIdPersisted.value = false;
-    pullingProgressValue.value = 0;
-    flowManagerUtils?.reloadFlow();
-    flowManagerUtils?.reloadTabularFlow();
-  }
+		for (let i = 0; i < flowsToPull.length; i++) {
+			const flow = flowsToPull[i] as IFlow;
+			await flowManagerUtils?.createFlow(flow);
+			pullingProgressValue.value = Math.round((i / flowsToPull.length) * 100);
+		}
+	} catch {
+    //
+	} finally {
+		pullFlowsDialog.value = false;
+		isPullingFlows.value = false;
+		selectedFlows.value = [];
+		flowDuplicatedName.value = "";
+		isPreviousIdPersisted.value = false;
+		pullingProgressValue.value = 0;
+		flowManagerUtils?.reloadFlow();
+		flowManagerUtils?.reloadTabularFlow();
+	}
 }
 
 function parseUrl(url: string) {
-  try {
-    const urlParsed = new URL(url);
-    if (!urlParsed.origin || urlParsed.origin === "null") {
-      throw new Error("Invalid URL");
-    }
-    const regex = /^\/([^/]+)(\/admin\/)/;
-    const match = urlParsed.pathname.match(regex);
+	try {
+		const urlParsed = new URL(url);
+		if (!urlParsed.origin || urlParsed.origin === "null") {
+			throw new Error("Invalid URL");
+		}
+		const regex = /^\/([^/]+)(\/admin\/)/;
+		const match = urlParsed.pathname.match(regex);
 
-    if (match) {
-      return urlParsed.origin + "/" + match[1];
-    }
-    return urlParsed.origin;
-  } catch (error) {
-    throw new Error("Invalid URL");
-  }
+		if (match) {
+			return `${urlParsed.origin}/${match[1]}`;
+		}
+		return urlParsed.origin;
+	} catch {
+		throw new Error("Invalid URL");
+	}
 }
 </script>
 
 <template>
   <v-dialog :model-value="value" @update:model-value="emit('update:modelValue', false)" :persistent="true">
-    <v-card class="card-extended">
+    <v-card>
       <v-card-title>Credentials</v-card-title>
       <v-card-text>
         <v-error v-if="isPullingFlowError" :error="{ extensions: { code: 'Error' }, message: 'Failed to pull flows' }"></v-error>

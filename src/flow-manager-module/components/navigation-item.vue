@@ -74,6 +74,7 @@ const flowManagerUtils = inject<{
 const selectedCredential = computed(() => flowManagerUtils?.selectedCredential.value);
 
 const parentId = flowManagerUtils?.parentId;
+const isLocal = computed(() => selectedCredential.value === "local");
 
 const duplicate = (item: IFlow, isDuplicate?: boolean) => {
   flowManagerUtils?.duplicate(item, isDuplicate);
@@ -133,7 +134,7 @@ function moveTo() {
 function goToFlow(item: IFlow & IFolder) {
   if (item.type === "category") return;
 
-  if (flowManagerUtils?.selectedCredential.value === "local") {
+  if (isLocal.value) {
     router.push(`/settings/flows/${item.id}`);
   } else {
     const credential = flowManagerUtils?.credentials.value.find((cred) => cred.id === flowManagerUtils?.selectedCredential.value);
@@ -145,6 +146,10 @@ function goToFlow(item: IFlow & IFolder) {
       document.body.removeChild(a);
     }
   }
+}
+
+function openDashboardDetail(flowId: string) {
+  router.push(`/flow-manager/dashboard/${flowId}`);
 }
 </script>
 
@@ -192,7 +197,7 @@ function goToFlow(item: IFlow & IFolder) {
   <v-menu ref="contextMenu" show-arrow placement="bottom-start">
     <v-list v-if="flow.type !== 'category'">
       <v-list-item
-        v-if="flow.trigger === 'manual' && flow.status === 'active' && selectedCredential === 'local'"
+        v-if="flow.trigger === 'manual' && flow.status === 'active' && isLocal"
         clickable
         @click="showRunDialog(flow as IFlow)"
       >
@@ -221,6 +226,14 @@ function goToFlow(item: IFlow & IFolder) {
         </v-list-item-icon>
         <v-list-item-content>
           <v-text-overflow :text="'Go to the Flow'" />
+        </v-list-item-content>
+      </v-list-item>
+      <v-list-item clickable @click="openDashboardDetail((flow as IFlow).id)">
+        <v-list-item-icon>
+          <v-icon name="insights" />
+        </v-list-item-icon>
+        <v-list-item-content>
+          <v-text-overflow :text="'Open Dashboard'" />
         </v-list-item-content>
       </v-list-item>
       <v-list-item clickable @click="duplicate(flow as IFlow)">

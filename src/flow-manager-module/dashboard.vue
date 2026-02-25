@@ -4,9 +4,6 @@
       <v-button to="/flow-manager" class="mr-4" icon rounded v-tooltip.bottom="'Back to Flows'">
         <v-icon name="arrow_back" />
       </v-button>
-      <v-button class="header-icon" rounded disabled icon secondary>
-        <v-icon name="insights" />
-      </v-button>
     </template>
 
     <div class="dashboard-content">

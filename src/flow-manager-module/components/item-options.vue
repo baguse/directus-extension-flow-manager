@@ -20,6 +20,12 @@
         </v-list-item-icon>
         <v-list-item-content> Run </v-list-item-content>
       </v-list-item>
+      <v-list-item v-if="isLocal" clickable @click="openDashboardDetail(item.id)">
+        <v-list-item-icon>
+          <v-icon name="insights" />
+        </v-list-item-icon>
+        <v-list-item-content> Open Dashboard </v-list-item-content>
+      </v-list-item>
       <v-list-item clickable @click="duplicate(item)">
         <v-list-item-icon>
           <v-icon name="content_copy" />
@@ -69,8 +75,9 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, PropType, toRefs, inject, Ref, computed } from "vue";
-import { IFlow, IFolder } from "../../types";
+import { type PropType, type Ref, computed, defineComponent, inject, toRefs } from "vue";
+import type { IFlow, IFolder } from "../../types";
+import { useRouter } from "vue-router";
 
 export default defineComponent({
   props: {
@@ -78,9 +85,14 @@ export default defineComponent({
       type: Object as PropType<IFlow>,
       required: true,
     },
+    isLocal: {
+      type: Boolean,
+      required: true,
+    },
   },
   setup(props) {
-    const { item } = toRefs(props);
+    const router = useRouter();
+    const { item, isLocal } = toRefs(props);
     const flowManagerUtils = inject<{
       duplicate: (item: IFlow, isDuplicate?: boolean) => Promise<void>;
       backup: (item: IFlow) => Promise<void>;
@@ -106,6 +118,8 @@ export default defineComponent({
       showRunDialog,
       showRunWebhookDialog,
       selectedCredential,
+      isLocal,
+      openDashboardDetail,
     };
 
     function duplicate(item: IFlow, isDuplicate?: boolean) {
@@ -138,6 +152,10 @@ export default defineComponent({
 
     function showRunWebhookDialog(item: IFlow) {
       flowManagerUtils?.showRunWebhookDialog(item);
+    }
+
+    function openDashboardDetail(itemId: string) {
+      router.push(`/flow-manager/dashboard/${itemId}`);
     }
   },
 });

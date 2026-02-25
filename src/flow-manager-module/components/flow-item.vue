@@ -46,6 +46,8 @@ const triggerType = computed(() => {
   return item.value.trigger?.toUpperCase();
 });
 
+const isLocal = computed(() => flowManagerUtils?.selectedCredential.value === "local");
+
 const selected = computed({
   get: () => {
     return !!selectedItems.value?.includes(item.value.id);
@@ -66,7 +68,7 @@ function onGroupSortChange(updates: IFlow[]) {
 function goToFlow(item: IFlow & IFolder) {
   if (item.type === "category") return;
 
-  if (flowManagerUtils?.selectedCredential.value === "local") {
+  if (isLocal.value) {
     router.push(`/settings/flows/${item.id}`);
   } else {
     const credential = flowManagerUtils?.credentials.value.find((cred) => cred.id === flowManagerUtils?.selectedCredential.value);
@@ -136,7 +138,7 @@ function selectItem() {
         clickable
         @click.stop.prevent="toggleCollapse"
       />
-      <item-options :item="item" />
+      <item-options :item="item" :is-local="isLocal" />
     </v-list-item>
 
     <transition-expand>

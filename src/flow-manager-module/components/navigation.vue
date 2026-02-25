@@ -18,27 +18,33 @@
         </v-chip>
       </div>
       <template v-if="allFlows.length">
-        <div class="action-button">
-          <v-button x-small to="/flow-manager"> Home </v-button>
-          <v-button x-small to="/flow-manager/dashboard"> Dashboard </v-button>
-          <v-button x-small @click="onNavigationAction">
-            {{ activeGroups?.length ? "Collapse All" : "Expand All" }}
+        <div class="action-buttons">
+          <v-button x-small :to="'/flow-manager'" v-tooltip.bottom="'Go to Home'">
+            Home
+          </v-button>
+          <v-button x-small :to="'/flow-manager/dashboard'" v-tooltip.bottom="'View Dashboard'">
+            Dashboard
           </v-button>
         </div>
-        <div class="search-input">
-          <v-input type="search" small :placeholder="'Search Flow'" v-model="tmpSearch" @input="debounce(onSearchChange, 500)">
-            <template v-slot:append>
-              <v-icon
-                v-if="tmpSearch"
-                name="close"
-                clickable
-                @click="
-                  search = '';
-                  tmpSearch = '';
-                "
-              />
-            </template>
-          </v-input>
+        <div class="search-input-wrapper">
+          <div class="search-input">
+            <v-input type="search" small :placeholder="'Search Flow'" v-model="tmpSearch" @input="debounce(onSearchChange, 500)">
+              <template v-slot:append>
+                <v-icon
+                  v-if="tmpSearch"
+                  name="close"
+                  clickable
+                  @click="
+                    search = '';
+                    tmpSearch = '';
+                  "
+                />
+              </template>
+            </v-input>
+          </div>
+          <v-button x-small icon rounded @click="onNavigationAction" v-tooltip.bottom="toggleButtonLabel">
+            <v-icon :name="toggleButtonIcon" />
+          </v-button>
         </div>
       </template>
     </div>
@@ -145,6 +151,14 @@ function checkFlowHaveChildSearched(item: IFlow | IFolder): boolean {
 
 const { data: activeGroups } = useLocalStorage<string[]>(`settings-active-groups-flow-manager`, []);
 
+const toggleButtonLabel = computed(() => {
+  return activeGroups.value?.length ? "Collapse All" : "Expand All";
+});
+
+const toggleButtonIcon = computed(() => {
+  return activeGroups.value?.length ? "unfold_less" : "unfold_more";
+});
+
 function onSearchChange() {
   if (!search.value) {
     return;
@@ -236,16 +250,25 @@ function onNavigationAction() {
 }
 
 .action-bar {
-  .search-input {
-    --input-height: 40px;
-    margin-top: 8px;
-    margin-bottom: 8px;
+  .search-input-wrapper {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    margin-top: 4px;
+    margin-bottom: 4px;
+
+    .search-input {
+      --input-height: 40px;
+      flex: 1;
+    }
   }
 
-  .action-button {
+  .action-buttons {
     display: flex;
+    gap: 4px;
+    margin-top: 4px;
+    margin-bottom: 4px;
     justify-content: space-between;
-    margin-top: 8px;
   }
 
   .version {

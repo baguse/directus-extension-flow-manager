@@ -14,6 +14,7 @@ export interface IOperation {
 }
 
 export interface IPayload {
+  id?: string;
   name: string;
   key: string;
   type: string;
