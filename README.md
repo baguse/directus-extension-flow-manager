@@ -107,6 +107,9 @@ Changelogs:
   * Fix the flow run error message exceeded length [#24](https://github.com/baguse/directus-extension-flow-manager/issues/24)
 - 1.4.14 (23 November 2025)
   * Fix issue when different fields are exists but Configure button was not shown [#25](https://github.com/baguse/directus-extension-flow-manager/issues/25)
+- 1.5.0 (25 February 2026)
+  * Feature Request to allow push to cloud as an update instead of a new creation [#27](https://github.com/baguse/directus-extension-flow-manager/issues/27)
+  * Add dashboard feature: You can get the success or failed detail on each flow and also you can inspect the logs
 
 Contributing:
 If you want to contribute kindly to create a PR and if you want to request a feature or report of a bug kindly create the Issue
