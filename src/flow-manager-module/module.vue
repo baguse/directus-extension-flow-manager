@@ -169,6 +169,18 @@
                   </v-list-item-icon>
                   <v-list-item-content> Run </v-list-item-content>
                 </v-list-item>
+                <v-list-item clickable @click="goToFlow(item)">
+                  <v-list-item-icon>
+                    <v-icon name="bolt" />
+                  </v-list-item-icon>
+                  <v-list-item-content> Go To Flow </v-list-item-content>
+                </v-list-item>
+                <v-list-item clickable @click="openDashboardDetail(item.id)">
+                  <v-list-item-icon>
+                    <v-icon name="insights" />
+                  </v-list-item-icon>
+                  <v-list-item-content> Open Dashboard </v-list-item-content>
+                </v-list-item>
                 <v-list-item clickable @click="duplicate(item)">
                   <v-list-item-icon>
                     <v-icon name="content_copy" />
@@ -540,11 +552,7 @@ import {
 	toRefs,
 	unref,
 } from "vue";
-import {
-	useStores,
-	useApi,
-	useLayout,
-} from "@directus/extensions-sdk";
+import { useStores, useApi, useLayout } from "@directus/extensions-sdk";
 import { useRouter } from "vue-router";
 import Draggable from "vuedraggable";
 import SecureLS from "secure-ls";
@@ -1405,6 +1413,7 @@ export default defineComponent({
 			differentFields,
 			syncFlowCounters,
 			isSyncingFlowCountersLoading,
+			openDashboardDetail,
 		};
 
 		async function createFlow(item: Omit<IFlow, "id"> & { id?: string }) {
@@ -1578,7 +1587,7 @@ export default defineComponent({
 				sleep(3000).then(() => {
 					processingDialog.value = false;
 				});
-        selectedCredentialId.value = "";
+				selectedCredentialId.value = "";
 				return;
 			}
 			const item = selectedItem.value as IFlow;
@@ -3006,6 +3015,10 @@ export default defineComponent({
 				reloadTabularFlow();
 				settingDialog.value = false;
 			}
+		}
+
+		function openDashboardDetail(flowId: string) {
+			router.push(`/flow-manager/dashboard/${flowId}`);
 		}
 	},
 });
