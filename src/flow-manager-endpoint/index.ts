@@ -113,154 +113,153 @@ export default defineEndpoint(
 			}
 		});
 
-		router.get(
-			"/flow-manager/dashboard/:flowId",
-			async (_req, res) => {
-				try {
-					const page = _req.query.page ? parseInt(String(_req.query.page), 10) : 1;
-					const limit = _req.query.limit ? parseInt(String(_req.query.limit), 10) : 10;
-					const { ActivityService, FlowsService } = services;
-					const schema = await getSchema({ database });
-					const flowsService = new FlowsService({
-						knex: database,
-						schema,
-					});
-					const activityService = new ActivityService({
-						knex: database,
-						schema,
-					});
-					const activityHistories: {
-						id: number;
-						type: "success" | "error";
-						date: Date;
-						operation: string;
-						message: string;
-						data: unknown;
-					}[] = [];
-					const [flow] = (await flowsService.readByQuery({
-						filter: {
-							id: {
-								_eq: _req.params.flowId,
+		router.get("/flow-manager/dashboard/:flowId", async (_req, res) => {
+			try {
+				const page = _req.query.page
+					? parseInt(String(_req.query.page), 10)
+					: 1;
+				const limit = _req.query.limit
+					? parseInt(String(_req.query.limit), 10)
+					: 10;
+				const { ActivityService, FlowsService } = services;
+				const schema = await getSchema({ database });
+				const flowsService = new FlowsService({
+					knex: database,
+					schema,
+				});
+				const activityService = new ActivityService({
+					knex: database,
+					schema,
+				});
+				const activityHistories: {
+					id: number;
+					type: "success" | "error";
+					date: Date;
+					operation: string;
+					message: string;
+					data: unknown;
+				}[] = [];
+				const [flow] = (await flowsService.readByQuery({
+					filter: {
+						id: {
+							_eq: _req.params.flowId,
+						},
+					},
+					fields: [
+						"id",
+						"flow_manager_success_counter",
+						"flow_manager_error_counter",
+						"operations.id",
+						"operations.name",
+					],
+				})) as {
+					id: string;
+					flow_manager_success_counter: number;
+					flow_manager_error_counter: number;
+					operations: { id: string; name: string }[];
+				}[];
+				if (!flow) {
+					res.status(404).send({ error: "Flow not found" });
+					return;
+				}
+				const activities = await activityService.readByQuery({
+					filter: {
+						_and: [
+							{
+								item: {
+									_eq: flow.id,
+								},
 							},
-						},
-						fields: [
-							"id",
-							"flow_manager_success_counter",
-							"flow_manager_error_counter",
-							"operations.id",
-							"operations.name",
+							{
+								action: {
+									_eq: "run",
+								},
+							},
+							{
+								collection: {
+									_eq: "directus_flows",
+								},
+							},
 						],
-					})) as {
-						id: string;
-						flow_manager_success_counter: number;
-						flow_manager_error_counter: number;
-						operations: { id: string; name: string }[];
-					}[];
-					if (!flow) {
-						res.status(404).send({ error: "Flow not found" });
-						return;
-					}
-					const activities = await activityService.readByQuery({
-						filter: {
-							_and: [
-								{
-									item: {
-										_eq: flow.id,
-									},
-								},
-								{
-									action: {
-										_eq: "run",
-									},
-								},
-								{
-									collection: {
-										_eq: "directus_flows",
-									},
-								},
-							],
-						},
-						fields: ["id", "timestamp", "revisions.data"],
-						sort: ["-timestamp"],
-						limit,
-						page,
-					});
+					},
+					fields: ["id", "timestamp", "revisions.data"],
+					sort: ["-timestamp"],
+					limit,
+					page,
+				});
 
-					const operationMap = flow.operations.reduce(
-						(acc, operation) => {
-							acc[operation.id] = operation.name;
-							return acc;
-						},
-						{} as Record<string, string>,
-					);
-					for (let j = 0; j < activities.length; j++) {
-						const activity = activities[j];
-						const revisions = activity.revisions;
-						for (let k = 0; k < revisions.length; k++) {
-							const revision = revisions[k];
+				const operationMap = flow.operations.reduce(
+					(acc, operation) => {
+						acc[operation.id] = operation.name;
+						return acc;
+					},
+					{} as Record<string, string>,
+				);
+				for (let j = 0; j < activities.length; j++) {
+					const activity = activities[j];
+					const revisions = activity.revisions;
+					for (let k = 0; k < revisions.length; k++) {
+						const revision = revisions[k];
 
-							let lastExecutionData = revision.data;
-							if (typeof lastExecutionData === "string") {
-								try {
-									lastExecutionData = JSON.parse(lastExecutionData);
-								} catch {}
-							}
+						let lastExecutionData = revision.data;
+						if (typeof lastExecutionData === "string") {
+							try {
+								lastExecutionData = JSON.parse(lastExecutionData);
+							} catch {}
+						}
 
-							let lastStepStatus = "";
-							let lastStepErrorMessage = "";
-							let lastStepOperationName = "";
+						let lastStepStatus = "";
+						let lastStepErrorMessage = "";
+						let lastStepOperationName = "";
 
-							if (lastExecutionData) {
-								const lastStep =
-									lastExecutionData.steps?.[
-										lastExecutionData.steps?.length - 1
-									];
-								lastStepStatus = lastStep?.status;
-								const lastData = lastExecutionData.data?.$last;
-								if (lastStepStatus === "reject" && lastData != null) {
-									lastStepOperationName = lastStep?.operation
-										? (operationMap[lastStep.operation] ?? "")
-										: "";
-									lastStepErrorMessage = Array.isArray(lastData)
-										? (lastData[0]?.message ?? "")
-										: (lastData?.message ?? "");
-								}
-							}
-
-							if (lastStepStatus === "reject") {
-								activityHistories.push({
-									id: activity.id,
-									type: "error",
-									date: new Date(activity.timestamp),
-									operation: lastStepOperationName,
-									message: lastStepErrorMessage,
-									data: lastExecutionData,
-								});
-							} else {
-								activityHistories.push({
-									id: activity.id,
-									type: "success",
-									date: new Date(activity.timestamp),
-									operation: lastStepOperationName,
-									message: lastStepErrorMessage,
-									data: lastExecutionData,
-								});
+						if (lastExecutionData) {
+							const lastStep =
+								lastExecutionData.steps?.[lastExecutionData.steps?.length - 1];
+							lastStepStatus = lastStep?.status;
+							const lastData = lastExecutionData.data?.$last;
+							if (lastStepStatus === "reject" && lastData != null) {
+								lastStepOperationName = lastStep?.operation
+									? (operationMap[lastStep.operation] ?? "")
+									: "";
+								lastStepErrorMessage = Array.isArray(lastData)
+									? (lastData[0]?.message ?? "")
+									: (lastData?.message ?? "");
 							}
 						}
+
+						if (lastStepStatus === "reject") {
+							activityHistories.push({
+								id: activity.id,
+								type: "error",
+								date: new Date(activity.timestamp),
+								operation: lastStepOperationName,
+								message: lastStepErrorMessage,
+								data: lastExecutionData,
+							});
+						} else {
+							activityHistories.push({
+								id: activity.id,
+								type: "success",
+								date: new Date(activity.timestamp),
+								operation: lastStepOperationName,
+								message: lastStepErrorMessage,
+								data: lastExecutionData,
+							});
+						}
 					}
-					res.status(200).send({
-						successCount: flow.flow_manager_success_counter,
-						errorCount: flow.flow_manager_error_counter,
-						activityHistories,
-					});
-				} catch (e: any) {
-					res.status(500).send({
-						error: e?.response?.data,
-						status: e.status,
-					});
 				}
-			},
-		);
+				res.status(200).send({
+					successCount: flow.flow_manager_success_counter,
+					errorCount: flow.flow_manager_error_counter,
+					activityHistories,
+				});
+			} catch (e: any) {
+				res.status(500).send({
+					error: e?.response?.data,
+					status: e.status,
+				});
+			}
+		});
 
 		router.post("/flow-manager/push-to-cloud", async (_req, res) => {
 			try {
@@ -269,6 +268,18 @@ export default defineEndpoint(
 					knex: database,
 					schema: await getSchema({ database }),
 				});
+				const operationFields = [
+					"operations.id",
+					"operations.name",
+					"operations.key",
+					"operations.type",
+					"operations.position_x",
+					"operations.position_y",
+					"operations.options",
+					"operations.resolve",
+					"operations.reject",
+					"operations.flow",
+				];
 				const {
 					config: { url, staticToken },
 					flowId,
@@ -280,7 +291,7 @@ export default defineEndpoint(
 							_eq: flowId,
 						},
 					},
-					fields: ["*", "operations.*"],
+					fields: ["*", ...operationFields],
 				});
 
 				const flowFields = [
@@ -307,10 +318,14 @@ export default defineEndpoint(
 						...(staticToken ? { Authorization: `Bearer ${staticToken}` } : {}),
 					},
 				});
+				const fields = [
+					`fields[]=*`,
+					...operationFields.map((f) => `fields[]=${f}`),
+				];
 				const {
 					data: { data: flowResponse },
 				} = await axiosInstance.request({
-					url: `/flows?filter[id][_eq]=${flow.id}&fields[]=*&fields[]=operations.*`,
+					url: `/flows?filter[id][_eq]=${flow.id}&${fields.join("&")}`,
 					method: "GET",
 				});
 
@@ -410,41 +425,68 @@ export default defineEndpoint(
 					for (let i = 0; i < needCreatedIds.length; i += 1) {
 						const id = String(needCreatedIds[i]);
 						const data = newOperations[id];
-						await axiosInstance.request({
-							url: `/operations`,
-							method: "POST",
-							data,
-						});
+						try {
+							await axiosInstance.request({
+								url: `/operations`,
+								method: "POST",
+								data,
+							});
 
-						logger.info(`[FLOW MANAGER] Operation ${id} Created`);
+							logger.info(`[FLOW MANAGER] Operation ${id} Created`);
+						} catch (e) {
+							logger.error(
+								`[FLOW MANAGER] Failed to create Operation with id ${id}`,
+							);
+							throw e;
+						}
 					}
 
 					for (let i = 0; i < needUpdateIds.length; i += 1) {
 						const id = String(needUpdateIds[i]);
 						const data = newOperations[id];
-						await axiosInstance.request({
-							url: `/operations/${id}`,
-							method: "PATCH",
-							data,
-						});
+						try {
+							await axiosInstance.request({
+								url: `/operations/${id}`,
+								method: "PATCH",
+								data,
+							});
 
-						logger.info(`[FLOW MANAGER] Operation ${id} updated`);
+							logger.info(`[FLOW MANAGER] Operation ${id} updated`);
+						} catch (e) {
+							logger.error(
+								`[FLOW MANAGER] Failed to update Operation with id ${id}`,
+							);
+							throw e;
+						}
 					}
 
 					for (let i = 0; i < removedOperationIds.length; i += 1) {
 						const id = String(removedOperationIds[i]);
-						await axiosInstance.request({
-							url: `/operations/${id}`,
-							method: "DELETE",
-						});
+						try {
+							await axiosInstance.request({
+								url: `/operations/${id}`,
+								method: "DELETE",
+							});
 
-						logger.info(`[FLOW MANAGER] Operation ${id} removed`);
+							logger.info(`[FLOW MANAGER] Operation ${id} removed`);
+						} catch (e) {
+							logger.error(
+								`[FLOW MANAGER] Failed to remove Operation with id ${id}`,
+							);
+							throw e;
+						}
 					}
 				}
-			} catch {
-				//
+			} catch (e: any) {
+				res.status(500).json({
+					message: e.message,
+				});
+				logger.error(e.message);
+				return;
 			}
-			res.json({});
+			res.json({
+				message: "Processing the sync process",
+			});
 		});
 	},
 );

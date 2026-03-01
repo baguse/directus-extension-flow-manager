@@ -110,6 +110,8 @@ Changelogs:
 - 1.5.0 (25 February 2026)
   * Feature Request to allow push to cloud as an update instead of a new creation [#27](https://github.com/baguse/directus-extension-flow-manager/issues/27)
   * Add dashboard feature: You can get the success or failed detail on each flow and also you can inspect the logs
+- 1.5.2 (26 February 2026)
+  * Fix failed push to cloud because there is `user_created` field 
 
 Contributing:
 If you want to contribute kindly to create a PR and if you want to request a feature or report of a bug kindly create the Issue
