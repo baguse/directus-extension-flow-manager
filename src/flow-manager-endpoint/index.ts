@@ -7,6 +7,13 @@ import isEqual from "lodash/isEqual";
 export default defineEndpoint(
 	(router, { database, services, getSchema, logger }) => {
 		router.post("/flow-manager/process", async (_req, res) => {
+      // @ts-expect-error this is the internal directus accountability data
+      if (!_req.accountability?.admin) {
+        res.status(401).send({
+					error: "Unauthorized",
+				});
+        return;
+      }
 			const { url, staticToken, method, payload } = _req.body;
 
 			try {
@@ -30,6 +37,13 @@ export default defineEndpoint(
 		});
 
 		router.post("/flow-manager/sync-counters", async (_req, res) => {
+      // @ts-expect-error this is the internal directus accountability data
+      if (!_req.accountability?.admin) {
+        res.status(401).send({
+					error: "Unauthorized",
+				});
+        return;
+      }
 			try {
 				const { ActivityService } = services;
 				const schema = await getSchema({ database });
@@ -114,6 +128,13 @@ export default defineEndpoint(
 		});
 
 		router.get("/flow-manager/dashboard/:flowId", async (_req, res) => {
+      // @ts-expect-error this is the internal directus accountability data
+      if (!_req.accountability?.admin) {
+        res.status(401).send({
+					error: "Unauthorized",
+				});
+        return;
+      }
 			try {
 				const page = _req.query.page
 					? parseInt(String(_req.query.page), 10)
@@ -262,6 +283,13 @@ export default defineEndpoint(
 		});
 
 		router.post("/flow-manager/push-to-cloud", async (_req, res) => {
+      // @ts-expect-error this is the internal directus accountability data
+      if (!_req.accountability?.admin) {
+        res.status(401).send({
+					error: "Unauthorized",
+				});
+        return;
+      }
 			try {
 				const { FlowsService } = services;
 				const flowsService = new FlowsService({

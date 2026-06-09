@@ -112,6 +112,8 @@ Changelogs:
   * Add dashboard feature: You can get the success or failed detail on each flow and also you can inspect the logs
 - 1.5.2 (26 February 2026)
   * Fix failed push to cloud because there is `user_created` field 
+- 1.5.3 (09 June 2026)
+  * Add is admin checking on the endpoint extension
 
 Contributing:
 If you want to contribute kindly to create a PR and if you want to request a feature or report of a bug kindly create the Issue
