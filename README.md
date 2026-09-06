@@ -114,6 +114,8 @@ Changelogs:
   * Fix failed push to cloud because there is `user_created` field 
 - 1.5.3 (09 June 2026)
   * Add is admin checking on the endpoint extension
+- 1.5.4 (06 September 2026)
+  * Fix the guard against a null $last when a flow step rejects thanks to @hx-natthawat
 
 Contributing:
 If you want to contribute kindly to create a PR and if you want to request a feature or report of a bug kindly create the Issue
