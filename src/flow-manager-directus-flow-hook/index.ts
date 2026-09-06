@@ -157,11 +157,15 @@ export default defineHook(({ action }, { services }) => {
       if (lastExecutionData) {
         const lastStep = lastExecutionData.steps?.[lastExecutionData.steps?.length - 1];
         lastStepStatus = lastStep?.status;
-        if (lastStepStatus === "reject") {  
-          if (Array.isArray(lastExecutionData.data.$last)) {
-            lastStepErrorMessage = lastExecutionData.data.$last[0].message;
+        if (lastStepStatus === "reject") {
+          // A rejected step does not always carry a $last payload. When it is
+          // null, Array.isArray(null) is false, so the else branch used to read
+          // .message off null and throw inside the action handler.
+          const lastError = lastExecutionData.data?.$last;
+          if (Array.isArray(lastError)) {
+            lastStepErrorMessage = lastError[0]?.message ?? "";
           } else {
-            lastStepErrorMessage = lastExecutionData.data.$last.message;
+            lastStepErrorMessage = lastError?.message ?? "";
           }
           lastStepOperation = lastStep.operation;
         }
