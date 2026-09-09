@@ -26,7 +26,10 @@ export default {
       'events',
       'assert',
       'http2',
-      'crypto'
+      'crypto',
+      'net',
+      'tls',
+      'path'
     ]),
   ],
 }

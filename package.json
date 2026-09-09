@@ -63,15 +63,15 @@
 		"add": "directus-extension add"
 	},
 	"devDependencies": {
-		"@directus/composables": "^10.1.12",
-		"@directus/extensions-sdk": "11.0.2",
-		"@directus/format-title": "^10.1.2",
-		"@types/lodash": "^4.17.1",
+		"@directus/composables": "^11.6.2",
+		"@directus/extensions-sdk": "^18.0.4",
+		"@directus/format-title": "^13.0.0",
+		"@types/lodash": "^4.17.25",
 		"@types/node": "^20.12.8",
-		"chart.js": "^4.4.6",
-		"lodash": "^4.17.21",
+		"chart.js": "^4.5.1",
+		"lodash": "^4.18.1",
 		"sass": "^1.76.0",
-		"secure-ls": "^1.2.6",
+		"secure-ls": "^2.0.0",
 		"typescript": "^5.4.5",
 		"vue": "^3.4.26",
 		"vuedraggable": "^4.1.0"
