@@ -1,7 +1,6 @@
 import { Ref } from "vue";
-import type { Field } from "@directus/types";
 import { ENDPOINT_EXTENSION_NAME, REQUIRED_FIELDS } from "../constants";
-import { ICredential } from "../types";
+import type { ExtendedField, ICredential } from "../types";
 import { useApi } from "@directus/extensions-sdk";
 
 const useFields = ({
@@ -16,9 +15,9 @@ const useFields = ({
   api: ReturnType<typeof useApi>;
 }) => {
   const ensureFields = async () => {
-    const notExistsFields: Array<Partial<Field>> = [];
-    const differentFields: Array<Partial<Field>> = [];
-    const fieldMap: Record<string, Partial<Field>[]> = REQUIRED_FIELDS.reduce((acc: Record<string, Partial<Field>[]>, field) => {
+    const notExistsFields: Array<Partial<ExtendedField>> = [];
+    const differentFields: Array<Partial<ExtendedField>> = [];
+    const fieldMap: Record<string, Partial<ExtendedField>[]> = REQUIRED_FIELDS.reduce((acc: Record<string, Partial<ExtendedField>[]>, field) => {
       if (!acc[`${field.collection}`]) {
         acc[`${field.collection}`] = [];
       }
@@ -32,7 +31,7 @@ const useFields = ({
         const requiredFields = fieldMap[collectionName] || [];
 
         for (const requiredField of requiredFields) {
-          const existingField = existingFields.find((f: Field) => f.field === requiredField.field);
+          const existingField = existingFields.find((f: ExtendedField) => f.field === requiredField.field);
           if (!existingField) {
             notExistsFields.push(requiredField);
           } else if (existingField.type !== requiredField.type) {
@@ -44,22 +43,26 @@ const useFields = ({
       const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
       if (credential) {
         for (const collectionName in fieldMap) {
-          const {
-            data: { data },
-          } = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
-            url: `${credential?.url}/fields/${collectionName}`,
-            staticToken: credential?.staticToken,
-            method: "GET",
-          });
-          const existingFields: Field[] = data;
           const requiredFields = fieldMap[collectionName] || [];
-          for (const requiredField of requiredFields) {
-            const existingField = existingFields.find((f: Field) => f.field === requiredField.field);
-            if (!existingField) {
-              notExistsFields.push(requiredField);
-            } else if (existingField.type !== requiredField.type) {
-              differentFields.push(requiredField);
+          try {
+            const {
+              data: { data },
+            } = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+              url: `${credential?.url}/fields/${collectionName}`,
+              staticToken: credential?.staticToken,
+              method: "GET",
+            });
+            const existingFields: ExtendedField[] = data;
+            for (const requiredField of requiredFields) {
+              const existingField = existingFields.find((f: ExtendedField) => f.field === requiredField.field);
+              if (!existingField) {
+                notExistsFields.push(requiredField);
+              } else if (existingField.type !== requiredField.type) {
+                differentFields.push(requiredField);
+              }
             }
+          } catch {
+            notExistsFields.push(...requiredFields);
           }
         }
       }

@@ -1,89 +1,12 @@
 import { defineHook } from "@directus/extensions-sdk";
-
-async function setupDirectusFlowsFields(fieldsService: any) {
-  const fields = await fieldsService.readAll("directus_flows");
-
-  let isCounterFieldExists = false;
-  let isCounterDateFieldExists = false;
-  let isLastExecutionMessageFieldExists = false;
-  let isLastExecutionOperationFieldExists = false;
-
-  const fieldPayloads = [];
-
-  for (const field of fields) {
-    if (field.field === "flow_manager_run_counter") {
-      isCounterFieldExists = true;
-    }
-
-    if (field.field === "flow_manager_last_run_at") {
-      isCounterDateFieldExists = true;
-    }
-
-    if (field.field === "flow_manager_last_run_message") {
-      isLastExecutionMessageFieldExists = true;
-    }
-
-    if (field.field === "flow_manager_last_run_operation") {
-      isLastExecutionOperationFieldExists = true;
-    }
-
-    if (isCounterFieldExists && isCounterDateFieldExists && isLastExecutionMessageFieldExists && isLastExecutionOperationFieldExists) {
-      break;
-    }
-  }
-
-  if (!isCounterFieldExists) {
-    fieldPayloads.push({
-      field: "flow_manager_run_counter",
-      type: "integer",
-      schema: { default_value: "0" },
-      meta: { interface: "input", special: null, hidden: true },
-      collection: "directus_flows",
-    });
-  }
-
-  if (!isCounterDateFieldExists) {
-    fieldPayloads.push({
-      field: "flow_manager_last_run_at",
-      type: "dateTime",
-      schema: { default_value: null },
-      meta: { interface: "input-datetime", special: null, hidden: true },
-      collection: "directus_flows",
-    });
-  }
-
-  if (!isLastExecutionMessageFieldExists) {
-    fieldPayloads.push({
-      field: "flow_manager_last_run_message",
-      type: "string",
-      schema: { default_value: "" },
-      meta: { interface: "input", special: null, hidden: true },
-      collection: "directus_flows",
-    });
-  }
-
-  if (!isLastExecutionOperationFieldExists) {
-    fieldPayloads.push({
-      field: "flow_manager_last_run_operation",
-      type: "string",
-      schema: { default_value: "" },
-      meta: { interface: "input", special: null, hidden: true },
-      collection: "directus_flows",
-    });
-  }
-
-  for (let i = 0; i < fieldPayloads.length; i += 1) {
-    const payload = fieldPayloads[i];
-    await fieldsService.createField(payload?.collection, payload);
-  }
-}
+import { generateUUID } from "../utils/common.util";
 
 export default defineHook(({ action }, { services }) => {
   action("revisions.create", async (data: any, { database, schema }) => {
     const { RevisionsService, ActivityService } = services;
     const activityService = new ActivityService({
       knex: database,
-      schema,
+      schema: schema!,
     });
     const [activity] = await activityService.readByQuery({
       filter: {
@@ -99,12 +22,12 @@ export default defineHook(({ action }, { services }) => {
     if (activity?.action === "run") {
       const revisionsService = new RevisionsService({
         knex: database,
-        schema,
+        schema: schema!,
       });
 
       const [countResult] = await revisionsService.readByQuery({
         aggregate: {
-          countDistinct: ["id"]
+          countDistinct: ["id"],
         },
         filter: {
           _and: [
@@ -135,14 +58,17 @@ export default defineHook(({ action }, { services }) => {
       });
 
       const flow = await database("directus_flows")
-      .where({ id: data.payload.item })
-      .first();
+        .select("directus_flows.id as id", "flow_manager_metadata.id as metadata_id", "flow_manager_metadata.flow_manager_success_counter", "flow_manager_metadata.flow_manager_error_counter")
+        .leftJoin("flow_manager_metadata", "directus_flows.flow_manager_metadata_id", "flow_manager_metadata.id")
+        .where({ 'directus_flows.id': data.payload.item })
+        .first();
 
       if (!flow) {
         return;
       }
 
-      let { flow_manager_success_counter: successCounter, flow_manager_error_counter: errorCounter } = flow;
+      const successCounter = flow.flow_manager_success_counter || 0;
+      const errorCounter = flow.flow_manager_error_counter || 0;
 
       let lastExecutionData = data.payload.data;
       if (typeof lastExecutionData === "string") {
@@ -171,16 +97,25 @@ export default defineHook(({ action }, { services }) => {
         }
       }
 
-      await database("directus_flows")
-        .where({ id: data.payload.item })
-        .update({
-          flow_manager_last_run_at: new Date(),
-          flow_manager_run_counter: countResult.countDistinct.id,
-          flow_manager_last_run_message: lastStepErrorMessage,
-          flow_manager_last_run_operation: lastStepOperation,
-          flow_manager_success_counter: lastStepStatus === "resolve" ? successCounter + 1 : successCounter,
-          flow_manager_error_counter: lastStepStatus === "reject" ? errorCounter + 1 : errorCounter,
+      const payload = {
+        flow_manager_last_run_at: new Date(),
+        flow_manager_run_counter: countResult?.countDistinct.id || 0,
+        flow_manager_last_run_message: lastStepErrorMessage,
+        flow_manager_last_run_operation: lastStepOperation,
+        flow_manager_success_counter: lastStepStatus === "resolve" ? successCounter + 1 : successCounter,
+        flow_manager_error_counter: lastStepStatus === "reject" ? errorCounter + 1 : errorCounter,
+      };
+
+      if (flow.metadata_id) {
+        await database("flow_manager_metadata").update(payload).where("id", flow.metadata_id);
+      } else {
+        const metadataId = generateUUID();
+        await database("flow_manager_metadata").insert({
+          id: metadataId,
+          ...payload,
         });
+        await database("directus_flows").update({ flow_manager_metadata_id: metadataId }).where("id", flow.id);
+      }
     }
   });
 });

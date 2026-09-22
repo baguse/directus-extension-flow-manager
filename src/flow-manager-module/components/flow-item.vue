@@ -33,8 +33,8 @@ const flowManagerUtils = inject<{
 }>("flowManagerUtils");
 const nestedFlows = computed(() =>
   items.value
-    .filter((flow) => flow.flow_manager_category === props.item.id)
-    .sort((a, b) => (a.flow_manager_order || 0) - (b.flow_manager_order || 0))
+    .filter((flow) => flow.flow_manager_metadata_id?.flow_manager_category === props.item.id)
+    .sort((a, b) => (a.flow_manager_metadata_id?.flow_manager_order || 0) - (b.flow_manager_metadata_id?.flow_manager_order || 0))
 );
 const { data: isItemExpanded } = useLocalStorage<boolean>(`settings-collapsed-flow-manager-${props.item.id}`, true);
 
@@ -111,8 +111,8 @@ function selectItem() {
       />
       <div v-if="!isCategory && !isActive" class="item-detail">
         <v-badge
-          :value="item.flow_manager_run_counter || 0"
-          :class="{ 'badge-success': !item.flow_manager_last_run_message, 'badge-error': !!item.flow_manager_last_run_message }"
+          :value="item.flow_manager_metadata_id?.flow_manager_run_counter || 0"
+          :class="{ 'badge-success': !item.flow_manager_metadata_id?.flow_manager_last_run_message, 'badge-error': !!item.flow_manager_metadata_id?.flow_manager_last_run_message }"
         >
           <v-chip x-small class="item-name text-gray mr-4 trigger-chip">{{ triggerType }}</v-chip>
         </v-badge>
@@ -122,8 +122,8 @@ function selectItem() {
       <div v-else class="item-detail">
         <v-badge
           v-if="triggerType"
-          :value="item.flow_manager_run_counter || 0"
-          :class="{ 'badge-success': !item.flow_manager_last_run_message, 'badge-error': !!item.flow_manager_last_run_message }"
+          :value="item.flow_manager_metadata_id?.flow_manager_run_counter || 0"
+          :class="{ 'badge-success': !item.flow_manager_metadata_id?.flow_manager_last_run_message, 'badge-error': !!item.flow_manager_metadata_id?.flow_manager_last_run_message }"
         >
           <v-chip x-small active class="item-name mr-4 trigger-chip">{{ triggerType }} </v-chip>
         </v-badge>

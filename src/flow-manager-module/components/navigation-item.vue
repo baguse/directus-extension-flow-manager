@@ -17,7 +17,7 @@ const currentPath = computed(() => encodeURIComponent((flow.value.id as string) 
 
 const childFlows = computed(() => {
   const flows = (flowChildMap.value[flow.value.id as string] || []).sort(
-    (a, b) => ((a as IFlow).flow_manager_order || 0) - ((b as IFlow).flow_manager_order || 0)
+    (a, b) => ((a as IFlow).flow_manager_metadata_id?.flow_manager_order || 0) - ((b as IFlow).flow_manager_metadata_id?.flow_manager_order || 0)
   );
 
   return flows;

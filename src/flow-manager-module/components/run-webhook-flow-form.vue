@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, toRefs, inject, Ref, computed } from "vue";
-import { ICredential, IFlow } from "../types";
+import { ICredential, IFlow } from "../typesf";
 import { useStores, useApi } from "@directus/extensions-sdk";
 import { ENDPOINT_EXTENSION_NAME } from "../../constants";
 

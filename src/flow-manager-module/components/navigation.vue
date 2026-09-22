@@ -17,7 +17,7 @@
           {{ serverInfo?.version || "N/A" }}
         </v-chip>
       </div>
-      <template v-if="allFlows.length">
+      <template v-if="allFlows.length && isDatabaseUpdated">
         <div class="action-buttons">
           <v-button x-small :to="'/flow-manager'" v-tooltip.bottom="'Go to Home'">
             Home
@@ -48,7 +48,7 @@
         </div>
       </template>
     </div>
-    <v-list v-model="activeGroups" scope="content-navigation" class="content-navigation" tabindex="-1" nav :mandatory="false">
+    <v-list v-if="isDatabaseUpdated" v-model="activeGroups" scope="content-navigation" class="content-navigation" tabindex="-1" nav :mandatory="false">
       <navigation-item
         v-for="(flow, flowIndex) in rootFlows"
         :key="`${flow.id}_${flowIndex}`"
@@ -73,9 +73,10 @@ const props = defineProps<{
   allFlows: IFolder[] | IFlow[];
   viewMode: string;
   serverInfo?: IServerInfo;
+  isDatabaseUpdated: Boolean;
 }>();
 
-const { rootFlows, flowChildMap, allFlows, viewMode } = toRefs(props);
+const { rootFlows, flowChildMap, allFlows, viewMode, isDatabaseUpdated } = toRefs(props);
 const search = ref<string>("");
 const tmpSearch = ref<string>("");
 const timeOutId = ref<NodeJS.Timeout | null>(null);
