@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { useElementSize } from "@directus/composables";
-import { Filter } from "@directus/types";
-import isObject from "lodash/isObject";
-import { Ref, computed, inject, ref, watch } from "vue";
-import { useI18n } from "vue-i18n";
+import { useElementSize } from '@directus/composables';
+import { Filter } from '@directus/types';
+import isObject from 'lodash/isObject';
+import { Ref, computed, inject, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 
 const props = defineProps<{
   modelValue: string | null;
@@ -12,8 +12,8 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: "update:modelValue", value: string | null): void;
-  (e: "update:filter", value: Filter | null): void;
+  (e: 'update:modelValue', value: string | null): void;
+  (e: 'update:filter', value: Filter | null): void;
 }>();
 
 const { t } = useI18n();
@@ -24,7 +24,7 @@ const active = ref(props.modelValue !== null);
 const filterActive = ref(false);
 const filterBorder = ref(false);
 
-const mainElement = inject<Ref<Element | undefined>>("main-element");
+const mainElement = inject<Ref<Element | undefined>>('main-element');
 const filterElement = ref<HTMLElement>();
 const { width: mainElementWidth } = useElementSize(mainElement!);
 const { width: filterElementWidth } = useElementSize(filterElement);
@@ -42,11 +42,12 @@ watch(
 
     const maxWidth =
       searchElement.getBoundingClientRect().right -
-      (headerElement.getBoundingClientRect().left + Number(window.getComputedStyle(headerElement).paddingLeft.replace("px", "")));
+      (headerElement.getBoundingClientRect().left +
+        Number(window.getComputedStyle(headerElement).paddingLeft.replace('px', '')));
 
-    filterElement.value.style.maxWidth = maxWidth > minWidth ? `${String(maxWidth)}px` : "0px";
+    filterElement.value.style.maxWidth = maxWidth > minWidth ? `${String(maxWidth)}px` : '0px';
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 watch(active, (newActive: boolean) => {
@@ -64,15 +65,19 @@ const activeFilterCount = computed(() => {
 
   return filterOperators.length;
 
-  function parseLevel(level: Record<string, any>) {
+  function parseLevel(level: Record<string, unknown>) {
     for (const [key, value] of Object.entries(level)) {
-      if (key === "_and" || key === "_or") {
-        value.forEach(parseLevel);
-      } else if (key.startsWith("_")) {
+      if ((key === '_and' || key === '_or') && Array.isArray(value)) {
+        value.forEach((v) => {
+          if (isObject(v)) {
+            parseLevel(v as Record<string, unknown>);
+          }
+        });
+      } else if (key.startsWith('_')) {
         filterOperators.push(key);
       } else {
         if (isObject(value)) {
-          parseLevel(value);
+          parseLevel(value as Record<string, unknown>);
         }
       }
     }
@@ -81,7 +86,7 @@ const activeFilterCount = computed(() => {
 
 function onClickOutside(e: { path?: HTMLElement[]; composedPath?: () => HTMLElement[] }) {
   const path = e.path || e.composedPath!();
-  if (path.some((el) => el?.classList?.contains("v-menu-content"))) return false;
+  if (path.some((el) => el?.classList?.contains('v-menu-content'))) return false;
 
   return true;
 }
@@ -94,26 +99,60 @@ function disable() {
 function emitValue() {
   if (!input.value) return;
   const value = input.value?.value;
-  emit("update:modelValue", value);
+  emit('update:modelValue', value);
 }
 </script>
 
 <template>
-  <v-badge bottom right class="search-badge" :value="activeFilterCount" :disabled="!activeFilterCount || filterActive">
+  <v-badge
+    bottom
+    right
+    class="search-badge"
+    :value="activeFilterCount"
+    :disabled="!activeFilterCount || filterActive"
+  >
     <div
       v-click-outside="{
         handler: disable,
         middleware: onClickOutside,
       }"
       class="search-input"
-      :class="{ active, 'filter-active': filterActive, 'has-content': !!modelValue, 'filter-border': filterBorder }"
+      :class="{
+        active,
+        'filter-active': filterActive,
+        'has-content': !!modelValue,
+        'filter-border': filterBorder,
+      }"
       @click="active = true"
     >
-      <v-icon v-tooltip.bottom="active ? null : t('search')" name="search" class="icon-search" :clickable="!active" />
-      <input ref="input" :value="modelValue" :placeholder="t('search_items')" @input="emitValue" @paste="emitValue" />
-      <v-icon v-if="modelValue" clickable class="icon-empty" name="close" @click.stop="$emit('update:modelValue', null)" />
+      <v-icon
+        v-tooltip.bottom="active ? null : t('search')"
+        name="search"
+        class="icon-search"
+        :clickable="!active"
+      />
+      <input
+        ref="input"
+        :value="modelValue"
+        :placeholder="t('search_items')"
+        @input="emitValue"
+        @paste="emitValue"
+      />
+      <v-icon
+        v-if="modelValue"
+        clickable
+        class="icon-empty"
+        name="close"
+        @click.stop="$emit('update:modelValue', null)"
+      />
 
-      <v-icon v-tooltip.bottom="t('filter')" clickable class="icon-filter" name="filter_list" @click="filterActive = !filterActive" />
+      <v-icon
+        v-tooltip.bottom="t('filter')"
+        clickable
+        class="icon-filter"
+        name="filter_list"
+        @click="filterActive = !filterActive"
+      />
 
       <transition-expand @before-enter="filterBorder = true" @after-leave="filterBorder = false">
         <div v-show="filterActive" ref="filterElement" class="filter">
@@ -146,7 +185,9 @@ function emitValue() {
   overflow: hidden;
   border: var(--theme--border-width) solid var(--theme--form--field--input--border-color);
   border-radius: calc((40px + var(--theme--border-width) * 2) / 2);
-  transition: width var(--slow) var(--transition), border-bottom-left-radius var(--fast) var(--transition),
+  transition:
+    width var(--slow) var(--transition),
+    border-bottom-left-radius var(--fast) var(--transition),
     border-bottom-right-radius var(--fast) var(--transition);
 
   .icon-empty {
@@ -243,7 +284,9 @@ function emitValue() {
     border-bottom: none;
     border-bottom-right-radius: 0;
     border-bottom-left-radius: 0;
-    transition: border-bottom-left-radius 0, border-bottom-right-radius 0;
+    transition:
+      border-bottom-left-radius 0,
+      border-bottom-right-radius 0;
 
     &::after {
       position: absolute;
@@ -253,7 +296,7 @@ function emitValue() {
       width: auto;
       height: var(--theme--border-width);
       background-color: var(--theme--border-color-subdued);
-      content: "";
+      content: '';
       pointer-events: none;
     }
   }

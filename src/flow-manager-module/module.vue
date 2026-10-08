@@ -7,61 +7,119 @@
     </template>
 
     <template #title-outer:append>
-      <v-chip v-if="installedVersion" small class="ml-2"
-        v-tooltip.bottom="'Current Version'">{{ installedVersion }}</v-chip>
+      <v-chip v-if="installedVersion" v-tooltip.bottom="'Current Version'" small class="ml-2">{{
+        installedVersion
+      }}</v-chip>
       <div v-if="latestVersion">
         <span class="ml-2">-></span>
-        <v-chip small class="ml-2 secondary-chip" v-tooltip.bottom="'Latest Version'">
+        <v-chip v-tooltip.bottom="'Latest Version'" small class="ml-2 secondary-chip">
           {{ latestVersion }}
         </v-chip>
       </div>
     </template>
 
     <template v-if="isDatabaseUpdated">
-      <div :class="{
-        'top-bar-panel': true,
-        'table-mode': !viewListMode,
-        'list-view-mode': viewListMode,
-      }">
+      <div
+        :class="{
+          'top-bar-panel': true,
+          'table-mode': !viewListMode,
+          'list-view-mode': viewListMode,
+        }"
+      >
         <v-checkbox v-model="showSelect">Show Select</v-checkbox>
-        <v-checkbox v-if="showSelect" v-model="isSelectAll" @update:model-value="selectAll()">Select All</v-checkbox>
-        <v-button v-if="showSelect" icon rounded small :disabled="!selectedFlowsInactive.length"
-          v-tooltip.bottom="'Activate Selected'" @click="() => changeFlowStatus('active')">
+        <v-checkbox v-if="showSelect" v-model="isSelectAll" @update:model-value="selectAll()"
+          >Select All</v-checkbox
+        >
+        <v-button
+          v-if="showSelect"
+          v-tooltip.bottom="'Activate Selected'"
+          icon
+          rounded
+          small
+          :disabled="!selectedFlowsInactive.length"
+          @click="() => changeFlowStatus('active')"
+        >
           <v-icon name="play_circle" />
         </v-button>
-        <v-button v-if="showSelect" icon rounded small :disabled="!selectedFlowsActive.length"
-          v-tooltip.bottom="'Deactivate Selected'" @click="() => changeFlowStatus('inactive')">
+        <v-button
+          v-if="showSelect"
+          v-tooltip.bottom="'Deactivate Selected'"
+          icon
+          rounded
+          small
+          :disabled="!selectedFlowsActive.length"
+          @click="() => changeFlowStatus('inactive')"
+        >
           <v-icon name="pause_circle" />
         </v-button>
-        <v-button v-if="showSelect" icon rounded small :disabled="!selectedItems.length"
-          v-tooltip.bottom="'Backup Selected'" @click="backupSelectedItems">
+        <v-button
+          v-if="showSelect"
+          v-tooltip.bottom="'Backup Selected'"
+          icon
+          rounded
+          small
+          :disabled="!selectedItems.length"
+          @click="backupSelectedItems"
+        >
           <v-icon name="file_download" />
         </v-button>
-        <v-button v-if="showSelect" icon rounded small :disabled="!selectedItems.length"
-          v-tooltip.bottom="'Duplicate Selected'" @click="duplicateSelectedItems">
+        <v-button
+          v-if="showSelect"
+          v-tooltip.bottom="'Duplicate Selected'"
+          icon
+          rounded
+          small
+          :disabled="!selectedItems.length"
+          @click="duplicateSelectedItems"
+        >
           <v-icon name="content_copy" />
         </v-button>
-        <v-button v-if="showSelect" icon rounded small :disabled="!selectedItems.length"
-          v-tooltip.bottom="'Delete Selected'" @click="deleteSelectedItems">
+        <v-button
+          v-if="showSelect"
+          v-tooltip.bottom="'Delete Selected'"
+          icon
+          rounded
+          small
+          :disabled="!selectedItems.length"
+          @click="deleteSelectedItems"
+        >
           <v-icon name="delete" />
         </v-button>
-        <v-button v-if="showSelect && selectedCredential === 'local'" icon rounded small
-          :disabled="!selectedItems.length" v-tooltip.bottom="'Push to Cloud Selected'"
-          @click="() => (pushToCloudDialog = true)">
+        <v-button
+          v-if="showSelect && selectedCredential === 'local'"
+          v-tooltip.bottom="'Push to Cloud Selected'"
+          icon
+          rounded
+          small
+          :disabled="!selectedItems.length"
+          @click="() => (pushToCloudDialog = true)"
+        >
           <v-icon name="cloud_upload" />
         </v-button>
         <div v-if="showSelect" class="align-content-center">
-          {{ selectedItems.length }} Item{{ selectedItems.length > 1 ? "s" : "" }} Selected
+          {{ selectedItems.length }} Item{{ selectedItems.length > 1 ? 's' : '' }} Selected
         </div>
       </div>
       <v-list v-if="viewListMode" class="draggable-list">
-        <draggable :force-fallback="true" :model-value="parentId ? currentFlows : rootFlows" item-key="id"
-          handle=".drag-handle" :swap-threshold="0.3" class="root-drag-container" :group="{ name: 'flows' }"
-          @update:model-value="onSort($event)">
+        <draggable
+          :force-fallback="true"
+          :model-value="parentId ? currentFlows : rootFlows"
+          item-key="id"
+          handle=".drag-handle"
+          :swap-threshold="0.3"
+          class="root-drag-container"
+          :group="{ name: 'flows' }"
+          @update:model-value="onSort($event)"
+        >
           <template #item="{ element }">
             <div class="list-group-item">
-              <flow-item :item="element" :items="allFlows" :show-select="showSelect" :selected-items="selectedItems"
-                @update:sort="($event: any) => onSort($event)" />
+              <flow-item
+                :item="element"
+                :items="allFlows"
+                :show-select="showSelect"
+                :selected-items="selectedItems"
+                @update:sort="onSort"
+              />
             </div>
           </template>
         </draggable>
@@ -80,17 +138,36 @@
           </v-list>
         </v-menu>
         <div class="layout-tabular main-table">
-          <v-table ref="table" class="table" v-model:headers="headers" :items="tabularFlows" :sort="tableSort"
-            :loading="isTabularFlowLoading" show-resize must-sort allow-header-reorder @click:row="goToFlow"
-            @update:sort="onTableSortChange" :show-select="showSelect === true ? 'multiple' : 'none'"
-            v-model="selectedItems" item-key="id" selection-use-keys>
+          <v-table
+            ref="table"
+            v-model:headers="headers"
+            v-model="selectedItems"
+            class="table"
+            :items="tabularFlows"
+            :sort="tableSort"
+            :loading="isTabularFlowLoading"
+            show-resize
+            must-sort
+            allow-header-reorder
+            :show-select="showSelect === true ? 'multiple' : 'none'"
+            item-key="id"
+            selection-use-keys
+            @click:row="goToFlow"
+            @update:sort="onTableSortChange"
+          >
             <template #[`item.icon`]="{ item }">
               <v-icon v-if="item.icon" :name="item.icon || ''" :color="item.color" />
             </template>
             <template #[`item.status`]="{ item }">
-              <v-chip v-if="item.status !== 'active'" x-small
-                class="item-name trigger-chip-inactive">{{ item.status.toUpperCase() }}</v-chip>
-              <v-chip v-else x-small active class="item-name trigger-chip">{{ item.status.toUpperCase() }} </v-chip>
+              <v-chip
+                v-if="item.status !== 'active'"
+                x-small
+                class="item-name trigger-chip-inactive"
+                >{{ item.status.toUpperCase() }}</v-chip
+              >
+              <v-chip v-else x-small active class="item-name trigger-chip"
+                >{{ item.status.toUpperCase() }}
+              </v-chip>
             </template>
             <template #[`item.flow_manager_last_run_at`]="{ item }">
               {{ formatDateLong(item.flow_manager_metadata_id?.flow_manager_last_run_at) }}
@@ -105,8 +182,14 @@
               {{ item.trigger.toUpperCase() }}
             </template>
             <template #[`item.flow_manager_category`]="{ item }">
-              <v-icon v-bind="getCategoryIcon(item.flow_manager_metadata_id?.flow_manager_category)" class="mr-1" />
-              <div v-context-menu="'contextMenuTable'" @contextmenu="onContextMenuTable(item.flow_manager_category)">
+              <v-icon
+                v-bind="getCategoryIcon(item.flow_manager_metadata_id?.flow_manager_category)"
+                class="mr-1"
+              />
+              <div
+                v-context-menu="'contextMenuTable'"
+                @contextmenu="onContextMenuTable(item.flow_manager_category)"
+              >
                 {{ getCategoryName(item.flow_manager_metadata_id?.flow_manager_category) }}
               </div>
             </template>
@@ -119,8 +202,14 @@
 
                 <v-list>
                   <v-list-item
-                    v-if="item.trigger === 'manual' && item.status === 'active' && selectedCredential === 'local'"
-                    clickable @click="showRunDialog(item)">
+                    v-if="
+                      item.trigger === 'manual' &&
+                      item.status === 'active' &&
+                      selectedCredential === 'local'
+                    "
+                    clickable
+                    @click="showRunDialog(item)"
+                  >
                     <v-list-item-icon>
                       <v-icon name="play_arrow" />
                     </v-list-item-icon>
@@ -168,17 +257,24 @@
 
             <template #header-context-menu="{ header }">
               <v-list>
-                <v-list-item :disabled="!header.sortable"
-                  :active="tableSort?.by === header.value && tableSort?.desc === false" clickable
-                  @click="onTableSortChange({ by: header.value, desc: false })">
+                <v-list-item
+                  :disabled="!header.sortable"
+                  :active="tableSort?.by === header.value && tableSort?.desc === false"
+                  clickable
+                  @click="onTableSortChange({ by: header.value, desc: false })"
+                >
                   <v-list-item-icon>
                     <v-icon name="sort" class="flip" />
                   </v-list-item-icon>
                   <v-list-item-content> Sort Ascending </v-list-item-content>
                 </v-list-item>
 
-                <v-list-item :active="tableSort?.by === header.value && tableSort?.desc === true"
-                  :disabled="!header.sortable" clickable @click="onTableSortChange({ by: header.value, desc: true })">
+                <v-list-item
+                  :active="tableSort?.by === header.value && tableSort?.desc === true"
+                  :disabled="!header.sortable"
+                  clickable
+                  @click="onTableSortChange({ by: header.value, desc: true })"
+                >
                   <v-list-item-icon>
                     <v-icon name="sort" />
                   </v-list-item-icon>
@@ -188,15 +284,21 @@
                 <v-divider />
 
                 <template v-if="header.value === 'status'">
-                  <v-list-item :active="selectedShortcutFilter.status === 'active'" clickable
-                    @click="setStatusFilter('active')">
+                  <v-list-item
+                    :active="selectedShortcutFilter.status === 'active'"
+                    clickable
+                    @click="setStatusFilter('active')"
+                  >
                     <v-list-item-icon>
                       <v-icon name="play_arrow" />
                     </v-list-item-icon>
                     <v-list-item-content> Show Active </v-list-item-content>
                   </v-list-item>
-                  <v-list-item :active="selectedShortcutFilter.status === 'inactive'" clickable
-                    @click="setStatusFilter('inactive')">
+                  <v-list-item
+                    :active="selectedShortcutFilter.status === 'inactive'"
+                    clickable
+                    @click="setStatusFilter('inactive')"
+                  >
                     <v-list-item-icon>
                       <v-icon name="pause" class="flip" />
                     </v-list-item-icon>
@@ -211,8 +313,13 @@
                 </template>
 
                 <template v-if="header.value === 'trigger'">
-                  <v-list-item v-for="trigger in TRIGGER_TYPES" :active="selectedShortcutFilter.trigger === trigger"
-                    clickable @click="setTriggerFilter(trigger)">
+                  <v-list-item
+                    v-for="trigger in TRIGGER_TYPES"
+                    :key="trigger"
+                    :active="selectedShortcutFilter.trigger === trigger"
+                    clickable
+                    @click="setTriggerFilter(trigger)"
+                  >
                     <v-list-item-icon>
                       <v-icon name="bolt" />
                     </v-list-item-icon>
@@ -227,9 +334,13 @@
                 </template>
 
                 <template v-if="header.value === 'flow_manager_category'">
-                  <v-list-item v-for="category in usedCategoryList"
-                    :active="selectedShortcutFilter.flow_manager_category === category.id" clickable
-                    @click="setCategoryFilter(category.id as string)">
+                  <v-list-item
+                    v-for="category in usedCategoryList"
+                    :key="category.id"
+                    :active="selectedShortcutFilter.flow_manager_category === category.id"
+                    clickable
+                    @click="setCategoryFilter(category.id as string)"
+                  >
                     <v-list-item-icon>
                       <v-icon :name="category.icon || 'folder'" :color="category.color" />
                     </v-list-item-icon>
@@ -248,7 +359,7 @@
         </div>
       </div>
     </template>
-    <div class="flex justify-center h-full items-center" v-else>
+    <div v-else class="flex justify-center h-full items-center">
       <div class="error not-configured-notes">
         <div>Flow Manager needs to be configured before you can use it.</div>
         <div>Please follow these steps:</div>
@@ -260,13 +371,23 @@
     </div>
 
     <template #navigation>
-      <content-navigation :view-mode="viewListMode ? 'LIST' : 'TABLE'" :root-flows="rootFlows"
-        :flow-child-map="flowChildMap" :all-flows="allFlows" :server-info="serverInfo" :is-database-updated="isDatabaseUpdated" />
+      <content-navigation
+        :view-mode="viewListMode ? 'LIST' : 'TABLE'"
+        :root-flows="rootFlows"
+        :flow-child-map="flowChildMap"
+        :all-flows="allFlows"
+        :server-info="serverInfo"
+        :is-database-updated="isDatabaseUpdated"
+      />
     </template>
     <template v-if="isDatabaseUpdated" #actions>
       <v-checkbox v-model="viewListMode" label="List View" />
-      <search-input v-if="!viewListMode" :collection="'directus_flows'" v-model="tableFlowSearch"
-        v-model:filter="tableFlowFilter" />
+      <search-input
+        v-if="!viewListMode"
+        v-model="tableFlowSearch"
+        v-model:filter="tableFlowFilter"
+        :collection="'directus_flows'"
+      />
       <v-button v-tooltip.bottom="'Settings'" rounded icon @click="settingDialog = true">
         <v-icon name="settings" />
       </v-button>
@@ -285,211 +406,192 @@
 
     <template #sidebar>
       <sidebar-detail icon="info" :title="'information'" close>
-        <div v-if="selectedItem?.id && (selectedItem as IFolder).type !== 'category'" style="display: grid">
+        <div
+          v-if="selectedItem?.id && (selectedItem as IFolder).type !== 'category'"
+          style="display: grid"
+        >
           <div style="font-weight: bold">Flow ID</div>
           <div class="sidebar-text">{{ selectedItem.id }}</div>
           <div style="font-weight: bold" class="mt-2 sidebar-text">Flow Name</div>
           <div>{{ selectedItem.name }}</div>
           <div style="font-weight: bold" class="mt-2 sidebar-text">Status</div>
-          <div>{{ (selectedItem as IFlow).status?.toUpperCase() || "N/A" }}</div>
+          <div>{{ (selectedItem as IFlow).status?.toUpperCase() || 'N/A' }}</div>
           <div style="font-weight: bold" class="mt-2 sidebar-text">Trigger Type</div>
-          <div>{{ (selectedItem as IFlow).trigger?.toUpperCase() || "N/A" }}</div>
+          <div>{{ (selectedItem as IFlow).trigger?.toUpperCase() || 'N/A' }}</div>
           <div style="font-weight: bold" class="mt-2 sidebar-text">Description</div>
-          <div>{{ (selectedItem as IFlow).description || "N/A" }}</div>
+          <div>{{ (selectedItem as IFlow).description || 'N/A' }}</div>
           <div style="font-weight: bold" class="mt-2 sidebar-text">Total Runs</div>
-          <div>{{ (selectedItem as IFlow).flow_manager_metadata_id?.flow_manager_run_counter || 0 }}</div>
+          <div>
+            {{ (selectedItem as IFlow).flow_manager_metadata_id?.flow_manager_run_counter || 0 }}
+          </div>
           <div style="font-weight: bold" class="mt-2 sidebar-text">Last Run</div>
-          <div>{{ formatDateLong((selectedItem as IFlow).flow_manager_metadata_id?.flow_manager_last_run_at) }}</div>
+          <div>
+            {{
+              formatDateLong(
+                (selectedItem as IFlow).flow_manager_metadata_id?.flow_manager_last_run_at,
+              )
+            }}
+          </div>
           <div style="font-weight: bold" class="mt-2 sidebar-text">Last Error Message</div>
-          <div>{{ (selectedItem as IFlow).flow_manager_metadata_id?.flow_manager_last_run_message || "N/A" }}</div>
+          <div>
+            {{
+              (selectedItem as IFlow).flow_manager_metadata_id?.flow_manager_last_run_message ||
+              'N/A'
+            }}
+          </div>
           <div style="font-weight: bold" class="mt-2 sidebar-text">Failed Operation Name</div>
           <div>
-            {{ getOperationNameById((selectedItem as IFlow).flow_manager_metadata_id?.flow_manager_last_run_operation || "")?.name || "N/A" }}
+            {{
+              getOperationNameById(
+                (selectedItem as IFlow).flow_manager_metadata_id?.flow_manager_last_run_operation ||
+                  '',
+              )?.name || 'N/A'
+            }}
           </div>
         </div>
       </sidebar-detail>
     </template>
 
-    <input ref="restoredFile" type="file" accept="application/json" @change="onRestoredFileChanged"
-      style="display: none" />
-    <v-dialog :model-value="restoreConfirmationDialog" :persistent="true"
-      @update:model-value="restoreConfirmationDialog = false">
-      <v-card>
-        <v-card-title>Confirmation Dialog</v-card-title>
-        <v-card-text>
-          <v-input placeholder="Flow Name" v-model="flowDuplicatedName" v-tooltip.bottom="'Flow Name'" />
-          <v-checkbox style="margin-top: 4px" label="Keep the same flow id as the original flow"
-            :model-value="isPreviousIdPersisted" @update:model-value="isPreviousIdPersisted = $event" />
-          <v-list v-if="Array.isArray(restoredFileObj)">
-            <v-list-item v-for="item in restoredFileObj" :key="item?.id">
-              <v-list-item-icon>
-                <v-icon :color="item?.color || 'var(--theme--primary)'" :name="item?.icon" />
-              </v-list-item-icon>
-              <v-list-item-content>{{ item?.name }}</v-list-item-content>
-            </v-list-item>
-          </v-list>
-          <v-list v-else>
-            <v-list-item>
-              <v-list-item-icon>
-                <v-icon :color="restoredFileObj.color || 'var(--theme--primary)'" :name="restoredFileObj.icon" />
-              </v-list-item-icon>
-              <v-list-item-content>{{ restoredFileObj.name }}</v-list-item-content>
-            </v-list-item>
-          </v-list>
-          <div v-if="errors.length">
-            <v-error v-for="(error, indexError) in errors" :key="`errorIndex-${indexError}`"
-              :error="{ extensions: { code: 'Error' }, message: error }"></v-error>
-            <div style="margin-top: 15px">There are some errors in the file you are trying to restore. Do you want to
-              continue?</div>
-          </div>
-          <div v-else>
-            <div style="margin-top: 15px">Do you want to continue?</div>
-          </div>
-        </v-card-text>
-        <v-card-actions>
-          <v-button secondary @click="restoreConfirmationDialog = false"> Cancel </v-button>
-          <v-button @click="onConfirmRestore"> Continue </v-button>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <input
+      ref="restoredFile"
+      type="file"
+      accept="application/json"
+      style="display: none"
+      @change="onRestoredFileChanged"
+    />
+    <RestoreConfirmationDialog
+      :value="restoreConfirmationDialog"
+      :flow-duplicated-name="flowDuplicatedName"
+      :is-previous-id-persisted="isPreviousIdPersisted"
+      :restored-file-obj="restoredFileObj"
+      :errors="errors"
+      @update:model-value="restoreConfirmationDialog = $event"
+      @update:flow-duplicated-name="flowDuplicatedName = $event"
+      @update:is-previous-id-persisted="isPreviousIdPersisted = $event"
+      @proceed="onConfirmRestore"
+    />
 
-    <v-dialog :model-value="settingDialog" :persistent="true" @update:model-value="settingDialog = false">
-      <v-card>
-        <v-card-title>Settings</v-card-title>
-        <v-card-text>
-          <div v-if="!isDatabaseUpdated">
-            <v-error :error="{
-              extensions: { code: 'Error' },
-              message: `Flow Manager fields and collections are not configured. By clicking the 'Configure' button, you will create the necessary fields/collections or re-create the existing fields.`,
-            }"></v-error>
-            <div v-if="notCreatedCollections.length" style="margin-top: 15px">
-              <div style="font-weight: bold">Collections to be created:</div>
-              <ul>
-                <li v-for="collectionName in notCreatedCollections" :key="collectionName">
-                  <strong>{{ collectionName }}</strong>
-                </li>
-              </ul>
-            </div>
-            <div v-if="notCreatedFields.length" style="margin-top: 15px">
-              <div style="font-weight: bold">Fields to be created:</div>
-              <ul>
-                <li v-for="field in notCreatedFields" :key="field.field">
-                  <template v-if="field.schema?.related_collection">
-                    <strong><code>{{ field.field }}</code></strong> on <strong><code>{{ field.collection }}</code></strong> related to collection <strong><code>{{field.schema.related_collection}}</code></strong>
-                  </template>
-                  <template v-else>
-                    <strong><code>{{ field.field }}</code></strong> on <strong><code>{{ field.collection }}</code></strong>
-                  </template>
-                </li>
-              </ul>
-            </div>
-            <div v-if="differentFields.length" style="margin-top: 15px">
-              <div style="font-weight: bold">Fields to be re-created:</div>
-              <ul>
-                <li v-for="field in differentFields" :key="field.field">
-                  <strong><code>{{ field.field }}</code></strong> on <strong><code>{{ field.collection }}</code></strong>
-                </li>
-              </ul>
-            </div>
-          </div>
-          <div v-else>
-            <v-table :headers="folderHeaders" :items="flowCategories" @click:row="selectCategoryForEdit">
-              <template #[`item.name`]="{ item }">
-                <v-icon :name="item.icon || ''"
-                  :color="item.color || 'var(--theme--background-inverted, var(--background-inverted))'" />
-                <span class="ml-2">
-                  {{ item.name }}
-                </span>
-              </template>
-              <template #item-append="{ item }">
-                <v-icon class="button-delete-category" name="delete" color="var(--theme-danger, var(--danger))"
-                  @click="deleteCategory(item)" v-tooltip.bottom="'Delete Category'" />
-              </template>
-            </v-table>
-            <div class="input-form">
-              <v-input placeholder="Category Name" v-model="selectedCategory.name" v-tooltip.bottom="'Category Name'">
-              </v-input>
-            </div>
-            <div class="input-form">
-              <interface-select-color width="full" :value="selectedCategory.color"
-                @input="selectedCategory.color = $event" />
-            </div>
-            <div class="input-form">
-              <interface-select-icon :value="selectedCategory.icon" @input="selectedCategory.icon = $event" />
-            </div>
-            <v-button @click="saveCategory" class="input-form" :disabled="!selectedCategory.name">
-              {{ isEditCategory ? "Save" : "Add" }}
-            </v-button>
-            <v-button v-if="isEditCategory" secondary @click="cancelEditCategory" class="input-form ml-2"> Cancel
-            </v-button>
-          </div>
-        </v-card-text>
-        <v-card-actions>
-          <v-button secondary @click="settingDialog = false"> Close </v-button>
-          <v-button v-if="!isDatabaseUpdated" :loading="isConfigurationLoading" @click="configureFlowManagerDatabase">
-            Configure </v-button>
-          <v-button v-else @click="syncFlowCounters" class="input-form ml-2" :loading="isSyncingFlowCountersLoading">
-            Sync Flow Counters
-          </v-button>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <SettingDialog
+      :value="settingDialog"
+      :is-database-updated="isDatabaseUpdated"
+      :not-created-collections="notCreatedCollections"
+      :not-created-fields="notCreatedFields"
+      :different-fields="differentFields"
+      :folder-headers="folderHeaders"
+      :flow-categories="flowCategories"
+      :selected-category="selectedCategory"
+      :is-edit-category="isEditCategory"
+      :is-configuration-loading="isConfigurationLoading"
+      :is-syncing-flow-counters-loading="isSyncingFlowCountersLoading"
+      @update:model-value="settingDialog = $event"
+      @update:selected-category="selectedCategory = $event"
+      @select-category-for-edit="selectCategoryForEdit"
+      @delete-category="deleteCategory"
+      @save-category="saveCategory"
+      @cancel-edit-category="cancelEditCategory"
+      @configure="configureFlowManagerDatabase"
+      @sync-flow-counters="syncFlowCounters"
+    />
 
-    <CredentialDialog :value="credentialDialog" @update:model-value="credentialDialog = $event"
-      v-model:credentials="credentials" />
+    <CredentialDialog
+      v-model:credentials="credentials"
+      :value="credentialDialog"
+      @update:model-value="credentialDialog = $event"
+    />
 
-    <PushToCloudDialog :value="pushToCloudDialog" :credentials="credentials" :loading="loadingPushToCloud"
+    <PushToCloudDialog
+      :value="pushToCloudDialog"
+      :credentials="credentials"
+      :loading="loadingPushToCloud"
       @update:model-value="pushToCloudDialog = $event"
-      @proceed="(credential: ICredential) => pushToCloud(credential)" />
+      @proceed="(credential: ICredential) => pushToCloud(credential)"
+    />
 
-    <DeleteDialog :value="deleteItemDialog" :isBatchAction="isBatchAction" :selectedItem="selectedItem"
-      :selectedFlows="selectedFlows" :loading="loadingDeleteItem" @update:model-value="deleteItemDialog = $event"
-      @proceed="deleteItem" />
+    <DeleteDialog
+      :value="deleteItemDialog"
+      :is-batch-action="isBatchAction"
+      :selected-item="selectedItem"
+      :selected-flows="selectedFlows"
+      :loading="loadingDeleteItem"
+      @update:model-value="deleteItemDialog = $event"
+      @proceed="deleteItem"
+    />
 
-    <RunManualFlowForm :value="runFlowDialog" :selectedItem="selectedItem" @update:model-value="runFlowDialog = $event"
-      @reload:flow="reloadFlow" @reload:tabular-flow="reloadTabularFlow" />
+    <RunManualFlowForm
+      :value="runFlowDialog"
+      :selected-item="selectedItem"
+      @update:model-value="runFlowDialog = $event"
+      @reload:flow="reloadFlow"
+      @reload:tabular-flow="reloadTabularFlow"
+    />
 
-    <RunWebhookFlowForm :value="runWebhookFlowDialog" :selectedItem="selectedItem"
-      @update:model-value="runWebhookFlowDialog = $event" @reload:flow="reloadFlow"
-      @reload:tabular-flow="reloadTabularFlow" />
+    <RunWebhookFlowForm
+      :value="runWebhookFlowDialog"
+      :selected-item="selectedItem"
+      @update:model-value="runWebhookFlowDialog = $event"
+      @reload:flow="reloadFlow"
+      @reload:tabular-flow="reloadTabularFlow"
+    />
 
-    <LoadingDialog :title="processingDialogTitle" :value="processingDialog"
-      @update:model-value="processingDialog = $event" :progress-value="progressValue" :list-processing="listProcessing"
-      :indeterminate="indeterminateProcess" />
+    <LoadingDialog
+      :title="processingDialogTitle"
+      :value="processingDialog"
+      :progress-value="progressValue"
+      :list-processing="listProcessing"
+      :indeterminate="indeterminateProcess"
+      @update:model-value="processingDialog = $event"
+    />
 
     <v-overlay :value="true" />
   </private-view>
 </template>
 
 <script lang="ts">
-import { type Ref, computed, defineComponent, onMounted, provide, ref, toRefs } from "vue";
-import { useStores, useApi, useLayout } from "@directus/extensions-sdk";
-import { useRouter } from "vue-router";
-import Draggable from "vuedraggable";
-import SecureLS from "secure-ls";
-import debounce from "lodash/debounce";
-import type { Collection, Field, Preset } from "@directus/types";
+import { type Ref, computed, defineComponent, onMounted, provide, ref, toRefs } from 'vue';
+import { useStores, useApi, useLayout } from '@directus/extensions-sdk';
+import { useRouter } from 'vue-router';
+import Draggable from 'vuedraggable';
+import SecureLS from 'secure-ls';
+import debounce from 'lodash/debounce';
+import type { AppCollection, Field, Filter, Preset } from '@directus/types';
 
-import type { Header, ICredential, IFlow, IFolder, IOperation, IServerInfo, ISyncFlowCounter, ProcessingItem } from "../types";
-import { ENDPOINT_EXTENSION_NAME, NPM_LINK, TRIGGER_TYPES } from "../constants";
+import type {
+  Header,
+  ICredential,
+  IFlow,
+  IFolder,
+  IOperation,
+  IServerInfo,
+  ISyncFlowCounter,
+  ProcessingItem,
+} from '../types';
+import { ENDPOINT_EXTENSION_NAME, NPM_LINK, TRIGGER_TYPES } from '../constants';
 
-import { formatDate, formatDateLong, getTimestamp } from "../utils/date.util";
-import { generateRandomString, maskingText } from "../utils/string.util";
-import { sleep } from "../utils/common.util";
-import { transformData } from "../utils/flow.util";
+import { formatDate, formatDateLong, getTimestamp } from '../utils/date.util';
+import { generateRandomString, maskingText } from '../utils/string.util';
+import { sleep } from '../utils/common.util';
+import { transformData } from '../utils/flow.util';
 
-import FlowItem from "./components/flow-item.vue";
-import ContentNavigation from "./components/navigation.vue";
-import RunManualFlowForm from "./components/run-manual-flow-form.vue";
-import SearchInput from "./components/search-input.vue";
-import LoadingDialog from "./components/loading-dialog.vue";
-import CredentialDialog from "./components/credential-dialog.vue";
-import DeleteDialog from "./components/delete-dialog.vue";
-import PushToCloudDialog from "./components/push-to-cloud-dialog.vue";
-import RunWebhookFlowForm from "./components/run-webhook-flow-form.vue";
-import useFields from "../utils/field.util";
-import useCollections from "../utils/collection.util";
-import type { ExtendedField, ExtendedPolicy, ExtendedUser } from '../types';
+import FlowItem from './components/flow-item.vue';
+import ContentNavigation from './components/navigation.vue';
+import RunManualFlowForm from './components/run-manual-flow-form.vue';
+import SearchInput from './components/search-input.vue';
+import LoadingDialog from './components/loading-dialog.vue';
+import CredentialDialog from './components/credential-dialog.vue';
+import DeleteDialog from './components/delete-dialog.vue';
+import PushToCloudDialog from './components/push-to-cloud-dialog.vue';
+import RunWebhookFlowForm from './components/run-webhook-flow-form.vue';
+import RestoreConfirmationDialog from './components/restore-confirmation-dialog.vue';
+import SettingDialog from './components/setting-dialog.vue';
+import useFields from '../utils/field.util';
+import useCollections from '../utils/collection.util';
+import type {
+  DirectusExtensionInfo,
+  DirectusFilter,
+  ExtendedField,
+  ExtendedPolicy,
+  ExtendedUser,
+} from '../types';
 
 export default defineComponent({
   components: {
@@ -503,6 +605,8 @@ export default defineComponent({
     DeleteDialog,
     PushToCloudDialog,
     RunWebhookFlowForm,
+    RestoreConfirmationDialog,
+    SettingDialog,
   },
 
   props: {
@@ -529,34 +633,36 @@ export default defineComponent({
     const settingsStore = useSettingsStore();
     const fieldsStore = useFieldsStore();
     const presetsStore = usePresetsStore();
-    const { layoutWrapper } = useLayout(ref("tabular"));
+    const { layoutWrapper } = useLayout(ref('tabular'));
 
     const { parentId } = toRefs(props);
     const flows = ref<IFlow[]>([]);
     const { allCollections } = collectionsStore;
-    const flowFields: Ref<Field[]> = ref(fieldsStore.getFieldsForCollection("directus_flows"));
-    const settingFields: Ref<Field[]> = ref(fieldsStore.getFieldsForCollection("directus_settings"));
-    const preset = ref<Preset>(presetsStore.getPresetForCollection("flow-manager"));
+    const flowFields: Ref<Field[]> = ref(fieldsStore.getFieldsForCollection('directus_flows'));
+    const settingFields: Ref<Field[]> = ref(
+      fieldsStore.getFieldsForCollection('directus_settings'),
+    );
+    const preset = ref<Preset>(presetsStore.getPresetForCollection('flow-manager'));
     const folderHeaders = ref([
       {
-        text: "Name",
-        value: "name",
+        text: 'Name',
+        value: 'name',
         width: 400,
       },
     ]);
 
     const flowCategories = ref<IFolder[]>(
       (settingsStore.settings.flow_manager_categories || []).map((category: string | IFolder) => {
-        if (typeof category === "string") {
+        if (typeof category === 'string') {
           return {
             id: category,
             name: category,
-            type: "category",
-            icon: "folder",
-            color: "",
+            type: 'category',
+            icon: 'folder',
+            color: '',
             flow_manager_metadata_id: {
               flow_manager_order: 0,
-            }
+            },
           };
         }
 
@@ -566,70 +672,78 @@ export default defineComponent({
     const selectedItems = ref<string[]>([]);
     const progressValue = ref(0);
     const listProcessing = ref<ProcessingItem[]>([]);
-    const processingDialogTitle = ref("");
+    const processingDialogTitle = ref('');
     const restoredFile = ref<HTMLInputElement | null>(null);
     const restoredFileObj: Ref<Partial<IFlow | IFlow[]>> = ref({});
     const restoreConfirmationDialog = ref(false);
     const errors: Ref<string[]> = ref([]);
-    const flowDuplicatedName = ref("");
-    const newCategoryName = ref("");
-    const newCategoryColor = ref("");
-    const selectedCredentialId = ref("");
+    const flowDuplicatedName = ref('');
+    const newCategoryName = ref('');
+    const newCategoryColor = ref('');
+    const selectedCredentialId = ref('');
     const tabularFlows = ref<IFlow[]>([]);
     const selectedCategory = ref<IFolder>({
-      id: "",
-      name: "",
-      type: "category",
-      icon: "folder",
-      color: "",
+      id: '',
+      name: '',
+      type: 'category',
+      icon: 'folder',
+      color: '',
     });
     const selectedItem = ref<IFlow | IFolder>({
-      id: "",
-      name: "",
-      icon: "",
-      color: "",
-      description: "",
-      trigger: "",
+      id: '',
+      name: '',
+      icon: '',
+      color: '',
+      description: '',
+      trigger: '',
       options: {
         collections: [],
       },
       operations: [],
-      operation: "",
-      status: "",
-      accountability: "",
+      operation: '',
+      status: '',
+      accountability: '',
       flow_manager_metadata_id: {
         flow_manager_order: 0,
-        flow_manager_category: "",
-      }
+        flow_manager_category: '',
+      },
     });
-    const selectedTextToCopy = ref("");
+    const selectedTextToCopy = ref('');
     const selectedShortcutFilter = ref({
-      status: "all",
-      trigger: "all",
-      flow_manager_category: "all",
+      status: 'all',
+      trigger: 'all',
+      flow_manager_category: 'all',
     });
     const selectedShortcutFilterCategoryName = computed(() => {
-      if (!selectedShortcutFilter.value.flow_manager_category || selectedShortcutFilter.value.flow_manager_category === 'all') return;
-      const category = flowCategories.value.find((c) => c.id === selectedShortcutFilter.value.flow_manager_category);
-      if (category) return category.name
-      const flow = flows.value.find((f) => f.id === selectedShortcutFilter.value.flow_manager_category)
+      if (
+        !selectedShortcutFilter.value.flow_manager_category ||
+        selectedShortcutFilter.value.flow_manager_category === 'all'
+      )
+        return;
+      const category = flowCategories.value.find(
+        (c) => c.id === selectedShortcutFilter.value.flow_manager_category,
+      );
+      if (category) return category.name;
+      const flow = flows.value.find(
+        (f) => f.id === selectedShortcutFilter.value.flow_manager_category,
+      );
       return flow?.name;
     });
 
-    const installedVersion = ref("");
-    const latestVersion = ref("");
+    const installedVersion = ref('');
+    const latestVersion = ref('');
 
-    const selectedCredential = ref("local");
+    const selectedCredential = ref('local');
     const currentUser = ref<ExtendedUser | null>(null);
     const serverInfo = ref<IServerInfo>();
-    const ls = new SecureLS({ encodingType: "aes" });
-    const storedCredentials = ref<ICredential[]>(ls.get("flow_manager_credentials") || []);
+    const ls = new SecureLS({ encodingType: 'aes' });
+    const storedCredentials = ref<ICredential[]>(ls.get('flow_manager_credentials') || []);
     const credentials = computed({
       get() {
         return storedCredentials.value;
       },
       set(value) {
-        ls.set("flow_manager_credentials", value);
+        ls.set('flow_manager_credentials', value);
         storedCredentials.value = value;
       },
     });
@@ -682,19 +796,20 @@ export default defineComponent({
     });
 
     const selectedFlowsActive = computed<IFlow[]>(() => {
-      return selectedFlows.value.filter((flow) => flow.status === "active");
+      return selectedFlows.value.filter((flow) => flow.status === 'active');
     });
 
     const selectedFlowsInactive = computed<IFlow[]>(() => {
-      return selectedFlows.value.filter((flow) => flow.status === "inactive");
+      return selectedFlows.value.filter((flow) => flow.status === 'inactive');
     });
     const title = computed(() => {
       if (!parentId.value) {
-        return "Flow Manager";
+        return 'Flow Manager';
       }
 
       const currentParent =
-        flows.value.find((flow) => flow.id === parentId.value) || flowCategories.value.find((category) => category.id === parentId.value);
+        flows.value.find((flow) => flow.id === parentId.value) ||
+        flowCategories.value.find((category) => category.id === parentId.value);
 
       if (!currentParent) {
         return `Flow Manager - ${parentId.value}`;
@@ -704,21 +819,22 @@ export default defineComponent({
     });
     const iconName = computed(() => {
       if (!parentId.value) {
-        return "bolt";
+        return 'bolt';
       }
 
       const currentParent: IFlow | IFolder | undefined =
-        flows.value.find((flow) => flow.id === parentId.value) || flowCategories.value.find((category) => category.id === parentId.value);
+        flows.value.find((flow) => flow.id === parentId.value) ||
+        flowCategories.value.find((category) => category.id === parentId.value);
 
       if (currentParent) {
-        if ((currentParent as IFolder)?.type === "category") {
-          return currentParent.icon || "folder";
+        if ((currentParent as IFolder)?.type === 'category') {
+          return currentParent.icon || 'folder';
         }
 
-        return currentParent.icon || "bolt";
+        return currentParent.icon || 'bolt';
       }
 
-      return "bolt";
+      return 'bolt';
     });
     const flowFieldConfiguration = computed(() => {
       let isOrderFieldConfigured = false;
@@ -727,18 +843,22 @@ export default defineComponent({
       let isRunCounterFieldConfigured = false;
 
       for (const field of flowFields.value) {
-        if (field.field === "flow_manager_order") {
+        if (field.field === 'flow_manager_order') {
           isOrderFieldConfigured = true;
-        } else if (field.field === "flow_manager_category") {
+        } else if (field.field === 'flow_manager_category') {
           isCategoryFieldConfigured = true;
-        } else if (field.field === "flow_manager_last_run_at") {
+        } else if (field.field === 'flow_manager_last_run_at') {
           isLastRunFieldConfigured = true;
-        } else if (field.field === "flow_manager_run_counter") {
+        } else if (field.field === 'flow_manager_run_counter') {
           isRunCounterFieldConfigured = true;
         }
       }
 
-      const isConfigured = isOrderFieldConfigured && isCategoryFieldConfigured && isLastRunFieldConfigured && isRunCounterFieldConfigured;
+      const isConfigured =
+        isOrderFieldConfigured &&
+        isCategoryFieldConfigured &&
+        isLastRunFieldConfigured &&
+        isRunCounterFieldConfigured;
 
       return {
         isConfigured,
@@ -751,7 +871,7 @@ export default defineComponent({
     const isSettingFieldConfigured = computed(() => {
       let isFieldConfigured = false;
       for (const field of settingFields.value) {
-        if (field.field === "flow_manager_categories") {
+        if (field.field === 'flow_manager_categories') {
           isFieldConfigured = true;
         }
       }
@@ -759,10 +879,13 @@ export default defineComponent({
       return isFieldConfigured;
     });
 
-    const collectionMap: Record<string, Collection> = allCollections.reduce((acc: Record<string, Collection>, collection: Collection) => {
-      acc[collection.collection] = collection;
-      return acc;
-    }, {});
+    const collectionMap: Record<string, AppCollection> = allCollections.reduce(
+      (acc: Record<string, AppCollection>, collection: AppCollection) => {
+        acc[collection.collection] = collection;
+        return acc;
+      },
+      {},
+    );
 
     const tableSort = computed<{
       by: string;
@@ -770,7 +893,7 @@ export default defineComponent({
     }>({
       get: () => {
         const savedSort = preset.value?.layout_query?.sort;
-        return savedSort || { by: "status", desc: false };
+        return savedSort || { by: 'status', desc: false };
       },
       set(value) {
         preset.value = {
@@ -784,7 +907,7 @@ export default defineComponent({
         return value;
       },
     });
-    const tableFlowFilter = computed<Preset["filter"]>({
+    const tableFlowFilter = computed<Preset['filter']>({
       get: () => {
         return preset.value?.filter;
       },
@@ -797,7 +920,7 @@ export default defineComponent({
         return value;
       },
     });
-    const tableFlowSearch = computed<Preset["search"]>({
+    const tableFlowSearch = computed<Preset['search']>({
       get: () => {
         return preset.value?.search;
       },
@@ -813,7 +936,7 @@ export default defineComponent({
     // true for list view, false for table view
     const viewListMode = computed({
       get() {
-        if (typeof preset.value?.layout_options?.viewListMode === "undefined") {
+        if (typeof preset.value?.layout_options?.viewListMode === 'undefined') {
           return true;
         }
         return preset.value?.layout_options?.viewListMode;
@@ -832,8 +955,8 @@ export default defineComponent({
     });
 
     const processedFlows = computed(() => {
-      const numberFields = ["flow_manager_run_counter"];
-      return flows.value.sort((a, b) => {
+      const numberFields = ['flow_manager_run_counter'];
+      return [...flows.value].sort((a, b) => {
         const sort = tableSort.value;
 
         if (numberFields.includes(sort.by)) {
@@ -842,12 +965,14 @@ export default defineComponent({
           return sort.desc ? bValue - aValue : aValue - bValue;
         }
 
-        let aValue: string = (a as unknown as Record<string, string>)[sort.by] || "";
-        let bValue: string = (b as unknown as Record<string, string>)[sort.by] || "";
+        let aValue: string = (a as unknown as Record<string, string>)[sort.by] || '';
+        let bValue: string = (b as unknown as Record<string, string>)[sort.by] || '';
 
-        if (sort.by === "flow_manager_category") {
-          const aCategory = folderMap.value[aValue]?.name || flowIdMap.value[aValue]?.name || aValue;
-          const bCategory = folderMap.value[bValue]?.name || flowIdMap.value[bValue]?.name || bValue;
+        if (sort.by === 'flow_manager_category') {
+          const aCategory =
+            folderMap.value[aValue]?.name || flowIdMap.value[aValue]?.name || aValue;
+          const bCategory =
+            folderMap.value[bValue]?.name || flowIdMap.value[bValue]?.name || bValue;
 
           aValue = aCategory;
           bValue = bCategory;
@@ -861,7 +986,7 @@ export default defineComponent({
     });
 
     const updateExistingPreset = debounce(async () => {
-      if (selectedCredential.value === "local") {
+      if (selectedCredential.value === 'local') {
         await presetsStore.update(preset.value.id, {
           layout_options: {
             sort: tableSort.value,
@@ -881,7 +1006,7 @@ export default defineComponent({
           await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
             url: `${credential.url}/presets/${preset.value.id}`,
             staticToken: credential.staticToken,
-            method: "PATCH",
+            method: 'PATCH',
             payload: {
               layout_options: {
                 sort: tableSort.value,
@@ -901,10 +1026,10 @@ export default defineComponent({
     }, 500);
 
     const createNewPreset = debounce(async () => {
-      if (selectedCredential.value === "local") {
+      if (selectedCredential.value === 'local') {
         await presetsStore.savePreset({
           bookmark: null,
-          collection: "flow-manager",
+          collection: 'flow-manager',
           layout_options: {
             sort: tableSort.value,
             headers: headers.value,
@@ -923,10 +1048,10 @@ export default defineComponent({
           await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
             url: `${credential.url}/presets`,
             staticToken: credential.staticToken,
-            method: "POST",
+            method: 'POST',
             payload: {
               bookmark: null,
-              collection: "flow-manager",
+              collection: 'flow-manager',
               layout_options: {
                 sort: tableSort.value,
                 headers: headers.value,
@@ -953,56 +1078,56 @@ export default defineComponent({
         return (
           savedHeaders || [
             {
-              text: "",
-              value: "icon",
+              text: '',
+              value: 'icon',
               width: 50,
               sortable: false,
             },
             {
-              text: "Status",
-              value: "status",
+              text: 'Status',
+              value: 'status',
               sortable: true,
               width: defaultWidth,
             },
             {
-              text: "Name",
-              value: "name",
+              text: 'Name',
+              value: 'name',
               sortable: true,
               width: defaultWidth,
             },
             {
-              text: "Category",
-              value: "flow_manager_category",
+              text: 'Category',
+              value: 'flow_manager_category',
               sortable: true,
               width: defaultWidth,
             },
             {
-              text: "Trigger Type",
-              value: "trigger",
+              text: 'Trigger Type',
+              value: 'trigger',
               sortable: true,
               width: defaultWidth,
             },
             {
-              text: "Description",
-              value: "description",
+              text: 'Description',
+              value: 'description',
               sortable: true,
               width: defaultWidth,
             },
             {
-              text: "Total Runs",
-              value: "flow_manager_run_counter",
+              text: 'Total Runs',
+              value: 'flow_manager_run_counter',
               sortable: true,
               width: defaultWidth,
             },
             {
-              text: "Last Run",
-              value: "flow_manager_last_run_at",
+              text: 'Last Run',
+              value: 'flow_manager_last_run_at',
               sortable: true,
               width: defaultWidth,
             },
             {
-              text: "Date Created",
-              value: "date_created",
+              text: 'Date Created',
+              value: 'date_created',
               sortable: true,
               width: defaultWidth,
             },
@@ -1010,9 +1135,14 @@ export default defineComponent({
         ).map((h: Header) => {
           const editedHeader = h;
           if (editedHeader.value === 'flow_manager_category') {
-            editedHeader.text = selectedShortcutFilterCategoryName.value ? `Category (${selectedShortcutFilterCategoryName.value})`: 'Category';
+            editedHeader.text = selectedShortcutFilterCategoryName.value
+              ? `Category (${selectedShortcutFilterCategoryName.value})`
+              : 'Category';
           } else if (editedHeader.value === 'trigger') {
-            editedHeader.text = selectedShortcutFilter.value.trigger && selectedShortcutFilter.value.trigger !== 'all' ? `Trigger Type (${selectedShortcutFilter.value.trigger.toUpperCase()})`: 'Trigger Type';
+            editedHeader.text =
+              selectedShortcutFilter.value.trigger && selectedShortcutFilter.value.trigger !== 'all'
+                ? `Trigger Type (${selectedShortcutFilter.value.trigger.toUpperCase()})`
+                : 'Trigger Type';
           }
 
           return editedHeader;
@@ -1084,20 +1214,22 @@ export default defineComponent({
       const categoryKeys = Object.keys(flowChildMap.value);
 
       for (let i = 0; i < categoryKeys.length; i++) {
-        const category = categoryKeys[i] || "";
-        const isChildreensIsFlow = flowChildMap.value[category]?.some((item) => (item as IFolder).type !== "category");
+        const category = categoryKeys[i] || '';
+        const isChildreensIsFlow = flowChildMap.value[category]?.some(
+          (item) => (item as IFolder).type !== 'category',
+        );
         if (isChildreensIsFlow) {
           const categoryData = folderMap.value[category] || flowIdMap.value[category];
           categories.push({
             id: category,
             name: categoryData?.name || category,
-            icon: categoryData?.icon || "folder",
-            color: categoryData?.color || "",
+            icon: categoryData?.icon || 'folder',
+            color: categoryData?.color || '',
           });
         }
       }
 
-      return categories.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+      return categories.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     });
 
     const rootFlows = computed<Partial<IFlow & IFolder>[]>(() => {
@@ -1109,19 +1241,30 @@ export default defineComponent({
         ...flowCategories.value.filter(
           (category: IFolder) =>
             !category.flow_manager_metadata_id?.flow_manager_category ||
-            (!folderMap.value[category.flow_manager_metadata_id?.flow_manager_category] && !flowIdMap.value[category.flow_manager_metadata_id?.flow_manager_category]),
+            (!folderMap.value[category.flow_manager_metadata_id?.flow_manager_category] &&
+              !flowIdMap.value[category.flow_manager_metadata_id?.flow_manager_category]),
         ),
         ...flows.value.filter(
           (flow: IFlow) =>
-            !flow.flow_manager_metadata_id?.flow_manager_category || (!folderMap.value[flow.flow_manager_metadata_id?.flow_manager_category] && !flowIdMap.value[flow.flow_manager_metadata_id?.flow_manager_category]),
+            !flow.flow_manager_metadata_id?.flow_manager_category ||
+            (!folderMap.value[flow.flow_manager_metadata_id?.flow_manager_category] &&
+              !flowIdMap.value[flow.flow_manager_metadata_id?.flow_manager_category]),
         ),
-      ].sort((a, b) => (a.flow_manager_metadata_id?.flow_manager_order || 0) - (b.flow_manager_metadata_id?.flow_manager_order || 0));
+      ].sort(
+        (a, b) =>
+          (a.flow_manager_metadata_id?.flow_manager_order || 0) -
+          (b.flow_manager_metadata_id?.flow_manager_order || 0),
+      );
     });
 
     const currentFlows = computed<Partial<IFlow & IFolder>[]>(() => {
       if (parentId.value) {
         const childFlows = flowChildMap.value[parentId.value] || [];
-        return childFlows.sort((a, b) => (a.flow_manager_metadata_id?.flow_manager_order as number) - (b.flow_manager_metadata_id?.flow_manager_order as number));
+        return childFlows.sort(
+          (a, b) =>
+            (a.flow_manager_metadata_id?.flow_manager_order as number) -
+            (b.flow_manager_metadata_id?.flow_manager_order as number),
+        );
       }
 
       return [];
@@ -1143,7 +1286,11 @@ export default defineComponent({
     });
 
     const isDatabaseUpdated = computed(() => {
-      return !(notCreatedFields.value.length || differentFields.value.length || notCreatedCollections.value.length);
+      return !(
+        notCreatedFields.value.length ||
+        differentFields.value.length ||
+        notCreatedCollections.value.length
+      );
     });
 
     // call this method on loaded
@@ -1151,7 +1298,7 @@ export default defineComponent({
     reloadTabularFlow();
     getLatestVersion();
 
-    provide("flowManagerUtils", {
+    provide('flowManagerUtils', {
       duplicate,
       backup,
       pushToCloud,
@@ -1220,7 +1367,6 @@ export default defineComponent({
       loadingPushToCloud,
       flowChildMap,
       title,
-      parentId,
       allFlows,
       deleteItemDialog,
       selectedItem,
@@ -1293,75 +1439,71 @@ export default defineComponent({
       notCreatedCollections,
     };
 
-    async function createFlow(item: Omit<IFlow, "id"> & { id?: string; }) {
-      try {
-        if (selectedCredential.value === "local") {
-          const response = await api.post("/flows", {
-            id: item.id,
+    async function createFlow(item: Omit<IFlow, 'id'> & { id?: string }) {
+      if (selectedCredential.value === 'local') {
+        const response = await api.post('/flows', {
+          id: item.id,
+          name: item.name,
+          status: 'inactive',
+          icon: item.icon,
+          accountability: item.accountability,
+          description: item.description,
+          trigger: item.trigger,
+          options: item.options,
+          color: item.color,
+          flow_manager_metadata_id: {
+            flow_manager_category: item.flow_manager_metadata_id?.flow_manager_category,
+          },
+        });
+
+        const payload = transformData(item.operations, response.data.data.id, item.operation);
+
+        await api.patch(`/flows/${response.data.data.id}`, {
+          operation: item.operation ? payload.operation : null,
+          operations: {
+            create: payload.operations,
+          },
+        });
+      } else {
+        const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
+        const response = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+          url: `${credential?.url}/flows`,
+          staticToken: credential?.staticToken,
+          method: 'POST',
+          payload: {
             name: item.name,
-            status: "inactive",
+            status: 'inactive',
             icon: item.icon,
             accountability: item.accountability,
             description: item.description,
             trigger: item.trigger,
             options: item.options,
             color: item.color,
-            flow_manager_metadata_id: {
-              flow_manager_category: item.flow_manager_metadata_id?.flow_manager_category,
-            }
-          });
+          },
+        });
 
-          const payload = transformData(item.operations, response.data.data.id, item.operation);
+        const payload = transformData(item.operations, response.data.data.id, item.operation);
 
-          await api.patch(`/flows/${response.data.data.id}`, {
+        await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+          url: `${credential?.url}/flows/${response.data.data.id}`,
+          staticToken: credential?.staticToken,
+          method: 'PATCH',
+          payload: {
             operation: item.operation ? payload.operation : null,
             operations: {
               create: payload.operations,
             },
-          });
-        } else {
-          const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
-          const response = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
-            url: `${credential?.url}/flows`,
-            staticToken: credential?.staticToken,
-            method: "POST",
-            payload: {
-              name: item.name,
-              status: "inactive",
-              icon: item.icon,
-              accountability: item.accountability,
-              description: item.description,
-              trigger: item.trigger,
-              options: item.options,
-              color: item.color,
-            },
-          });
-
-          const payload = transformData(item.operations, response.data.data.id, item.operation);
-
-          await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
-            url: `${credential?.url}/flows/${response.data.data.id}`,
-            staticToken: credential?.staticToken,
-            method: "PATCH",
-            payload: {
-              operation: item.operation ? payload.operation : null,
-              operations: {
-                create: payload.operations,
-              },
-            },
-          });
-        }
-      } catch (error) {
-        throw error;
+          },
+        });
       }
     }
 
     async function duplicate(item: IFlow, isDuplicate = true) {
       try {
-        const payload: Omit<IFlow, "id"> & { id?: string; } = {
+        const payload: Omit<IFlow, 'id'> & { id?: string } = {
           id: !isDuplicate && isPreviousIdPersisted.value ? item.id : undefined,
           name: isDuplicate ? `${item.name} - Duplicated` : flowDuplicatedName.value,
-          status: "inactive",
+          status: 'inactive',
           icon: item.icon,
           accountability: item.accountability,
           description: item.description,
@@ -1382,20 +1524,22 @@ export default defineComponent({
         isPreviousIdPersisted.value = false;
 
         notificationsStore.add({
-          type: "success",
-          title: isDuplicate ? "Flow Duplicated successfully" : `Flow "${item.name}" restored successfully`,
+          type: 'success',
+          title: isDuplicate
+            ? 'Flow Duplicated successfully'
+            : `Flow "${item.name}" restored successfully`,
           closeable: true,
           persist: true,
         });
       } catch {
         notificationsStore.add({
-          type: "error",
-          title: isDuplicate ? "Flow Duplication failed" : `Failed to restore Flow "${item.name}"`,
+          type: 'error',
+          title: isDuplicate ? 'Flow Duplication failed' : `Failed to restore Flow "${item.name}"`,
           closeable: true,
           persist: true,
         });
       } finally {
-        if (restoredFile.value) restoredFile.value.value = "";
+        if (restoredFile.value) restoredFile.value.value = '';
       }
     }
 
@@ -1403,7 +1547,7 @@ export default defineComponent({
       if (selectedItems.value.length) {
         pushToCloudDialog.value = false;
         indeterminateProcess.value = false;
-        processingDialogTitle.value = "Pushing Flows to Cloud";
+        processingDialogTitle.value = 'Pushing Flows to Cloud';
         processingDialog.value = true;
         listProcessing.value = [];
         progressValue.value = 0;
@@ -1420,21 +1564,23 @@ export default defineComponent({
               flowId: item.id,
             });
             listProcessing.value.push({
-              status: "success",
+              status: 'success',
               message: `Flow "${item.name}"`,
             });
             totalSuccess++;
           } catch {
             listProcessing.value.push({
-              status: "error",
+              status: 'error',
               message: `Flow "${item.name}"`,
             });
             totalError++;
           }
-          progressValue.value = Math.round((listProcessing.value.length / selectedFlows.value.length) * 100);
+          progressValue.value = Math.round(
+            (listProcessing.value.length / selectedFlows.value.length) * 100,
+          );
         }
         notificationsStore.add({
-          type: "success",
+          type: 'success',
           title: `${totalSuccess} Flows pushed successfully. ${totalError} Flows failed`,
           closeable: true,
           persist: true,
@@ -1444,7 +1590,7 @@ export default defineComponent({
         sleep(3000).then(() => {
           processingDialog.value = false;
         });
-        selectedCredentialId.value = "";
+        selectedCredentialId.value = '';
         return;
       }
       const item = selectedItem.value as IFlow;
@@ -1459,32 +1605,32 @@ export default defineComponent({
         });
 
         notificationsStore.add({
-          type: "success",
+          type: 'success',
           title: `The flow has been sent to the "${credential?.name}" successfully`,
           closeable: true,
           persist: true,
         });
       } catch {
         notificationsStore.add({
-          type: "error",
-          title: "Send to cloud failed",
+          type: 'error',
+          title: 'Send to cloud failed',
           closeable: true,
           persist: true,
         });
       } finally {
         pushToCloudDialog.value = false;
-        selectedCredentialId.value = "";
+        selectedCredentialId.value = '';
         loadingPushToCloud.value = false;
       }
     }
 
     async function backup(item: IFlow | IFlow[]) {
-      interface ISanitizedFlow extends Partial<Omit<IFlow, "operations">> {
+      interface ISanitizedFlow extends Partial<Omit<IFlow, 'operations'>> {
         operations: Partial<IOperation>[];
       }
 
       let result: ISanitizedFlow | ISanitizedFlow[];
-      let fileName: string = "";
+      let fileName: string = '';
       if (Array.isArray(item)) {
         result = item.map((flow) => {
           return {
@@ -1545,36 +1691,38 @@ export default defineComponent({
         fileName = `flow-manager-${getTimestamp()}-${item.name}.json`;
       }
       const blob = new Blob([JSON.stringify(result, null, 2)], {
-        type: "application/json",
+        type: 'application/json',
       });
       var fileObj = window.URL.createObjectURL(blob);
 
-      var docUrl = document.createElement("a");
+      var docUrl = document.createElement('a');
       docUrl.href = fileObj;
-      docUrl.setAttribute("download", fileName);
+      docUrl.setAttribute('download', fileName);
       document.body.appendChild(docUrl);
       docUrl.click();
     }
 
     async function deleteItem() {
       const deleteFunc =
-        selectedCredential.value === "local"
+        selectedCredential.value === 'local'
           ? async (id: string) => {
-            await api.delete(`/flows/${id}`);
-          }
+              await api.delete(`/flows/${id}`);
+            }
           : async (id: string) => {
-            const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
-            await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
-              url: `${credential?.url}/flows/${id}`,
-              staticToken: credential?.staticToken,
-              method: "DELETE",
-            });
-          };
+              const credential = credentials.value.find(
+                (cred) => cred.id === selectedCredential.value,
+              );
+              await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+                url: `${credential?.url}/flows/${id}`,
+                staticToken: credential?.staticToken,
+                method: 'DELETE',
+              });
+            };
       if (isBatchAction.value) {
         if (!selectedItems.value.length) return;
         deleteItemDialog.value = false;
         indeterminateProcess.value = false;
-        processingDialogTitle.value = "Deleting Flows";
+        processingDialogTitle.value = 'Deleting Flows';
         processingDialog.value = true;
         listProcessing.value = [];
         progressValue.value = 0;
@@ -1585,21 +1733,23 @@ export default defineComponent({
           try {
             await deleteFunc(`${item.id}`);
             listProcessing.value.push({
-              status: "success",
+              status: 'success',
               message: `Flow "${item.name}"`,
             });
             totalSuccess++;
           } catch {
             listProcessing.value.push({
-              status: "error",
+              status: 'error',
               message: `Flow "${item.name}"`,
             });
             totalError++;
           }
-          progressValue.value = Math.round((listProcessing.value.length / selectedFlows.value.length) * 100);
+          progressValue.value = Math.round(
+            (listProcessing.value.length / selectedFlows.value.length) * 100,
+          );
         }
         notificationsStore.add({
-          type: "success",
+          type: 'success',
           title: `${totalSuccess} Flows deleted successfully. ${totalError} Flows deletion failed`,
           closeable: true,
           persist: true,
@@ -1613,11 +1763,11 @@ export default defineComponent({
         });
       } else {
         if (!selectedItem.value) return;
-        let type = "Flow";
+        let type = 'Flow';
         try {
           loadingDeleteItem.value = true;
-          if ((selectedItem.value as IFolder).type === "category") {
-            type = "Folder";
+          if ((selectedItem.value as IFolder).type === 'category') {
+            type = 'Folder';
             deleteCategory(selectedItem.value as IFolder);
           } else {
             await deleteFunc((selectedItem.value as IFlow).id);
@@ -1627,14 +1777,14 @@ export default defineComponent({
           }
 
           notificationsStore.add({
-            type: "success",
+            type: 'success',
             title: `${type} Deleted successfully`,
             closeable: true,
             persist: true,
           });
         } catch {
           notificationsStore.add({
-            type: "error",
+            type: 'error',
             title: `${type} Deletion failed`,
             closeable: true,
             persist: true,
@@ -1675,9 +1825,20 @@ export default defineComponent({
 
               if (flow?.operations) {
                 for (const operation of flow.operations) {
-                  if (["item-read", "item-create", "item-update", "item-delete"].includes(operation.type)) {
-                    if (!collectionMap[operation.options.collection] && operation.options.collection !== "{{$trigger.collection}}") {
-                      errors.value.push(`Collection "${operation.options.collection}"" does not exist on ${operation.name} operation`);
+                  if (
+                    ['item-read', 'item-create', 'item-update', 'item-delete'].includes(
+                      operation.type,
+                    )
+                  ) {
+                    const collectionName = operation.options?.collection;
+                    if (
+                      collectionName &&
+                      !collectionMap[collectionName] &&
+                      collectionName !== '{{$trigger.collection}}'
+                    ) {
+                      errors.value.push(
+                        `Collection "${collectionName}" does not exist on ${operation.name} operation`,
+                      );
                     }
                   }
                 }
@@ -1687,18 +1848,29 @@ export default defineComponent({
             flowDuplicatedName.value = `{{original_name}} - Copy`;
           } else {
             if (!parsedResult?.trigger) {
-              errors.value.push("Trigger is required");
+              errors.value.push('Trigger is required');
             }
 
             if (!parsedResult?.options) {
-              errors.value.push("Flow Options are required");
+              errors.value.push('Flow Options are required');
             }
 
             if (parsedResult?.operations) {
               for (const operation of parsedResult.operations) {
-                if (["item-read", "item-create", "item-update", "item-delete"].includes(operation.type)) {
-                  if (!collectionMap[operation.options.collection] && operation.options.collection !== "{{$trigger.collection}}") {
-                    errors.value.push(`Collection "${operation.options.collection}"" does not exist on ${operation.name} operation`);
+                if (
+                  ['item-read', 'item-create', 'item-update', 'item-delete'].includes(
+                    operation.type,
+                  )
+                ) {
+                  const collectionName = operation.options?.collection;
+                  if (
+                    collectionName &&
+                    !collectionMap[collectionName] &&
+                    collectionName !== '{{$trigger.collection}}'
+                  ) {
+                    errors.value.push(
+                      `Collection "${collectionName}" does not exist on ${operation.name} operation`,
+                    );
                   }
                 }
               }
@@ -1724,15 +1896,15 @@ export default defineComponent({
       restoredFile.value?.click();
     }
 
-    function goToFlow({ item }: { item: IFlow; }) {
-      if (selectedCredential.value === "local") {
+    function goToFlow({ item }: { item: IFlow }) {
+      if (selectedCredential.value === 'local') {
         router.push(`/settings/flows/${item.id}`);
       } else {
         const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
         if (credential) {
-          const a = document.createElement("a");
+          const a = document.createElement('a');
           a.href = `${credential.url}/admin/settings/flows/${item.id}`;
-          a.target = "_blank";
+          a.target = '_blank';
           a.click();
           document.body.removeChild(a);
         }
@@ -1743,7 +1915,7 @@ export default defineComponent({
       restoreConfirmationDialog.value = false;
       if (Array.isArray(restoredFileObj.value)) {
         indeterminateProcess.value = false;
-        processingDialogTitle.value = "Restoring Flows";
+        processingDialogTitle.value = 'Restoring Flows';
         processingDialog.value = true;
         listProcessing.value = [];
         progressValue.value = 0;
@@ -1756,7 +1928,7 @@ export default defineComponent({
             await createFlow({
               id: isPreviousIdPersisted.value ? flow.id : undefined,
               name: newName,
-              status: "inactive",
+              status: 'inactive',
               icon: flow?.icon,
               color: flow?.color,
               description: flow?.description,
@@ -1770,24 +1942,26 @@ export default defineComponent({
               accountability: flow?.accountability,
             });
             listProcessing.value.push({
-              status: "success",
+              status: 'success',
               message: `Flow "${flow?.name}"`,
             });
             totalSuccess++;
           } catch {
             listProcessing.value.push({
-              status: "error",
+              status: 'error',
               message: `Flow "${flow?.name}"`,
             });
             totalError++;
           }
-          progressValue.value = Math.round((listProcessing.value.length / restoredFileObj.value.length) * 100);
+          progressValue.value = Math.round(
+            (listProcessing.value.length / restoredFileObj.value.length) * 100,
+          );
         }
         await reloadFlow();
         await reloadTabularFlow();
         isPreviousIdPersisted.value = false;
         notificationsStore.add({
-          type: "success",
+          type: 'success',
           title: `${totalSuccess} Flows restored successfully. ${totalError} Flows restoration failed`,
           closeable: true,
           persist: true,
@@ -1807,33 +1981,33 @@ export default defineComponent({
           id?: string;
           flow_manager_category: string | null;
           flow_manager_order: number;
-        }
+        };
       }[] = [];
 
       const destination = group || parentId.value;
 
       for (let i = 0; i < updates.length; i++) {
         const item = updates[i];
-        if (item?.type !== "category") {
+        if (item?.type !== 'category') {
           flowPayload.push({
             id: item?.id as string,
             flow_manager_metadata_id: {
               id: item?.flow_manager_metadata_id?.id,
               flow_manager_category: destination,
               flow_manager_order: i + 1,
-            }
+            },
           });
         } else {
           patchCategory({
             id: item?.id as string,
             name: item?.name as string,
-            type: "category",
-            icon: item?.icon || "folder",
+            type: 'category',
+            icon: item?.icon || 'folder',
             color: item?.color as string,
             flow_manager_metadata_id: {
               flow_manager_order: i + 1,
               flow_manager_category: destination as unknown as string,
-            }
+            },
           });
         }
       }
@@ -1841,14 +2015,14 @@ export default defineComponent({
       saveCategories();
 
       if (flowPayload.length) {
-        if (selectedCredential.value === "local") {
+        if (selectedCredential.value === 'local') {
           await api.patch(`/flows`, flowPayload);
         } else {
           const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
           await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
             url: `${credential?.url}/flows`,
             staticToken: credential?.staticToken,
-            method: "PATCH",
+            method: 'PATCH',
             payload: flowPayload,
           });
         }
@@ -1859,41 +2033,41 @@ export default defineComponent({
     async function configureFlowManagerDatabase() {
       isConfigurationLoading.value = true;
 
-      if (selectedCredential.value === "local") {
+      if (selectedCredential.value === 'local') {
         for (const collectionName of notCreatedCollections.value) {
           await collectionsStore.upsertCollection(collectionName, {
             collection: collectionName,
             fields: [
               {
-                field: "id",
-                type: "uuid",
-                meta: { hidden: true, readonly: true, interface: "input", special: ["uuid"] },
+                field: 'id',
+                type: 'uuid',
+                meta: { hidden: true, readonly: true, interface: 'input', special: ['uuid'] },
                 schema: { is_primary_key: true, length: 36, has_auto_increment: false },
               },
               {
-                field: "date_created",
-                type: "timestamp",
+                field: 'date_created',
+                type: 'timestamp',
                 meta: {
-                  special: ["date-created"],
-                  interface: "datetime",
+                  special: ['date-created'],
+                  interface: 'datetime',
                   readonly: true,
                   hidden: true,
-                  width: "half",
-                  display: "datetime",
+                  width: 'half',
+                  display: 'datetime',
                   display_options: { relative: true },
                 },
                 schema: {},
               },
               {
-                field: "date_updated",
-                type: "timestamp",
+                field: 'date_updated',
+                type: 'timestamp',
                 meta: {
-                  special: ["date-updated"],
-                  interface: "datetime",
+                  special: ['date-updated'],
+                  interface: 'datetime',
                   readonly: true,
                   hidden: true,
-                  width: "half",
-                  display: "datetime",
+                  width: 'half',
+                  display: 'datetime',
                   display_options: { relative: true },
                 },
                 schema: {},
@@ -1905,13 +2079,13 @@ export default defineComponent({
         }
         for (const field of notCreatedFields.value) {
           await fieldsStore.createField(field.collection, field);
-          if (field.meta?.special?.includes("m2o")) {
+          if (field.meta?.special?.includes('m2o')) {
             await relationsStore.upsertRelation(field.collection, field.field, {
               collection: field.collection,
               field: field.field,
               related_collection: field.schema?.related_collection,
               meta: { sort_field: null },
-              schema: { on_delete: "SET NULL" },
+              schema: { on_delete: 'SET NULL' },
             });
           }
         }
@@ -1922,8 +2096,8 @@ export default defineComponent({
         await fieldsStore.hydrate();
         await collectionsStore.hydrate();
         await relationsStore.hydrate();
-        flowFields.value = fieldsStore.getFieldsForCollection("directus_flows");
-        settingFields.value = fieldsStore.getFieldsForCollection("directus_settings");
+        flowFields.value = fieldsStore.getFieldsForCollection('directus_flows');
+        settingFields.value = fieldsStore.getFieldsForCollection('directus_settings');
         if (notCreatedCollections.value.includes('flow_manager_metadata')) {
           await syncMetadata();
         }
@@ -1934,40 +2108,40 @@ export default defineComponent({
             await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
               url: `${credential?.url}/collections`,
               staticToken: credential?.staticToken,
-              method: "POST",
+              method: 'POST',
               payload: {
                 collection: collectionName,
                 fields: [
                   {
-                    field: "id",
-                    type: "uuid",
-                    meta: { hidden: true, readonly: true, interface: "input", special: ["uuid"] },
+                    field: 'id',
+                    type: 'uuid',
+                    meta: { hidden: true, readonly: true, interface: 'input', special: ['uuid'] },
                     schema: { is_primary_key: true, length: 36, has_auto_increment: false },
                   },
                   {
-                    field: "date_created",
-                    type: "timestamp",
+                    field: 'date_created',
+                    type: 'timestamp',
                     meta: {
-                      special: ["date-created"],
-                      interface: "datetime",
+                      special: ['date-created'],
+                      interface: 'datetime',
                       readonly: true,
                       hidden: true,
-                      width: "half",
-                      display: "datetime",
+                      width: 'half',
+                      display: 'datetime',
                       display_options: { relative: true },
                     },
                     schema: {},
                   },
                   {
-                    field: "date_updated",
-                    type: "timestamp",
+                    field: 'date_updated',
+                    type: 'timestamp',
                     meta: {
-                      special: ["date-updated"],
-                      interface: "datetime",
+                      special: ['date-updated'],
+                      interface: 'datetime',
                       readonly: true,
                       hidden: true,
-                      width: "half",
-                      display: "datetime",
+                      width: 'half',
+                      display: 'datetime',
                       display_options: { relative: true },
                     },
                     schema: {},
@@ -1982,20 +2156,20 @@ export default defineComponent({
             await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
               url: `${credential?.url}/fields/${field.collection}`,
               staticToken: credential?.staticToken,
-              method: "POST",
+              method: 'POST',
               payload: field,
             });
-            if (field.meta?.special?.includes("m2o")) {
+            if (field.meta?.special?.includes('m2o')) {
               await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
                 url: `${credential?.url}/relations`,
                 staticToken: credential?.staticToken,
-                method: "POST",
+                method: 'POST',
                 payload: {
                   collection: field.collection,
                   field: field.field,
                   related_collection: field.schema?.related_collection,
                   meta: { sort_field: null },
-                  schema: { on_delete: "SET NULL" },
+                  schema: { on_delete: 'SET NULL' },
                 },
               });
             }
@@ -2004,18 +2178,18 @@ export default defineComponent({
             await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
               url: `${credential?.url}/fields/${field.collection}/${field.field}`,
               staticToken: credential?.staticToken,
-              method: "DELETE",
+              method: 'DELETE',
             });
             await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
               url: `${credential?.url}/fields/${field.collection}`,
               staticToken: credential?.staticToken,
-              method: "POST",
+              method: 'POST',
               payload: field,
             });
           }
 
-          flowFields.value = await reloadFields("directus_flows");
-          settingFields.value = await reloadFields("directus_settings");
+          flowFields.value = await reloadFields('directus_flows');
+          settingFields.value = await reloadFields('directus_settings');
           if (notCreatedCollections.value.includes('flow_manager_metadata')) {
             await syncMetadata();
           }
@@ -2030,30 +2204,32 @@ export default defineComponent({
       let categoryIndex = flowCategories.value.findIndex((category) => category.id === item.id);
       const payload: Partial<IFolder> = {};
 
-      if (typeof item.name === "string") {
+      if (typeof item.name === 'string') {
         payload.name = item.name;
       }
 
-      if (typeof item.icon === "string") {
+      if (typeof item.icon === 'string') {
         payload.icon = item.icon;
       }
 
-      if (typeof item.color === "string") {
+      if (typeof item.color === 'string') {
         payload.color = item.color;
       }
 
-      if (typeof item.flow_manager_metadata_id?.flow_manager_order === "number") {
+      if (typeof item.flow_manager_metadata_id?.flow_manager_order === 'number') {
         if (!payload.flow_manager_metadata_id) {
           payload.flow_manager_metadata_id = {};
         }
-        payload.flow_manager_metadata_id.flow_manager_order = item.flow_manager_metadata_id.flow_manager_order;
+        payload.flow_manager_metadata_id.flow_manager_order =
+          item.flow_manager_metadata_id.flow_manager_order;
       }
 
-      if (typeof item.flow_manager_metadata_id?.flow_manager_category !== "undefined") {
+      if (typeof item.flow_manager_metadata_id?.flow_manager_category !== 'undefined') {
         if (!payload.flow_manager_metadata_id) {
           payload.flow_manager_metadata_id = {};
         }
-        payload.flow_manager_metadata_id.flow_manager_category = item.flow_manager_metadata_id.flow_manager_category;
+        payload.flow_manager_metadata_id.flow_manager_category =
+          item.flow_manager_metadata_id.flow_manager_category;
       }
 
       if (categoryIndex > -1) {
@@ -2066,7 +2242,10 @@ export default defineComponent({
          * TODO: Will be deprecated in the future
          */
         categoryIndex = flowCategories.value.findIndex((category) => category.name === item.name);
-        if (categoryIndex !== -1 && flowCategories.value[categoryIndex]?.id === flowCategories.value[categoryIndex]?.name) {
+        if (
+          categoryIndex !== -1 &&
+          flowCategories.value[categoryIndex]?.id === flowCategories.value[categoryIndex]?.name
+        ) {
           // the old category
           flowCategories.value[categoryIndex] = {
             ...flowCategories.value[categoryIndex],
@@ -2085,37 +2264,38 @@ export default defineComponent({
           {
             id: generateRandomString(10),
             name: selectedCategory.value.name,
-            type: "category",
-            icon: selectedCategory.value.icon || "folder",
+            type: 'category',
+            icon: selectedCategory.value.icon || 'folder',
             color: selectedCategory.value.color,
             flow_manager_metadata_id: {
-              flow_manager_category: "",
+              flow_manager_category: '',
               flow_manager_order: 0,
-            }
+            },
           },
         ];
       } else {
         patchCategory({
           id: selectedCategory.value.id,
           name: selectedCategory.value.name,
-          type: "category",
-          icon: selectedCategory.value.icon || "folder",
+          type: 'category',
+          icon: selectedCategory.value.icon || 'folder',
           color: selectedCategory.value.color,
           flow_manager_metadata_id: {
-            flow_manager_category: selectedCategory.value.flow_manager_metadata_id?.flow_manager_category,
+            flow_manager_category:
+              selectedCategory.value.flow_manager_metadata_id?.flow_manager_category,
             flow_manager_order: selectedCategory.value.flow_manager_metadata_id?.flow_manager_order,
-          }
+          },
         });
 
         isEditCategory.value = false;
       }
 
       selectedCategory.value = {
-        id: "",
-        name: "",
-        type: "category",
-        icon: "folder",
-        color: "",
+        id: '',
+        name: '',
+        type: 'category',
+        icon: 'folder',
+        color: '',
       };
 
       saveCategories();
@@ -2123,7 +2303,9 @@ export default defineComponent({
 
     async function deleteCategory(category: IFolder) {
       let isValidToDelete = false;
-      let deletedIndex = flowCategories.value.findIndex((flowCategory) => flowCategory.id === category.id);
+      let deletedIndex = flowCategories.value.findIndex(
+        (flowCategory) => flowCategory.id === category.id,
+      );
 
       if (deletedIndex !== -1) {
         isValidToDelete = true;
@@ -2131,8 +2313,13 @@ export default defineComponent({
         /**
          * TODO: Will be deprecated in the future
          */
-        deletedIndex = flowCategories.value.findIndex((flowCategory) => flowCategory.name === category.name);
-        if (deletedIndex !== -1 && flowCategories.value[deletedIndex]?.id === flowCategories.value[deletedIndex]?.name) {
+        deletedIndex = flowCategories.value.findIndex(
+          (flowCategory) => flowCategory.name === category.name,
+        );
+        if (
+          deletedIndex !== -1 &&
+          flowCategories.value[deletedIndex]?.id === flowCategories.value[deletedIndex]?.name
+        ) {
           isValidToDelete = true;
         }
       }
@@ -2140,11 +2327,11 @@ export default defineComponent({
       if (isValidToDelete) {
         if (selectedCategory.value.id === flowCategories.value[deletedIndex]?.id) {
           selectedCategory.value = {
-            id: "",
-            name: "",
-            type: "category",
-            icon: "folder",
-            color: "",
+            id: '',
+            name: '',
+            type: 'category',
+            icon: 'folder',
+            color: '',
           };
         }
 
@@ -2159,29 +2346,29 @@ export default defineComponent({
       pushToCloudDialog.value = true;
     }
 
-    function selectCategoryForEdit({ item }: { item: IFolder; }) {
+    function selectCategoryForEdit({ item }: { item: IFolder }) {
       isEditCategory.value = true;
       selectedCategory.value = {
         id: item.id,
         name: item.name,
-        type: "category",
+        type: 'category',
         icon: item.icon,
         color: item.color,
         flow_manager_metadata_id: {
           flow_manager_category: item.flow_manager_metadata_id?.flow_manager_category,
           flow_manager_order: item.flow_manager_metadata_id?.flow_manager_order,
-        }
+        },
       };
     }
 
     function cancelEditCategory() {
       isEditCategory.value = false;
       selectedCategory.value = {
-        id: "",
-        name: "",
-        type: "category",
-        icon: "folder",
-        color: "",
+        id: '',
+        name: '',
+        type: 'category',
+        icon: 'folder',
+        color: '',
       };
     }
 
@@ -2191,12 +2378,12 @@ export default defineComponent({
         {
           id: generateRandomString(10),
           name: `${item.name} - Duplicated`,
-          type: "category",
+          type: 'category',
           icon: item.icon,
           color: item.color,
           flow_manager_metadata_id: {
             flow_manager_category: item.flow_manager_metadata_id?.flow_manager_category,
-          }
+          },
         },
       ];
 
@@ -2208,7 +2395,7 @@ export default defineComponent({
       selectedCategory.value = {
         id: item.id,
         name: item.name,
-        type: "category",
+        type: 'category',
         icon: item.icon,
         color: item.color,
       };
@@ -2221,12 +2408,9 @@ export default defineComponent({
 
     async function reloadFlow() {
       flows.value = [];
-      const fields = ["*", "operations.*", "flow_manager_metadata_id.*"];
-      const queries = [
-        `fields=${fields.join(",")}`,
-        'limit=-1'
-      ]
-      if (selectedCredential.value === "local") {
+      const fields = ['*', 'operations.*', 'flow_manager_metadata_id.*'];
+      const queries = [`fields=${fields.join(',')}`, 'limit=-1'];
+      if (selectedCredential.value === 'local') {
         const {
           data: { data: flowsResponse },
         } = await api.get(`/flows?${queries.join('&')}`);
@@ -2241,15 +2425,15 @@ export default defineComponent({
             } = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
               url: `${c.url}/flows?${queries.join('&')}`,
               staticToken: c.staticToken,
-              method: "GET",
+              method: 'GET',
             });
 
             flows.value = flowsResponse;
           }
         } catch {
           notificationsStore.add({
-            type: "error",
-            title: "Failed to fetch Flows. Please check your credentials",
+            type: 'error',
+            title: 'Failed to fetch Flows. Please check your credentials',
             closeable: true,
             persist: true,
           });
@@ -2262,23 +2446,23 @@ export default defineComponent({
           selectedItem.value = updatedItem;
         } else {
           selectedItem.value = {
-            id: "",
-            name: "",
-            icon: "",
-            color: "",
-            description: "",
-            trigger: "",
+            id: '',
+            name: '',
+            icon: '',
+            color: '',
+            description: '',
+            trigger: '',
             options: {
               collections: [],
             },
             operations: [],
-            operation: "",
-            status: "",
-            accountability: "",
+            operation: '',
+            status: '',
+            accountability: '',
             flow_manager_metadata_id: {
               flow_manager_order: 0,
-              flow_manager_category: "",
-            }
+              flow_manager_category: '',
+            },
           };
         }
       }
@@ -2286,14 +2470,15 @@ export default defineComponent({
 
     async function reloadTabularFlow() {
       try {
-        let sort = "id";
+        let sort = 'id';
         const sortMap: Record<string, string> = {
           flow_manager_order: 'flow_manager_metadata_id.flow_manager_order',
           flow_manager_category: 'flow_manager_metadata_id.flow_manager_category',
           flow_manager_run_counter: 'flow_manager_metadata_id.flow_manager_run_counter',
           flow_manager_last_run_at: 'flow_manager_metadata_id.flow_manager_last_run_at',
           flow_manager_last_run_message: 'flow_manager_metadata_id.flow_manager_last_run_message',
-          flow_manager_last_run_operation: 'flow_manager_metadata_id.flow_manager_last_run_operation',
+          flow_manager_last_run_operation:
+            'flow_manager_metadata_id.flow_manager_last_run_operation',
           flow_manager_error_counter: 'flow_manager_metadata_id.flow_manager_error_counter',
           flow_manager_success_counter: 'flow_manager_metadata_id.flow_manager_success_counter',
         };
@@ -2303,13 +2488,13 @@ export default defineComponent({
             sort = `-${sort}`;
           }
         }
-        const fields = ["*", "operations.*", "flow_manager_metadata_id.*"];
+        const fields = ['*', 'operations.*', 'flow_manager_metadata_id.*'];
 
-        let response: { data: { data: IFlow[]; }; } = { data: { data: [] } };
-        if (selectedCredential.value === "local") {
-          response = await api.get("/flows", {
+        let response: { data: { data: IFlow[] } } = { data: { data: [] } };
+        if (selectedCredential.value === 'local') {
+          response = await api.get('/flows', {
             params: {
-              fields: fields.join(","),
+              fields: fields.join(','),
               sort,
               filter: tableFlowFilter.value,
               search: tableFlowSearch.value,
@@ -2318,7 +2503,7 @@ export default defineComponent({
         } else {
           const c = credentials.value.find((c) => c.id === selectedCredential.value);
           if (c) {
-            const queries = [`fields=${fields.join(",")}`, `sort=${sort}`];
+            const queries = [`fields=${fields.join(',')}`, `sort=${sort}`];
             if (tableFlowFilter.value) {
               queries.push(`filter=${JSON.stringify(tableFlowFilter.value)}`);
             }
@@ -2326,9 +2511,9 @@ export default defineComponent({
               queries.push(`search=${tableFlowSearch.value}`);
             }
             response = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
-              url: `${c.url}/flows?${queries.join("&")}`,
+              url: `${c.url}/flows?${queries.join('&')}`,
               staticToken: c.staticToken,
-              method: "GET",
+              method: 'GET',
             });
           }
         }
@@ -2339,7 +2524,7 @@ export default defineComponent({
       }
     }
 
-    function onTableSortChange(sort: { by: string; desc: boolean; }) {
+    function onTableSortChange(sort: { by: string; desc: boolean }) {
       tableSort.value = sort;
       updatePreset();
     }
@@ -2354,8 +2539,8 @@ export default defineComponent({
     }
 
     function getCategoryName(categoryId: string) {
-      if (folderMap.value[categoryId || ""]?.name) {
-        return `${folderMap.value[categoryId || ""]?.name}`;
+      if (folderMap.value[categoryId || '']?.name) {
+        return `${folderMap.value[categoryId || '']?.name}`;
       }
       if (flowIdMap.value[categoryId]?.name) {
         return `${flowIdMap.value[categoryId]?.name}`;
@@ -2367,13 +2552,13 @@ export default defineComponent({
     function getCategoryIcon(categoryId: string) {
       if (!categoryId) {
         return {
-          name: "",
+          name: '',
         };
       }
-      if (folderMap.value[categoryId || ""]?.icon) {
+      if (folderMap.value[categoryId || '']?.icon) {
         return {
-          name: folderMap.value[categoryId || ""]?.icon,
-          color: folderMap.value[categoryId || ""]?.color,
+          name: folderMap.value[categoryId || '']?.icon,
+          color: folderMap.value[categoryId || '']?.color,
         };
       }
       if (flowIdMap.value[categoryId]?.icon) {
@@ -2384,7 +2569,7 @@ export default defineComponent({
       }
 
       return {
-        name: "folder",
+        name: 'folder',
       };
     }
 
@@ -2397,8 +2582,12 @@ export default defineComponent({
     }
 
     function setStatusFilter(status: string) {
-      const filteredAnd = (tableFlowFilter.value as any)?._and?.filter((filter: any) => Object.keys(filter)[0] !== "status") || [];
-      if (status !== "all") {
+      const currentFilter = tableFlowFilter.value as DirectusFilter | null;
+      const filteredAnd =
+        currentFilter?._and?.filter(
+          (filter: Record<string, unknown>) => Object.keys(filter)[0] !== 'status',
+        ) || [];
+      if (status !== 'all') {
         filteredAnd.push({
           status: {
             _eq: status,
@@ -2406,16 +2595,20 @@ export default defineComponent({
         });
       }
       tableFlowFilter.value = {
-        ...tableFlowFilter.value,
+        ...(currentFilter || {}),
         _and: filteredAnd,
-      };
+      } as unknown as Filter;
       selectedShortcutFilter.value.status = status;
       updatePreset();
     }
 
     function setTriggerFilter(trigger: string) {
-      const filteredAnd = (tableFlowFilter.value as any)?._and?.filter((filter: any) => Object.keys(filter)[0] !== "trigger") || [];
-      if (trigger !== "all") {
+      const currentFilter = tableFlowFilter.value as DirectusFilter | null;
+      const filteredAnd =
+        currentFilter?._and?.filter(
+          (filter: Record<string, unknown>) => Object.keys(filter)[0] !== 'trigger',
+        ) || [];
+      if (trigger !== 'all') {
         filteredAnd.push({
           trigger: {
             _eq: trigger,
@@ -2423,36 +2616,44 @@ export default defineComponent({
         });
       }
       tableFlowFilter.value = {
-        ...tableFlowFilter.value,
+        ...(currentFilter || {}),
         _and: filteredAnd,
-      };
+      } as unknown as Filter;
       selectedShortcutFilter.value.trigger = trigger;
       updatePreset();
     }
 
     function setCategoryFilter(category: string) {
+      const currentFilter = tableFlowFilter.value as DirectusFilter | null;
       const filteredAnd =
-        (tableFlowFilter.value as any)?._and?.filter((filter: any) => Object.keys(filter)[0] !== "flow_manager_metadata_id") || [];
+        currentFilter?._and?.filter(
+          (filter: Record<string, unknown>) =>
+            Object.keys(filter)[0] !== 'flow_manager_metadata_id',
+        ) || [];
       const metadataFilters =
-        (tableFlowFilter.value as any)?._and?.filter((filter: any) => Object.keys(filter)[0] === "flow_manager_metadata_id") || [];
-      const otherMetadataFilters = metadataFilters.filter((filter: any) => !filter.flow_manager_metadata_id?.flow_manager_category);
-      
-      if (category !== "all") {
+        currentFilter?._and?.filter(
+          (filter: Record<string, unknown>) =>
+            Object.keys(filter)[0] === 'flow_manager_metadata_id',
+        ) || [];
+      const otherMetadataFilters = metadataFilters.filter(
+        (filter: Record<string, unknown>) =>
+          !(filter.flow_manager_metadata_id as Record<string, unknown> | undefined)
+            ?.flow_manager_category,
+      );
+
+      if (category !== 'all') {
         filteredAnd.push({
           flow_manager_metadata_id: {
             flow_manager_category: {
               _eq: category,
-            }
+            },
           },
         });
       }
       tableFlowFilter.value = {
-        ...tableFlowFilter.value,
-        _and: [
-          ...filteredAnd,
-          ...otherMetadataFilters
-        ],
-      };
+        ...(currentFilter || {}),
+        _and: [...filteredAnd, ...otherMetadataFilters],
+      } as unknown as Filter;
       selectedShortcutFilter.value.flow_manager_category = category;
       updatePreset();
     }
@@ -2461,22 +2662,23 @@ export default defineComponent({
       try {
         const {
           data: { data: installedExtensions },
-        } = await api.get("/extensions");
+        } = await api.get<{ data: DirectusExtensionInfo[] }>('/extensions');
 
         const extension = installedExtensions.find(
-          (extension: any) =>
-            (extension.name === "directus-extension-flow-manager" || extension.schema?.name === "directus-extension-flow-manager") &&
-            extension.schema?.type === "bundle",
+          (extension: DirectusExtensionInfo) =>
+            (extension.name === 'directus-extension-flow-manager' ||
+              extension.schema?.name === 'directus-extension-flow-manager') &&
+            extension.schema?.type === 'bundle',
         );
 
-        installedVersion.value = extension?.schema.version;
+        installedVersion.value = extension?.schema?.version || '';
 
         if (installedVersion.value) {
           const { data } = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
             url: NPM_LINK,
           });
 
-          const latestTag = data?.["dist-tags"]?.latest;
+          const latestTag = data?.['dist-tags']?.latest;
 
           if (latestTag) {
             if (latestTag !== installedVersion.value) {
@@ -2484,7 +2686,7 @@ export default defineComponent({
             }
           }
         }
-      } catch { }
+      } catch {}
     }
 
     function selectItemKey(itemKey: string, isSelected: boolean) {
@@ -2500,7 +2702,10 @@ export default defineComponent({
         if (viewListMode.value) {
           if (parentId.value) {
             selectedItems.value = processedFlows.value
-              .filter((flow: IFlow) => flow.flow_manager_metadata_id?.flow_manager_category === parentId.value)
+              .filter(
+                (flow: IFlow) =>
+                  flow.flow_manager_metadata_id?.flow_manager_category === parentId.value,
+              )
               .map((flow: IFlow) => flow.id);
           } else {
             selectedItems.value = processedFlows.value.map((flow: IFlow) => flow.id);
@@ -2518,7 +2723,7 @@ export default defineComponent({
         return;
       }
       indeterminateProcess.value = false;
-      processingDialogTitle.value = "Duplicating Flows";
+      processingDialogTitle.value = 'Duplicating Flows';
       processingDialog.value = true;
       listProcessing.value = [];
       progressValue.value = 0;
@@ -2530,7 +2735,7 @@ export default defineComponent({
             try {
               await createFlow({
                 name: `${item.name} - Duplicated`,
-                status: "inactive",
+                status: 'inactive',
                 icon: item.icon,
                 accountability: item.accountability,
                 description: item.description,
@@ -2544,22 +2749,24 @@ export default defineComponent({
                 operations: item.operations,
               });
               listProcessing.value.push({
-                status: "success",
+                status: 'success',
                 message: `Flow "${item.name}"`,
               });
               totalSuccess++;
             } catch {
               listProcessing.value.push({
-                status: "error",
+                status: 'error',
                 message: `Flow "${item.name}"`,
               });
               totalError++;
             }
-            progressValue.value = Math.round((listProcessing.value.length / selectedItems.value.length) * 100);
+            progressValue.value = Math.round(
+              (listProcessing.value.length / selectedItems.value.length) * 100,
+            );
           }
         }
         notificationsStore.add({
-          type: "success",
+          type: 'success',
           title: `Successfully duplicated ${totalSuccess} Flows. Failed to duplicate ${totalError} Flows`,
           closeable: true,
           persist: true,
@@ -2584,7 +2791,7 @@ export default defineComponent({
         if (selectedFlows.value.length) {
           await backup(selectedFlows.value);
         }
-      } catch { }
+      } catch {}
     }
 
     async function deleteSelectedItems() {
@@ -2603,7 +2810,7 @@ export default defineComponent({
     }
 
     async function reloadFields(collectionName: string) {
-      if (selectedCredential.value === "local") {
+      if (selectedCredential.value === 'local') {
         return fieldsStore.getFieldsForCollection(collectionName);
       } else {
         const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
@@ -2612,30 +2819,32 @@ export default defineComponent({
         } = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
           url: `${credential?.url}/fields/${collectionName}`,
           staticToken: credential?.staticToken,
-          method: "GET",
+          method: 'GET',
         });
         return data;
       }
     }
 
     async function reloadFolders() {
-      if (selectedCredential.value === "local") {
-        return (settingsStore.settings?.flow_manager_categories || []).map((category: string | IFolder) => {
-          if (typeof category === "string") {
-            return {
-              id: category,
-              name: category,
-              type: "category",
-              icon: "folder",
-              color: "",
-              flow_manager_metadata_id: {
-                flow_manager_order: 0,
-              }
-            };
-          }
+      if (selectedCredential.value === 'local') {
+        return (settingsStore.settings?.flow_manager_categories || []).map(
+          (category: string | IFolder) => {
+            if (typeof category === 'string') {
+              return {
+                id: category,
+                name: category,
+                type: 'category',
+                icon: 'folder',
+                color: '',
+                flow_manager_metadata_id: {
+                  flow_manager_order: 0,
+                },
+              };
+            }
 
-          return category;
-        });
+            return category;
+          },
+        );
       } else {
         const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
         const {
@@ -2643,19 +2852,19 @@ export default defineComponent({
         } = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
           url: `${credential?.url}/settings`,
           staticToken: credential?.staticToken,
-          method: "GET",
+          method: 'GET',
         });
         return (data?.flow_manager_categories || []).map((category: string | IFolder) => {
-          if (typeof category === "string") {
+          if (typeof category === 'string') {
             return {
               id: category,
               name: category,
-              type: "category",
-              icon: "folder",
-              color: "",
+              type: 'category',
+              icon: 'folder',
+              color: '',
               flow_manager_metadata_id: {
                 flow_manager_order: 0,
-              }
+              },
             };
           }
 
@@ -2666,7 +2875,7 @@ export default defineComponent({
     async function setCredential(credential: string) {
       const oldCredential = selectedCredential.value;
       indeterminateProcess.value = true;
-      processingDialogTitle.value = "Loading";
+      processingDialogTitle.value = 'Loading';
       selectedCredential.value = credential;
 
       ensureDatabase();
@@ -2676,29 +2885,29 @@ export default defineComponent({
         const isHaveAdminAccess = await getUserPermission();
         if (!isHaveAdminAccess) {
           notificationsStore.add({
-            type: "error",
+            type: 'error',
             title: "You don't have permission to access this credential",
             closeable: true,
             persist: true,
           });
-          selectedCredential.value = "local";
+          selectedCredential.value = 'local';
           return;
         }
-        router.push("/flow-manager");
+        router.push('/flow-manager');
         processingDialog.value = true;
         await reloadExternalPreset();
         reloadFlow();
         reloadTabularFlow();
-        flowFields.value = await reloadFields("directus_flows");
-        settingFields.value = await reloadFields("directus_settings");
+        flowFields.value = await reloadFields('directus_flows');
+        settingFields.value = await reloadFields('directus_settings');
 
         reloadFolders().then((folders) => {
           flowCategories.value = folders;
         });
       } catch {
         notificationsStore.add({
-          type: "error",
-          title: "Failed to fetch using the selected credential",
+          type: 'error',
+          title: 'Failed to fetch using the selected credential',
           closeable: true,
           persist: true,
         });
@@ -2706,11 +2915,11 @@ export default defineComponent({
         getServerInfo();
       }
       processingDialog.value = false;
-      processingDialogTitle.value = "";
+      processingDialogTitle.value = '';
     }
 
     async function saveCategories() {
-      if (selectedCredential.value === "local") {
+      if (selectedCredential.value === 'local') {
         settingsStore.updateSettings(
           {
             flow_manager_categories: flowCategories.value,
@@ -2722,7 +2931,7 @@ export default defineComponent({
         await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
           url: `${credential?.url}/settings`,
           staticToken: credential?.staticToken,
-          method: "PATCH",
+          method: 'PATCH',
           payload: {
             flow_manager_categories: flowCategories.value,
           },
@@ -2732,26 +2941,26 @@ export default defineComponent({
 
     async function getUser(isHasPolicyField = false) {
       const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
-      const queries: string[] = ["fields[]=*"];
+      const queries: string[] = ['fields[]=*'];
       if (isHasPolicyField) {
-        queries.push("fields[]=policies.policy.*");
-        queries.push("fields[]=role.policies.policy.*");
+        queries.push('fields[]=policies.policy.*');
+        queries.push('fields[]=role.policies.policy.*');
       } else {
-        queries.push("fields[]=role.*");
+        queries.push('fields[]=role.*');
       }
-      if (selectedCredential.value === "local") {
+      if (selectedCredential.value === 'local') {
         const {
           data: { data },
-        } = await api.get(`/users/me?${queries.join("&")}`);
+        } = await api.get(`/users/me?${queries.join('&')}`);
         currentUser.value = data;
       } else {
         if (credential) {
           const {
             data: { data },
           } = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
-            url: `${credential.url}/users/me?${queries.join("&")}`,
+            url: `${credential.url}/users/me?${queries.join('&')}`,
             staticToken: credential.staticToken,
-            method: "GET",
+            method: 'GET',
           });
           currentUser.value = data;
         }
@@ -2760,7 +2969,7 @@ export default defineComponent({
 
     async function getServerInfo() {
       try {
-        if (selectedCredential.value === "local") {
+        if (selectedCredential.value === 'local') {
           const {
             data: { data },
           } = await api.get(`/server/info`);
@@ -2773,7 +2982,7 @@ export default defineComponent({
             } = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
               url: `${credential.url}/server/info`,
               staticToken: credential.staticToken,
-              method: "GET",
+              method: 'GET',
             });
             serverInfo.value = data;
           }
@@ -2791,9 +3000,11 @@ export default defineComponent({
         } = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
           url: `${credential.url}/presets?filter[user][_eq]=${currentUser.value?.id}&limit=-1`,
           staticToken: credential.staticToken,
-          method: "GET",
+          method: 'GET',
         });
-        const [selectedPreset] = data.filter((preset: { collection: string; }) => preset.collection === "flow-manager");
+        const [selectedPreset] = data.filter(
+          (preset: { collection: string }) => preset.collection === 'flow-manager',
+        );
         preset.value = selectedPreset;
       }
     }
@@ -2803,30 +3014,32 @@ export default defineComponent({
         return;
       }
       indeterminateProcess.value = false;
-      processingDialogTitle.value = status === "active" ? "Activating Flows" : "Deactivating Flows";
+      processingDialogTitle.value = status === 'active' ? 'Activating Flows' : 'Deactivating Flows';
       processingDialog.value = true;
       listProcessing.value = [];
       progressValue.value = 0;
       let totalSuccess = 0;
       let totalError = 0;
       const func =
-        selectedCredential.value === "local"
+        selectedCredential.value === 'local'
           ? async (id: string) => {
-            await api.patch(`/flows/${id}`, {
-              status,
-            });
-          }
-          : async (id: string) => {
-            const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
-            await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
-              url: `${credential?.url}/flows/${id}`,
-              staticToken: credential?.staticToken,
-              method: "PATCH",
-              payload: {
+              await api.patch(`/flows/${id}`, {
                 status,
-              },
-            });
-          };
+              });
+            }
+          : async (id: string) => {
+              const credential = credentials.value.find(
+                (cred) => cred.id === selectedCredential.value,
+              );
+              await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+                url: `${credential?.url}/flows/${id}`,
+                staticToken: credential?.staticToken,
+                method: 'PATCH',
+                payload: {
+                  status,
+                },
+              });
+            };
       try {
         const filtered = selectedFlows.value.filter((flow) => flow.status !== status);
         for (const item of filtered) {
@@ -2834,13 +3047,13 @@ export default defineComponent({
             try {
               await func(item.id);
               listProcessing.value.push({
-                status: "success",
+                status: 'success',
                 message: `Flow "${item.name}"`,
               });
               totalSuccess++;
             } catch {
               listProcessing.value.push({
-                status: "error",
+                status: 'error',
                 message: `Flow "${item.name}"`,
               });
               totalError++;
@@ -2849,9 +3062,9 @@ export default defineComponent({
           }
         }
         notificationsStore.add({
-          type: "success",
+          type: 'success',
           title:
-            status === "active"
+            status === 'active'
               ? `Successfully activated ${totalSuccess} Flows. Failed to activate ${totalError} Flows`
               : `Successfully deactivated ${totalSuccess} Flows. Failed to deactivate ${totalError} Flows`,
           closeable: true,
@@ -2870,11 +3083,14 @@ export default defineComponent({
     }
 
     async function getUserPermission() {
-      const permissionFields = await reloadFields("directus_permissions");
-      const permissionHasPolicy = permissionFields.some((f: Field) => f.field === "policy");
+      const permissionFields = await reloadFields('directus_permissions');
+      const permissionHasPolicy = permissionFields.some((f: Field) => f.field === 'policy');
       await getUser(permissionHasPolicy);
       if (permissionHasPolicy) {
-        const policies: ExtendedPolicy[] = [...(currentUser.value?.policies || []), ...(currentUser.value?.role?.policies || [])];
+        const policies: ExtendedPolicy[] = [
+          ...(currentUser.value?.policies || []),
+          ...(currentUser.value?.role?.policies || []),
+        ];
 
         return policies.some((policy) => policy.admin_access || policy.policy.admin_access);
       } else {
@@ -2891,23 +3107,23 @@ export default defineComponent({
     async function syncFlowCounters() {
       isSyncingFlowCountersLoading.value = true;
       let payload: ISyncFlowCounter = {
-        type: "local"
+        type: 'local',
       };
-      if (selectedCredential.value !== "local") {
+      if (selectedCredential.value !== 'local') {
         const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
         if (credential) {
           payload = {
-            type: "remote",
+            type: 'remote',
             url: credential.url,
             staticToken: credential.staticToken,
-          }
+          };
         }
       }
       try {
         await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/sync-counters`, payload);
         notificationsStore.add({
-          type: "success",
-          title: "Flow counters synced successfully",
+          type: 'success',
+          title: 'Flow counters synced successfully',
           closeable: true,
           persist: true,
         });
@@ -2916,8 +3132,8 @@ export default defineComponent({
         settingDialog.value = false;
       } catch {
         notificationsStore.add({
-          type: "error",
-          title: "Failed to sync the Flow counters",
+          type: 'error',
+          title: 'Failed to sync the Flow counters',
           closeable: true,
           persist: true,
         });
@@ -2939,7 +3155,7 @@ export default defineComponent({
       if (notExistsFields.length || differentFields.value.length || notExistsCollections.length) {
         settingDialog.value = true;
       }
-    };
+    }
 
     async function syncMetadata() {
       try {
@@ -2951,16 +3167,34 @@ export default defineComponent({
             flow_manager_metadata_id: {
               flow_manager_order: c.flow_manager_order,
               flow_manager_category: c.flow_manager_category,
-            }
-          }
+            },
+          };
         });
-        if (selectedCredential.value === "local") {
+        if (selectedCredential.value === 'local') {
           for (const flow of flows.value) {
-            const { flow_manager_category, flow_manager_order, flow_manager_last_run_at, flow_manager_run_counter, flow_manager_last_run_message, flow_manager_last_run_operation, flow_manager_success_counter, flow_manager_error_counter } = flow;
+            const {
+              flow_manager_category,
+              flow_manager_order,
+              flow_manager_last_run_at,
+              flow_manager_run_counter,
+              flow_manager_last_run_message,
+              flow_manager_last_run_operation,
+              flow_manager_success_counter,
+              flow_manager_error_counter,
+            } = flow;
             const payload = {
-              flow_manager_category, flow_manager_order, flow_manager_last_run_at, flow_manager_run_counter, flow_manager_last_run_message, flow_manager_last_run_operation, flow_manager_success_counter, flow_manager_error_counter
+              flow_manager_category,
+              flow_manager_order,
+              flow_manager_last_run_at,
+              flow_manager_run_counter,
+              flow_manager_last_run_message,
+              flow_manager_last_run_operation,
+              flow_manager_success_counter,
+              flow_manager_error_counter,
             };
-            const { data: { data: metadataResult } } = await api.post('/items/flow_manager_metadata', payload);
+            const {
+              data: { data: metadataResult },
+            } = await api.post('/items/flow_manager_metadata', payload);
             await api.patch(`/flows/${flow.id}`, { flow_manager_metadata_id: metadataResult.id });
           }
           settingsStore.updateSettings(
@@ -2971,27 +3205,47 @@ export default defineComponent({
           );
         } else {
           for (const flow of flows.value) {
-            const { flow_manager_category, flow_manager_order, flow_manager_last_run_at, flow_manager_run_counter, flow_manager_last_run_message, flow_manager_last_run_operation, flow_manager_success_counter, flow_manager_error_counter } = flow;
+            const {
+              flow_manager_category,
+              flow_manager_order,
+              flow_manager_last_run_at,
+              flow_manager_run_counter,
+              flow_manager_last_run_message,
+              flow_manager_last_run_operation,
+              flow_manager_success_counter,
+              flow_manager_error_counter,
+            } = flow;
             const payload = {
-              flow_manager_category, flow_manager_order, flow_manager_last_run_at, flow_manager_run_counter, flow_manager_last_run_message, flow_manager_last_run_operation, flow_manager_success_counter, flow_manager_error_counter
+              flow_manager_category,
+              flow_manager_order,
+              flow_manager_last_run_at,
+              flow_manager_run_counter,
+              flow_manager_last_run_message,
+              flow_manager_last_run_operation,
+              flow_manager_success_counter,
+              flow_manager_error_counter,
             };
-            const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
-            const { data: { data: metadataResult } } = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+            const credential = credentials.value.find(
+              (cred) => cred.id === selectedCredential.value,
+            );
+            const {
+              data: { data: metadataResult },
+            } = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
               url: `${credential?.url}/items/flow_manager_metadata`,
               staticToken: credential?.staticToken,
-              method: "POST",
+              method: 'POST',
               payload,
             });
             await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
               url: `${credential?.url}/flows/${flow.id}`,
               staticToken: credential?.staticToken,
-              method: "PATCH",
+              method: 'PATCH',
               payload: { flow_manager_metadata_id: metadataResult.id },
             });
             await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
               url: `${credential?.url}/settings`,
               staticToken: credential?.staticToken,
-              method: "PATCH",
+              method: 'PATCH',
               payload: {
                 flow_manager_categories: categories,
               },
@@ -3001,8 +3255,8 @@ export default defineComponent({
         flowCategories.value = categories;
       } catch {
         notificationsStore.add({
-          type: "error",
-          title: "Failed to fetch Flows. Please check your credentials",
+          type: 'error',
+          title: 'Failed to fetch Flows. Please check your credentials',
           closeable: true,
           persist: true,
         });
@@ -3031,7 +3285,7 @@ export default defineComponent({
     --v-list-item-background-color-hover: var(--primary-alt);
     --v-list-item-border-color-hover: var(--primary);
 
-    >* {
+    > * {
       opacity: 0;
     }
   }
@@ -3078,7 +3332,7 @@ export default defineComponent({
 
   display: contents;
 
-  &> :deep(table) {
+  & > :deep(table) {
     min-width: calc(100% - var(--content-padding)) !important;
     margin-left: var(--content-padding);
 
@@ -3164,7 +3418,7 @@ export default defineComponent({
 </style>
 
 <style lang="scss" scoped>
-.main-table>.v-table>table>.table-header>tr>.select.cell[scope="col"]>button {
+.main-table > .v-table > table > .table-header > tr > .select.cell[scope='col'] > button {
   display: none;
 }
 
@@ -3172,7 +3426,7 @@ export default defineComponent({
   z-index: 600;
 }
 
-.small.v-select>.v-menu-activator>.v-input {
+.small.v-select > .v-menu-activator > .v-input {
   height: 38px;
 }
 
@@ -3210,7 +3464,9 @@ export default defineComponent({
   padding: 6px 12px;
   overflow: auto;
   color: var(--theme--danger);
-  font-family: var(--theme--fonts--monospace--font-family) "Fira Mono", monospace;
+  font-family:
+    var(--theme--fonts--monospace--font-family) 'Fira Mono',
+    monospace;
   background-color: var(--danger-alt);
   border-radius: var(--theme--border-radius);
 }

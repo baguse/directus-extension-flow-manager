@@ -1,4 +1,4 @@
-import { IOperation, IPayload } from "../types";
+import { IOperation, IPayload } from '../types';
 
 function getChildKeys(item: IPayload) {
   const childKeys: string[] = [];
@@ -22,7 +22,12 @@ function getChildKeys(item: IPayload) {
   return childKeys;
 }
 
-export function transformData(list: IOperation[], flowId: string, flowTriggerId: string, isPreserveId = false) {
+export function transformData(
+  list: IOperation[],
+  flowId: string,
+  flowTriggerId: string,
+  isPreserveId = false,
+) {
   const result: Partial<IPayload> = {};
 
   function findItemById(id: string | null) {
@@ -98,7 +103,7 @@ export function transformData(list: IOperation[], flowId: string, flowTriggerId:
   }
 
   for (let i = 0; i < list.length; i++) {
-    if (!connectedItemIds.includes(list[i]?.id || "")) {
+    if (!connectedItemIds.includes(list[i]?.id || '')) {
       if (list[i]) {
         unconnectedItems.push(list[i] as IOperation);
       }
@@ -107,7 +112,9 @@ export function transformData(list: IOperation[], flowId: string, flowTriggerId:
 
   const unconnectedOperations = buildUnconnectedOperation(unconnectedItems, flowId);
 
-  const childKeys = Array.from(new Set(unconnectedOperations.map((item) => getChildKeys(item)).flat()));
+  const childKeys = Array.from(
+    new Set(unconnectedOperations.map((item) => getChildKeys(item)).flat()),
+  );
 
   const operations = unconnectedOperations.filter((item) => !childKeys.includes(item.key));
 

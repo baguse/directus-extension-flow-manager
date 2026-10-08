@@ -1,10 +1,11 @@
 <template>
   <div v-if="viewMode === 'TABLE'" class="content-navigation-wrapper">
     <div class="action-bar">
-      <v-select class="small" v-model="selectedCredential" :items="credentialOptions"></v-select>
+      <v-select v-model="selectedCredential" class="small" :items="credentialOptions"></v-select>
       <div class="version">
-        Directus Version <v-chip x-small active class="trigger-chip">
-          {{ serverInfo?.version || "N/A" }}
+        Directus Version
+        <v-chip x-small active class="trigger-chip">
+          {{ serverInfo?.version || 'N/A' }}
         </v-chip>
       </div>
     </div>
@@ -13,23 +14,28 @@
     <div class="action-bar">
       <v-select v-model="selectedCredential" :items="credentialOptions"></v-select>
       <div class="version">
-        Directus Version <v-chip x-small active class="trigger-chip">
-          {{ serverInfo?.version || "N/A" }}
+        Directus Version
+        <v-chip x-small active class="trigger-chip">
+          {{ serverInfo?.version || 'N/A' }}
         </v-chip>
       </div>
       <template v-if="allFlows.length && isDatabaseUpdated">
         <div class="action-buttons">
-          <v-button x-small :to="'/flow-manager'" v-tooltip.bottom="'Go to Home'">
-            Home
-          </v-button>
-          <v-button x-small :to="'/flow-manager/dashboard'" v-tooltip.bottom="'View Dashboard'">
+          <v-button v-tooltip.bottom="'Go to Home'" x-small :to="'/flow-manager'"> Home </v-button>
+          <v-button v-tooltip.bottom="'View Dashboard'" x-small :to="'/flow-manager/dashboard'">
             Dashboard
           </v-button>
         </div>
         <div class="search-input-wrapper">
           <div class="search-input">
-            <v-input type="search" small :placeholder="'Search Flow'" v-model="tmpSearch" @input="debounce(onSearchChange, 500)">
-              <template v-slot:append>
+            <v-input
+              v-model="tmpSearch"
+              type="search"
+              small
+              :placeholder="'Search Flow'"
+              @input="debounce(onSearchChange, 500)"
+            >
+              <template #append>
                 <v-icon
                   v-if="tmpSearch"
                   name="close"
@@ -42,13 +48,27 @@
               </template>
             </v-input>
           </div>
-          <v-button x-small icon rounded @click="onNavigationAction" v-tooltip.bottom="toggleButtonLabel">
+          <v-button
+            v-tooltip.bottom="toggleButtonLabel"
+            x-small
+            icon
+            rounded
+            @click="onNavigationAction"
+          >
             <v-icon :name="toggleButtonIcon" />
           </v-button>
         </div>
       </template>
     </div>
-    <v-list v-if="isDatabaseUpdated" v-model="activeGroups" scope="content-navigation" class="content-navigation" tabindex="-1" nav :mandatory="false">
+    <v-list
+      v-if="isDatabaseUpdated"
+      v-model="activeGroups"
+      scope="content-navigation"
+      class="content-navigation"
+      tabindex="-1"
+      nav
+      :mandatory="false"
+    >
       <navigation-item
         v-for="(flow, flowIndex) in rootFlows"
         :key="`${flow.id}_${flowIndex}`"
@@ -61,10 +81,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, toRefs, inject, Ref } from "vue";
-import NavigationItem from "./navigation-item.vue";
-import { ICredential, IFlow, IFolder, IServerInfo } from "../../types";
-import { useLocalStorage } from "../../composables/use-local-storage";
+import { computed, ref, toRefs, inject, Ref } from 'vue';
+import NavigationItem from './navigation-item.vue';
+import { ICredential, IFlow, IFolder, IServerInfo } from '../../types';
+import { useLocalStorage } from '../../composables/use-local-storage';
 
 const props = defineProps<{
   currentCollection?: string;
@@ -73,23 +93,23 @@ const props = defineProps<{
   allFlows: IFolder[] | IFlow[];
   viewMode: string;
   serverInfo?: IServerInfo;
-  isDatabaseUpdated: Boolean;
+  isDatabaseUpdated: boolean;
 }>();
 
 const { rootFlows, flowChildMap, allFlows, viewMode, isDatabaseUpdated } = toRefs(props);
-const search = ref<string>("");
-const tmpSearch = ref<string>("");
+const search = ref<string>('');
+const tmpSearch = ref<string>('');
 const timeOutId = ref<NodeJS.Timeout | null>(null);
 
 const flowManagerUtils = inject<{
   credentials: Ref<ICredential[]>;
   selectedCredential: Ref<string>;
   setCredential: (credential: string) => void;
-}>("flowManagerUtils");
+}>('flowManagerUtils');
 
 const selectedCredential = computed({
   get: () => flowManagerUtils?.selectedCredential.value,
-  set: (value) => flowManagerUtils?.setCredential(value as string),
+  set: (value) => flowManagerUtils?.setCredential?.(value as string),
 });
 /**
  * @description
@@ -118,8 +138,8 @@ const credentialOptions = computed(() => {
 
   return [
     {
-      text: "Local",
-      value: "local",
+      text: 'Local',
+      value: 'local',
     },
     ...credentials,
   ];
@@ -153,11 +173,11 @@ function checkFlowHaveChildSearched(item: IFlow | IFolder): boolean {
 const { data: activeGroups } = useLocalStorage<string[]>(`settings-active-groups-flow-manager`, []);
 
 const toggleButtonLabel = computed(() => {
-  return activeGroups.value?.length ? "Collapse All" : "Expand All";
+  return activeGroups.value?.length ? 'Collapse All' : 'Expand All';
 });
 
 const toggleButtonIcon = computed(() => {
-  return activeGroups.value?.length ? "unfold_less" : "unfold_more";
+  return activeGroups.value?.length ? 'unfold_less' : 'unfold_more';
 });
 
 function onSearchChange() {
@@ -179,7 +199,7 @@ function onSearchChange() {
   activeGroups.value = result;
 }
 
-function debounce(fn: Function, delay: number) {
+function debounce(fn: () => void, delay: number) {
   if (timeOutId.value) clearTimeout(timeOutId.value);
   timeOutId.value = setTimeout(() => {
     search.value = tmpSearch.value;

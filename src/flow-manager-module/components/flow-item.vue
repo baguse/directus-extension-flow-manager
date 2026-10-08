@@ -1,10 +1,10 @@
 <script lang="ts" setup>
-import { toRefs, computed, inject, Ref } from "vue";
-import { ICredential, IFlow, IFolder } from "../../types";
-import Draggable from "vuedraggable";
-import { useRouter } from "vue-router";
-import { useLocalStorage } from "../../composables/use-local-storage";
-import itemOptions from "./item-options.vue";
+import { toRefs, computed, inject } from 'vue';
+import type { FlowManagerUtilsContext, IFlow, IFolder } from '../../types';
+import Draggable from 'vuedraggable';
+import { useRouter } from 'vue-router';
+import { useLocalStorage } from '../../composables/use-local-storage';
+import itemOptions from './item-options.vue';
 
 const props = withDefaults(
   defineProps<{
@@ -16,44 +16,45 @@ const props = withDefaults(
   {
     showSelect: false,
     selectedItems: () => [],
-  }
+  },
 );
 
-const emit = defineEmits(["selectItem"]);
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const emit = defineEmits(['selectItem']);
 
 const router = useRouter();
 const { item, items, selectedItems, showSelect } = toRefs(props);
-const flowManagerUtils = inject<{
-  onSort: (event: any[], parentId: string) => void;
-  selectItem: (item: IFlow) => void;
-  selectItemKey: (key: string, isSelected: boolean) => void;
-  selectedItems: Ref<string[]>;
-  selectedCredential: Ref<string>;
-  credentials: Ref<ICredential[]>;
-}>("flowManagerUtils");
+const flowManagerUtils = inject<FlowManagerUtilsContext>('flowManagerUtils');
 const nestedFlows = computed(() =>
   items.value
     .filter((flow) => flow.flow_manager_metadata_id?.flow_manager_category === props.item.id)
-    .sort((a, b) => (a.flow_manager_metadata_id?.flow_manager_order || 0) - (b.flow_manager_metadata_id?.flow_manager_order || 0))
+    .sort(
+      (a, b) =>
+        (a.flow_manager_metadata_id?.flow_manager_order || 0) -
+        (b.flow_manager_metadata_id?.flow_manager_order || 0),
+    ),
 );
-const { data: isItemExpanded } = useLocalStorage<boolean>(`settings-collapsed-flow-manager-${props.item.id}`, true);
+const { data: isItemExpanded } = useLocalStorage<boolean>(
+  `settings-collapsed-flow-manager-${props.item.id}`,
+  true,
+);
 
-const isActive = computed(() => item.value.status === "active");
+const isActive = computed(() => item.value.status === 'active');
 
-const isCategory = computed(() => item.value.type === "category");
+const isCategory = computed(() => item.value.type === 'category');
 
 const triggerType = computed(() => {
   return item.value.trigger?.toUpperCase();
 });
 
-const isLocal = computed(() => flowManagerUtils?.selectedCredential.value === "local");
+const isLocal = computed(() => flowManagerUtils?.selectedCredential?.value === 'local');
 
 const selected = computed({
   get: () => {
     return !!selectedItems.value?.includes(item.value.id);
   },
   set: (value: boolean) => {
-    flowManagerUtils?.selectItemKey(item.value.id, value);
+    flowManagerUtils?.selectItemKey?.(item.value.id, value);
   },
 });
 
@@ -62,20 +63,22 @@ function toggleCollapse() {
 }
 
 function onGroupSortChange(updates: IFlow[]) {
-  flowManagerUtils?.onSort(updates, item.value.id);
+  flowManagerUtils?.onSort?.(updates, item.value.id);
 }
 
 function goToFlow(item: IFlow & IFolder) {
-  if (item.type === "category") return;
+  if (item.type === 'category') return;
 
   if (isLocal.value) {
     router.push(`/settings/flows/${item.id}`);
   } else {
-    const credential = flowManagerUtils?.credentials.value.find((cred) => cred.id === flowManagerUtils?.selectedCredential.value);
+    const credential = flowManagerUtils?.credentials?.value?.find(
+      (cred) => cred.id === flowManagerUtils?.selectedCredential?.value,
+    );
     if (credential) {
-      const a = document.createElement("a");
+      const a = document.createElement('a');
       a.href = `${credential.url}/admin/settings/flows/${item.id}`;
-      a.target = "_blank";
+      a.target = '_blank';
       a.click();
       document.body.removeChild(a);
     }
@@ -83,18 +86,28 @@ function goToFlow(item: IFlow & IFolder) {
 }
 
 function selectItem() {
-  flowManagerUtils?.selectItem(item.value);
+  flowManagerUtils?.selectItem?.(item.value);
 }
 </script>
 
 <template>
   <div class="row-item">
-    <v-list-item block dense clickable style="height: 49px" :class="{ hidden: !isCategory && !isActive }" @click="selectItem()">
+    <v-list-item
+      block
+      dense
+      clickable
+      style="height: 49px"
+      :class="{ hidden: !isCategory && !isActive }"
+      @click="selectItem()"
+    >
       <v-list-item-icon>
         <v-icon class="drag-handle" name="drag_handle" />
       </v-list-item-icon>
       <div v-if="!isCategory && showSelect">
-        <v-checkbox v-model="selected" @update:model-value="($e: boolean) => $emit('selectItem', $e)" />
+        <v-checkbox
+          v-model="selected"
+          @update:model-value="($e: boolean) => $emit('selectItem', $e)"
+        />
       </div>
       <v-icon
         v-if="isCategory"
@@ -104,15 +117,18 @@ function selectItem() {
       />
       <v-icon
         v-else
+        v-tooltip.bottom="item.status === 'active' ? 'Active' : 'Inactive'"
         :name="item.icon || ''"
         :color="item.color || 'var(--theme--background-inverted, var(--background-inverted)'"
         :class="`mr-4`"
-        v-tooltip.bottom="item.status === 'active' ? 'Active' : 'Inactive'"
       />
       <div v-if="!isCategory && !isActive" class="item-detail">
         <v-badge
           :value="item.flow_manager_metadata_id?.flow_manager_run_counter || 0"
-          :class="{ 'badge-success': !item.flow_manager_metadata_id?.flow_manager_last_run_message, 'badge-error': !!item.flow_manager_metadata_id?.flow_manager_last_run_message }"
+          :class="{
+            'badge-success': !item.flow_manager_metadata_id?.flow_manager_last_run_message,
+            'badge-error': !!item.flow_manager_metadata_id?.flow_manager_last_run_message,
+          }"
         >
           <v-chip x-small class="item-name text-gray mr-4 trigger-chip">{{ triggerType }}</v-chip>
         </v-badge>
@@ -123,14 +139,23 @@ function selectItem() {
         <v-badge
           v-if="triggerType"
           :value="item.flow_manager_metadata_id?.flow_manager_run_counter || 0"
-          :class="{ 'badge-success': !item.flow_manager_metadata_id?.flow_manager_last_run_message, 'badge-error': !!item.flow_manager_metadata_id?.flow_manager_last_run_message }"
+          :class="{
+            'badge-success': !item.flow_manager_metadata_id?.flow_manager_last_run_message,
+            'badge-error': !!item.flow_manager_metadata_id?.flow_manager_last_run_message,
+          }"
         >
           <v-chip x-small active class="item-name mr-4 trigger-chip">{{ triggerType }} </v-chip>
         </v-badge>
         <span ref="itemName" class="item-name">{{ item.name }}</span>
         <span v-if="item.description" class="item-note">{{ item.description }}</span>
       </div>
-      <v-icon v-if="!isCategory" v-tooltip="'Go to Flow'" name="open_in_new" clickable @click.stop.prevent="goToFlow(item)" />
+      <v-icon
+        v-if="!isCategory"
+        v-tooltip="'Go to Flow'"
+        name="open_in_new"
+        clickable
+        @click.stop.prevent="goToFlow(item)"
+      />
       <v-icon
         v-if="nestedFlows?.length"
         v-tooltip="isItemExpanded ? 'Collapse' : 'Expand'"
@@ -154,7 +179,12 @@ function selectItem() {
         @update:model-value="onGroupSortChange"
       >
         <template #item="{ element }">
-          <flow-item :item="element" :items="items" :selected-items="selectedItems" :show-select="showSelect" />
+          <flow-item
+            :item="element"
+            :items="items"
+            :selected-items="selectedItems"
+            :show-select="showSelect"
+          />
         </template>
       </draggable>
     </transition-expand>

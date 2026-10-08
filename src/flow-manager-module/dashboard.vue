@@ -1,7 +1,7 @@
 <template>
   <private-view :title="'Flow Dashboard'">
     <template #title-outer:prepend>
-      <v-button to="/flow-manager" class="mr-4" icon rounded v-tooltip.bottom="'Back to Flows'">
+      <v-button v-tooltip.bottom="'Back to Flows'" to="/flow-manager" class="mr-4" icon rounded>
         <v-icon name="arrow_back" />
       </v-button>
     </template>
@@ -58,10 +58,10 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed, onMounted, watch, onBeforeUnmount, nextTick } from "vue";
-import { useRouter } from "vue-router";
-import { useApi } from "@directus/extensions-sdk";
-import { Chart, type ChartConfiguration } from "chart.js/auto";
+import { defineComponent, ref, computed, onMounted, watch, onBeforeUnmount, nextTick } from 'vue';
+import { useRouter } from 'vue-router';
+import { useApi } from '@directus/extensions-sdk';
+import { Chart, type ChartConfiguration } from 'chart.js/auto';
 
 interface FlowStat {
   id: string;
@@ -70,30 +70,31 @@ interface FlowStat {
   flow_manager_error_counter?: number;
 }
 
-const CHART_TYPES = ["line", "bar"] as const;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const CHART_TYPES = ['line', 'bar'] as const;
 type ChartTypeValue = (typeof CHART_TYPES)[number];
 
 export default defineComponent({
-  name: "FlowManagerDashboard",
+  name: 'FlowManagerDashboard',
   setup() {
     const api = useApi();
     const router = useRouter();
     const flows = ref<FlowStat[]>([]);
     const loading = ref(true);
     const chartCanvas = ref<HTMLCanvasElement | null>(null);
-    const chartType = ref<ChartTypeValue>("line");
+    const chartType = ref<ChartTypeValue>('line');
     let chartInstance: Chart | null = null;
 
     const chartTypeOptions = [
-      { text: "Line chart", value: "line" },
-      { text: "Bar chart", value: "bar" },
+      { text: 'Line chart', value: 'line' },
+      { text: 'Bar chart', value: 'bar' },
     ];
 
     const totalSuccess = computed(() =>
-      flows.value.reduce((sum, f) => sum + (f.flow_manager_success_counter ?? 0), 0)
+      flows.value.reduce((sum, f) => sum + (f.flow_manager_success_counter ?? 0), 0),
     );
     const totalError = computed(() =>
-      flows.value.reduce((sum, f) => sum + (f.flow_manager_error_counter ?? 0), 0)
+      flows.value.reduce((sum, f) => sum + (f.flow_manager_error_counter ?? 0), 0),
     );
 
     const flowStats = computed(() =>
@@ -101,17 +102,25 @@ export default defineComponent({
         const totalA = (a.flow_manager_success_counter ?? 0) + (a.flow_manager_error_counter ?? 0);
         const totalB = (b.flow_manager_success_counter ?? 0) + (b.flow_manager_error_counter ?? 0);
         return totalB - totalA;
-      })
+      }),
     );
 
     function getChartColors() {
       const el = document.body || document.documentElement;
       const style = getComputedStyle(el);
-      const success = style.getPropertyValue("--theme--success").trim() || style.getPropertyValue("--success").trim() || "#6644ff";
-      const danger = style.getPropertyValue("--theme--danger").trim() || style.getPropertyValue("--danger").trim() || "#e54d42";
-      const foreground = style.getPropertyValue("--theme--foreground").trim() || style.getPropertyValue("--foreground").trim();
-      const isLight = document.body.classList.contains("light");
-      const foregroundFallback = isLight ? "#1a1a1a" : "#e6e6e6";
+      const success =
+        style.getPropertyValue('--theme--success').trim() ||
+        style.getPropertyValue('--success').trim() ||
+        '#6644ff';
+      const danger =
+        style.getPropertyValue('--theme--danger').trim() ||
+        style.getPropertyValue('--danger').trim() ||
+        '#e54d42';
+      const foreground =
+        style.getPropertyValue('--theme--foreground').trim() ||
+        style.getPropertyValue('--foreground').trim();
+      const isLight = document.body.classList.contains('light');
+      const foregroundFallback = isLight ? '#1a1a1a' : '#e6e6e6';
       return { success, danger, foreground: foreground || foregroundFallback };
     }
 
@@ -133,10 +142,12 @@ export default defineComponent({
 
     function buildChartConfig(type: ChartTypeValue): ChartConfiguration {
       const { success, danger, foreground } = getChartColors();
-      const isBar = type === "bar";
+      const isBar = type === 'bar';
       const successFill = isBar ? success : colorWithAlpha(success, 0.25);
       const dangerFill = isBar ? danger : colorWithAlpha(danger, 0.25);
-      const labels = flowStats.value.map((f) => (f.name.length > 20 ? f.name.slice(0, 17) + "…" : f.name));
+      const labels = flowStats.value.map((f) =>
+        f.name.length > 20 ? f.name.slice(0, 17) + '…' : f.name,
+      );
       const successData = flowStats.value.map((f) => f.flow_manager_success_counter ?? 0);
       const errorData = flowStats.value.map((f) => f.flow_manager_error_counter ?? 0);
 
@@ -146,20 +157,20 @@ export default defineComponent({
           labels,
           datasets: [
             {
-              label: "Success",
+              label: 'Success',
               data: successData,
               borderColor: success,
               backgroundColor: successFill,
-              fill: type === "line",
-              tension: type === "line" ? 0.3 : 0,
+              fill: type === 'line',
+              tension: type === 'line' ? 0.3 : 0,
             },
             {
-              label: "Error",
+              label: 'Error',
               data: errorData,
               borderColor: danger,
               backgroundColor: dangerFill,
-              fill: type === "line",
-              tension: type === "line" ? 0.3 : 0,
+              fill: type === 'line',
+              tension: type === 'line' ? 0.3 : 0,
             },
           ],
         },
@@ -167,7 +178,7 @@ export default defineComponent({
           responsive: true,
           maintainAspectRatio: false,
           interaction: {
-            mode: "index",
+            mode: 'index',
             intersect: false,
           },
           onClick(_event, elements) {
@@ -181,7 +192,7 @@ export default defineComponent({
           },
           plugins: {
             legend: {
-              position: "top",
+              position: 'top',
               labels: {
                 color: foreground,
                 font: { size: 14, weight: 500 },
@@ -197,7 +208,7 @@ export default defineComponent({
                 color: foreground,
                 font: { size: 13 },
               },
-              grid: { color: "rgba(128,128,128,0.2)" },
+              grid: { color: 'rgba(128,128,128,0.2)' },
             },
             x: {
               ticks: {
@@ -206,7 +217,7 @@ export default defineComponent({
                 maxRotation: 45,
                 minRotation: 0,
               },
-              grid: { display: type === "bar" },
+              grid: { display: type === 'bar' },
             },
           },
         },
@@ -244,15 +255,15 @@ export default defineComponent({
           scheduleRenderChart();
         }
       },
-      { deep: true }
+      { deep: true },
     );
 
     async function loadFlows() {
       loading.value = true;
       try {
-        const { data } = await api.get<{ data: FlowStat[] }>("/flows", {
+        const { data } = await api.get<{ data: FlowStat[] }>('/flows', {
           params: {
-            fields: "id,name,flow_manager_success_counter,flow_manager_error_counter",
+            fields: 'id,name,flow_manager_success_counter,flow_manager_error_counter',
             limit: -1,
           },
         });
@@ -277,7 +288,7 @@ export default defineComponent({
           scheduleRenderChart();
         }
       });
-      themeObserver.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+      themeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
     });
 
     onBeforeUnmount(() => {
@@ -374,12 +385,16 @@ export default defineComponent({
 
   &.success {
     background: color-mix(in srgb, var(--theme--success, var(--success)) 12%, transparent);
-    .summary-label { color: var(--theme--success, var(--success)); }
+    .summary-label {
+      color: var(--theme--success, var(--success));
+    }
   }
 
   &.error {
     background: color-mix(in srgb, var(--theme--danger, var(--danger)) 12%, transparent);
-    .summary-label { color: var(--theme--danger, var(--danger)); }
+    .summary-label {
+      color: var(--theme--danger, var(--danger));
+    }
   }
 }
 

@@ -7,12 +7,12 @@ function externalizeDeps(deps) {
         return {
           id: source,
           external: true,
-        }
+        };
       }
 
-      return null
+      return null;
     },
-  }
+  };
 }
 export default {
   plugins: [
@@ -29,7 +29,7 @@ export default {
       'crypto',
       'net',
       'tls',
-      'path'
+      'path',
     ]),
   ],
-}
+};

@@ -1,22 +1,46 @@
 <template>
   <v-list-item-icon>
-    <v-icon :name="icon ?? 'label'" :color="color || 'var(--theme--background-inverted, var(--background-inverted))'" />
+    <v-icon
+      :name="icon ?? 'label'"
+      :color="color || 'var(--theme--background-inverted, var(--background-inverted))'"
+    />
   </v-list-item-icon>
   <v-list-item-content>
     <div class="flex">
       <div v-if="type !== 'category'">
-        <v-chip v-if="status !== 'active'" x-small class="item-name mr-4 trigger-chip" :style="{
-          '--v-chip-color': 'var(--foreground-inverted, var(--theme--foreground))',
-          '--v-chip-background-color': 'var(--theme--primary)'
-        }">{{ triggerType }}</v-chip>
-        <v-chip v-else x-small active class="item-name mr-4 trigger-chip" :style="{
-          '--v-chip-color': 'var(--foreground-inverted, var(--theme--foreground))',
-          '--v-chip-background-color': 'var(--theme--primary)'
-        }">
+        <v-chip
+          v-if="status !== 'active'"
+          x-small
+          class="item-name mr-4 trigger-chip"
+          :style="{
+            '--v-chip-color': 'var(--foreground-inverted, var(--theme--foreground))',
+            '--v-chip-background-color': 'var(--theme--primary)',
+          }"
+          >{{ triggerType }}</v-chip
+        >
+        <v-chip
+          v-else
+          x-small
+          active
+          class="item-name mr-4 trigger-chip"
+          :style="{
+            '--v-chip-color': 'var(--foreground-inverted, var(--theme--foreground))',
+            '--v-chip-background-color': 'var(--theme--primary)',
+          }"
+        >
           {{ triggerType }}
         </v-chip>
       </div>
-      <v-text-overflow :style="{ color: status !== 'active' ? 'var(--foreground-subdued, var(--theme--foreground-subdued))' : 'var(--foreground, var(--theme--foreground))' }" :text="name" :highlight="search" />
+      <v-text-overflow
+        :style="{
+          color:
+            status !== 'active'
+              ? 'var(--foreground-subdued, var(--theme--foreground-subdued))'
+              : 'var(--foreground, var(--theme--foreground))',
+        }"
+        :text="name"
+        :highlight="search"
+      />
     </div>
   </v-list-item-content>
 </template>
@@ -33,9 +57,9 @@ withDefaults(
     status?: string;
   }>(),
   {
-    icon: "label",
-    color: "var(--theme--background-inverted, var(--background-inverted))",
-  }
+    icon: 'label',
+    color: 'var(--theme--background-inverted, var(--background-inverted))',
+  },
 );
 </script>
 

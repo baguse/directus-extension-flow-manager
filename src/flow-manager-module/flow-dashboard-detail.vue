@@ -1,13 +1,25 @@
 <template>
   <private-view :title="pageTitle">
     <template #title-outer:prepend>
-      <v-button to="/flow-manager/dashboard" class="mr-4" icon rounded v-tooltip.bottom="'Back to Dashboard'">
+      <v-button
+        v-tooltip.bottom="'Back to Dashboard'"
+        to="/flow-manager/dashboard"
+        class="mr-4"
+        icon
+        rounded
+      >
         <v-icon name="arrow_back" />
       </v-button>
     </template>
 
     <template #actions>
-      <v-button icon rounded :loading="refreshLoading" v-tooltip.bottom="'Refresh'" @click="onRefresh">
+      <v-button
+        v-tooltip.bottom="'Refresh'"
+        icon
+        rounded
+        :loading="refreshLoading"
+        @click="onRefresh"
+      >
         <v-icon name="refresh" />
       </v-button>
     </template>
@@ -48,35 +60,56 @@
         <div class="detail-section">
           <h2 class="section-title">Activity history</h2>
           <p v-if="!activityHistories.length" class="empty-message">No activity yet.</p>
-          <v-table v-else :items="activityHistories" :headers="tableHeaders" class="activity-table"
-            :active="selectedLog ? [selectedLog.id] : []" @click:row="onRowClick">
+          <v-table
+            v-else
+            :items="activityHistories"
+            :headers="tableHeaders"
+            class="activity-table"
+            :active="selectedLog ? [selectedLog.id] : []"
+            @click:row="onRowClick"
+          >
             <template #[`item.type`]="{ item }">
-              <v-icon :name="item.type === 'success' ? 'check_circle' : 'error'"
-                :color="item.type === 'success' ? 'var(--theme--success)' : 'var(--theme--danger)'" />
+              <v-icon
+                :name="item.type === 'success' ? 'check_circle' : 'error'"
+                :color="item.type === 'success' ? 'var(--theme--success)' : 'var(--theme--danger)'"
+              />
               <span class="type-label" :class="item.type">{{ item.type }}</span>
             </template>
             <template #[`item.date`]="{ item }">
               {{ formatDate(item.date) }}
             </template>
             <template #[`item.operation`]="{ item }">
-              <span class="cell-text">{{ item.operation || "—" }}</span>
+              <span class="cell-text">{{ item.operation || '—' }}</span>
             </template>
             <template #[`item.message`]="{ item }">
-              <span class="cell-text message-cell" :title="item.message">{{ item.message || "—" }}</span>
+              <span class="cell-text message-cell" :title="item.message">{{
+                item.message || '—'
+              }}</span>
             </template>
           </v-table>
           <div v-if="activityHistories.length" class="pagination-section">
             <span class="pagination-info">
               {{ paginationLabel }}
             </span>
-            <v-pagination v-model="page" :length="totalPages" :total-visible="5" show-first-last class="pagination" />
+            <v-pagination
+              v-model="page"
+              :length="totalPages"
+              :total-visible="5"
+              show-first-last
+              class="pagination"
+            />
           </div>
         </div>
       </template>
     </div>
 
-    <v-drawer :title="formatDate(selectedLog?.date ?? '')" :model-value="!!selectedLog" icon="link"
-      @update:model-value="selectedLog = null" @cancel="selectedLog = null">
+    <v-drawer
+      :title="formatDate(selectedLog?.date ?? '')"
+      :model-value="!!selectedLog"
+      icon="link"
+      @update:model-value="selectedLog = null"
+      @cancel="selectedLog = null"
+    >
       <div v-if="logDetail" class="drawer-content">
         <div class="log-detail-trigger">
           <div class="trigger-header">
@@ -96,18 +129,21 @@
           </div>
 
           <div class="collapsible-section">
-            <div class="collapsible-header" @click="expandedSections.options = !expandedSections.options">
+            <div
+              class="collapsible-header"
+              @click="expandedSections.options = !expandedSections.options"
+            >
               <v-icon :name="expandedSections.options ? 'expand_more' : 'chevron_right'" />
               <span>Options</span>
             </div>
             <div v-if="expandedSections.options" class="collapsible-content">
               <div class="json-block">
                 <v-button
+                  v-tooltip.bottom="'Copy JSON'"
                   class="json-copy-button"
                   icon
                   rounded
                   small
-                  v-tooltip.bottom="'Copy JSON'"
                   @click.stop="copyJSON(logDetail.trigger.options)"
                 >
                   <v-icon name="content_copy" />
@@ -118,18 +154,21 @@
           </div>
 
           <div class="collapsible-section">
-            <div class="collapsible-header" @click="expandedSections.payload = !expandedSections.payload">
+            <div
+              class="collapsible-header"
+              @click="expandedSections.payload = !expandedSections.payload"
+            >
               <v-icon :name="expandedSections.payload ? 'expand_more' : 'chevron_right'" />
               <span>Payload</span>
             </div>
             <div v-if="expandedSections.payload" class="collapsible-content">
               <div class="json-block">
                 <v-button
+                  v-tooltip.bottom="'Copy JSON'"
                   class="json-copy-button"
                   icon
                   rounded
                   small
-                  v-tooltip.bottom="'Copy JSON'"
                   @click.stop="copyJSON(logDetail.trigger.payload)"
                 >
                   <v-icon name="content_copy" />
@@ -140,19 +179,21 @@
           </div>
 
           <div class="collapsible-section">
-            <div class="collapsible-header"
-              @click="expandedSections.accountability = !expandedSections.accountability">
+            <div
+              class="collapsible-header"
+              @click="expandedSections.accountability = !expandedSections.accountability"
+            >
               <v-icon :name="expandedSections.accountability ? 'expand_more' : 'chevron_right'" />
               <span>Accountability</span>
             </div>
             <div v-if="expandedSections.accountability" class="collapsible-content">
               <div class="json-block">
                 <v-button
+                  v-tooltip.bottom="'Copy JSON'"
                   class="json-copy-button"
                   icon
                   rounded
                   small
-                  v-tooltip.bottom="'Copy JSON'"
                   @click.stop="copyJSON(logDetail.trigger.accountability)"
                 >
                   <v-icon name="content_copy" />
@@ -162,7 +203,11 @@
             </div>
           </div>
         </div>
-        <div v-for="(step, index) in logDetail.steps" :key="step.key || index" class="log-detail-step">
+        <div
+          v-for="(step, index) in logDetail.steps"
+          :key="step.key || index"
+          class="log-detail-step"
+        >
           <div class="trigger-header">
             <v-chip
               v-if="step.status === 'reject'"
@@ -188,23 +233,25 @@
             >
               PASSED
             </v-chip>
-            <span class="trigger-title">{{ step.operation?.name || "Step" }}</span>
+            <span class="trigger-title">{{ step.operation?.name || 'Step' }}</span>
             <span class="trigger-type">{{ formatStepType(step.operation?.type as string) }}</span>
           </div>
 
           <div class="collapsible-section">
             <div class="collapsible-header" @click="toggleStepSection(index, 'options')">
-              <v-icon :name="isStepSectionExpanded(index, 'options') ? 'expand_more' : 'chevron_right'" />
+              <v-icon
+                :name="isStepSectionExpanded(index, 'options') ? 'expand_more' : 'chevron_right'"
+              />
               <span>Options</span>
             </div>
             <div v-if="isStepSectionExpanded(index, 'options')" class="collapsible-content">
               <div class="json-block">
                 <v-button
+                  v-tooltip.bottom="'Copy JSON'"
                   class="json-copy-button"
                   icon
                   rounded
                   small
-                  v-tooltip.bottom="'Copy JSON'"
                   @click.stop="copyJSON(step.options)"
                 >
                   <v-icon name="content_copy" />
@@ -216,17 +263,19 @@
 
           <div class="collapsible-section">
             <div class="collapsible-header" @click="toggleStepSection(index, 'payload')">
-              <v-icon :name="isStepSectionExpanded(index, 'payload') ? 'expand_more' : 'chevron_right'" />
+              <v-icon
+                :name="isStepSectionExpanded(index, 'payload') ? 'expand_more' : 'chevron_right'"
+              />
               <span>Payload</span>
             </div>
             <div v-if="isStepSectionExpanded(index, 'payload')" class="collapsible-content">
               <div class="json-block">
                 <v-button
+                  v-tooltip.bottom="'Copy JSON'"
                   class="json-copy-button"
                   icon
                   rounded
                   small
-                  v-tooltip.bottom="'Copy JSON'"
                   @click.stop="copyJSON(step.payload)"
                 >
                   <v-icon name="content_copy" />
@@ -242,68 +291,34 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed, onMounted, watch } from "vue";
-import { useApi } from "@directus/extensions-sdk";
-import { useRoute } from "vue-router";
-import { ENDPOINT_EXTENSION_NAME } from "../constants";
+import { defineComponent, ref, computed, onMounted, watch } from 'vue';
+import { useApi } from '@directus/extensions-sdk';
+import { useRoute } from 'vue-router';
+import { ENDPOINT_EXTENSION_NAME } from '../constants';
+import type { ActivityHistory, IFlow } from '../types';
 
-interface ActivityHistory {
-  id: number;
-  type: "success" | "error";
-  date: string;
-  operation?: string;
-  message?: string;
-  data: {
-    data: {
-      $env: any;
-      $last: any;
-      $trigger: {
-        body: any;
-        path: string;
-        query: any;
-        method: string;
-        headers: any;
-      };
-      $accountability: {
-        ip: string;
-        app: boolean;
-        role: string;
-        user: string;
-        admin: boolean;
-        roles: string[];
-        origin: string;
-        session: string;
-        userAgent: string;
-      } | null;
+interface ApiErrorResponse {
+  response?: {
+    status?: number;
+    data?: {
+      error?: string;
+      errors?: { message?: string }[];
     };
-    steps: {
-      key: string;
-      status: string;
-      operation: string;
-      options: any;
-    }[];
   };
+  message?: string;
 }
 
-interface IOperation {
-  id: string;
-  name: string;
-  key: string;
-  type: string;
-  position_x: number;
-  position_y: number;
-  options: any;
-  resolve: string | null;
-  reject: string | null;
+function isApiError(e: unknown): e is ApiErrorResponse {
+  return typeof e === 'object' && e !== null && 'response' in e;
 }
 
 export default defineComponent({
-  name: "FlowDashboardDetail",
+  name: 'FlowDashboardDetail',
   setup() {
     const api = useApi();
     const route = useRoute();
     const flowId = computed(() => route.params.flowId as string);
-    const flowName = ref<string>("");
+    const flowName = ref<string>('');
     const activityHistories = ref<ActivityHistory[]>([]);
     const loading = ref(true);
     const error = ref<string | null>(null);
@@ -319,36 +334,25 @@ export default defineComponent({
       payload: false,
       accountability: false,
     });
-    const expandedStepSections = ref<Record<string, { options: boolean; payload: boolean; }>>({});
+    const expandedStepSections = ref<Record<string, { options: boolean; payload: boolean }>>({});
     const LIMIT = 10;
-    const flow = ref<{
-      id: string;
-      name: string;
-      trigger: string;
-      operation: string;
-      icon: string;
-      color: string;
-      description: string;
-      status: string;
-      operations: IOperation[];
-      options: any;
-    } | null>(null);
+    const flow = ref<IFlow | null>(null);
 
-    function onRowClick({ item }: { item: ActivityHistory; }) {
+    function onRowClick({ item }: { item: ActivityHistory }) {
       selectedLog.value = item;
     }
 
     function formatTriggerType(type: string): string {
-      if (!type) return "";
+      if (!type) return '';
       return type.charAt(0).toUpperCase() + type.slice(1);
     }
 
     function formatStepType(type: string): string {
-      if (!type) return "";
+      if (!type) return '';
       return type.charAt(0).toUpperCase() + type.slice(1);
     }
 
-    function getStepKey(index: number, step: any): string {
+    function getStepKey(index: number, step?: { key?: string } | null): string {
       return step?.key || `step-${index}`;
     }
 
@@ -369,8 +373,8 @@ export default defineComponent({
       expandedStepSections.value[key][section] = !expandedStepSections.value[key][section];
     }
 
-    function formatJSON(obj: any): string {
-      if (!obj) return "{}";
+    function formatJSON(obj: unknown): string {
+      if (!obj) return '{}';
       try {
         return JSON.stringify(obj, null, 2);
       } catch {
@@ -378,11 +382,15 @@ export default defineComponent({
       }
     }
 
-    async function copyJSON(obj: any): Promise<void> {
+    async function copyJSON(obj: unknown): Promise<void> {
       const text = formatJSON(obj);
       if (!text) return;
 
-      if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
+      if (
+        typeof navigator !== 'undefined' &&
+        navigator.clipboard &&
+        navigator.clipboard.writeText
+      ) {
         try {
           await navigator.clipboard.writeText(text);
           return;
@@ -391,17 +399,17 @@ export default defineComponent({
         }
       }
 
-      if (typeof document !== "undefined") {
-        const textarea = document.createElement("textarea");
+      if (typeof document !== 'undefined') {
+        const textarea = document.createElement('textarea');
         textarea.value = text;
-        textarea.style.position = "fixed";
-        textarea.style.opacity = "0";
-        textarea.style.left = "-9999px";
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        textarea.style.left = '-9999px';
         document.body.appendChild(textarea);
         textarea.focus();
         textarea.select();
         try {
-          document.execCommand("copy");
+          document.execCommand('copy');
         } finally {
           document.body.removeChild(textarea);
         }
@@ -415,19 +423,24 @@ export default defineComponent({
     });
 
     const tableHeaders = [
-      { text: "ID", value: "id", sortable: false },
-      { text: "Type", value: "type", sortable: false },
-      { text: "Date", value: "date", sortable: true, width: 200 },
-      { text: "Last Error Operation", value: "operation", width: 300, sortable: false },
-      { text: "Message", value: "message", sortable: false, width: 500 },
+      { text: 'ID', value: 'id', sortable: false },
+      { text: 'Type', value: 'type', sortable: false },
+      { text: 'Date', value: 'date', sortable: true, width: 200 },
+      { text: 'Last Error Operation', value: 'operation', width: 300, sortable: false },
+      { text: 'Message', value: 'message', sortable: false, width: 500 },
     ];
 
-    const pageTitle = computed(() => (flowName.value ? `Flow: ${flowName.value}` : "Flow Dashboard Detail"));
+    const pageTitle = computed(() =>
+      flowName.value ? `Flow: ${flowName.value}` : 'Flow Dashboard Detail',
+    );
     const operationMap = computed(() => {
-      return flow.value?.operations.reduce((acc, operation) => {
-        acc[operation.id] = operation;
-        return acc;
-      }, {} as Record<string, IOperation>);
+      return flow.value?.operations.reduce(
+        (acc, operation) => {
+          acc[operation.id] = operation;
+          return acc;
+        },
+        {} as Record<string, IOperation>,
+      );
     });
 
     const logDetail = computed(() => {
@@ -445,7 +458,7 @@ export default defineComponent({
       const steps = data.steps.map((step) => {
         const operation = operationMap.value?.[step.operation];
         const operationKey = step.key;
-        const payload = (data.data as any)[operationKey] ?? {};
+        const payload = (data.data as Record<string, unknown>)[operationKey] ?? {};
         return {
           ...step,
           operation,
@@ -464,23 +477,23 @@ export default defineComponent({
     });
 
     function formatDate(dateStr: string): string {
-      if (!dateStr) return "—";
+      if (!dateStr) return '—';
       const d = new Date(dateStr);
       return d.toLocaleString(undefined, {
-        dateStyle: "medium",
-        timeStyle: "short",
+        dateStyle: 'medium',
+        timeStyle: 'short',
       });
     }
 
     async function loadFlow() {
       try {
-        const { data } = await api.get<{ data: { name?: string; }; }>(`/flows/${flowId.value}`, {
-          params: { fields: "*,operations.*" },
+        const { data } = await api.get<{ data: IFlow }>(`/flows/${flowId.value}`, {
+          params: { fields: '*,operations.*' },
         });
-        flowName.value = data?.data?.name ?? "";
-        flow.value = data?.data as any;
+        flowName.value = data?.data?.name ?? '';
+        flow.value = data?.data ?? null;
       } catch {
-        flowName.value = "";
+        flowName.value = '';
         flow.value = null;
       }
     }
@@ -490,12 +503,13 @@ export default defineComponent({
       error.value = null;
       try {
         await loadFlow();
-        const queries = [
-          `page=${page.value}`,
-          `limit=${LIMIT}`,
-        ];
-        const { data } = await api.get<{ activityHistories: ActivityHistory[]; successCount: number; errorCount: number; }>(
-          `/${ENDPOINT_EXTENSION_NAME}/flow-manager/dashboard/${flowId.value}?${queries.join("&")}`
+        const queries = [`page=${page.value}`, `limit=${LIMIT}`];
+        const { data } = await api.get<{
+          activityHistories: ActivityHistory[];
+          successCount: number;
+          errorCount: number;
+        }>(
+          `/${ENDPOINT_EXTENSION_NAME}/flow-manager/dashboard/${flowId.value}?${queries.join('&')}`,
         );
         activityHistories.value = data?.activityHistories ?? [];
         const count = (data?.successCount ?? 0) + (data?.errorCount ?? 0);
@@ -503,15 +517,24 @@ export default defineComponent({
         successCount.value = data?.successCount ?? 0;
         errorCount.value = data?.errorCount ?? 0;
         totalPages.value = Math.max(1, Math.ceil(count / LIMIT));
-      } catch (e: any) {
+      } catch (e: unknown) {
         activityHistories.value = [];
         totalPages.value = 1;
         totalCount.value = 0;
-        const data = e?.response?.data;
-        error.value =
-          e?.response?.status === 404
-            ? (data?.error ?? "Flow not found")
-            : (data?.errors?.[0]?.message ?? data?.error ?? e?.message ?? "Failed to load activity.");
+        let errorMessage = 'Failed to load activity.';
+        if (isApiError(e)) {
+          const resData = e.response?.data;
+          errorMessage =
+            e.response?.status === 404
+              ? (resData?.error ?? 'Flow not found')
+              : (resData?.errors?.[0]?.message ??
+                resData?.error ??
+                e.message ??
+                'Failed to load activity.');
+        } else if (e instanceof Error) {
+          errorMessage = e.message;
+        }
+        error.value = errorMessage;
       } finally {
         loading.value = false;
       }
@@ -524,7 +547,7 @@ export default defineComponent({
           page.value = 1;
           loadActivityHistories();
         }
-      }
+      },
     );
 
     async function onRefresh() {
@@ -847,7 +870,7 @@ export default defineComponent({
 
 .json-content {
   margin: 0;
-  font-family: "Monaco", "Menlo", "Ubuntu Mono", "Consolas", "source-code-pro", monospace;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;
   font-size: 12px;
   line-height: 1.5;
   color: var(--theme--foreground, var(--foreground));

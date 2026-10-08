@@ -1,29 +1,34 @@
-import { defineModule } from "@directus/extensions-sdk";
-import ModuleComponent from "./module.vue";
-import DashboardComponent from "./dashboard.vue";
-import FlowDashboardDetailComponent from "./flow-dashboard-detail.vue";
-import { User } from "@directus/types";
+import { defineModule } from '@directus/extensions-sdk';
+import ModuleComponent from './module.vue';
+import DashboardComponent from './dashboard.vue';
+import FlowDashboardDetailComponent from './flow-dashboard-detail.vue';
+import type { ExtendedUser } from '../types';
+
+interface PolicyAccessItem {
+  admin_access?: boolean;
+  policy?: { admin_access?: boolean };
+}
 
 export default defineModule({
-  id: "flow-manager",
-  name: "Flow Manager",
-  icon: "bolt",
+  id: 'flow-manager',
+  name: 'Flow Manager',
+  icon: 'bolt',
   routes: [
     {
-      path: "",
+      path: '',
       component: ModuleComponent,
     },
     {
-      path: "dashboard",
+      path: 'dashboard',
       component: DashboardComponent,
     },
     {
-      path: "dashboard/:flowId",
+      path: 'dashboard/:flowId',
       component: FlowDashboardDetailComponent,
       props: (route) => ({ flowId: route.params.flowId }),
     },
     {
-      path: ":parentId",
+      path: ':parentId',
       component: ModuleComponent,
       props: (route) => {
         return {
@@ -32,14 +37,27 @@ export default defineModule({
       },
     },
   ],
-  preRegisterCheck(user: User & { admin_access?: boolean }) {
-    let adminAccess
-    if (typeof user.role?.admin_access !== "undefined") {
-      adminAccess = user.role?.admin_access;
-    } else if (typeof user.admin_access !== "undefined") {
-      // v11 case
-      adminAccess = user.admin_access;
+  preRegisterCheck(user) {
+    const adminUser = user as unknown as ExtendedUser;
+
+    if (adminUser?.admin_access === true) return true;
+    if (adminUser?.role?.admin_access === true) return true;
+
+    const userPolicies = adminUser?.policies as unknown as PolicyAccessItem[] | undefined;
+    if (Array.isArray(userPolicies)) {
+      if (userPolicies.some((p) => p?.admin_access === true || p?.policy?.admin_access === true)) {
+        return true;
+      }
     }
-    return !!adminAccess;
+
+    const rolePolicies = (adminUser?.role as unknown as { policies?: PolicyAccessItem[] })
+      ?.policies;
+    if (Array.isArray(rolePolicies)) {
+      if (rolePolicies.some((p) => p?.admin_access === true || p?.policy?.admin_access === true)) {
+        return true;
+      }
+    }
+
+    return false;
   },
 });

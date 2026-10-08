@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { toRefs } from "vue";
-import { IFlow, IFolder } from "../../types";
+import { toRefs } from 'vue';
+import { IFlow, IFolder } from '../../types';
 
 const props = withDefaults(
   defineProps<{
@@ -15,16 +15,20 @@ const props = withDefaults(
     selectedItem: undefined,
     selectedFlows: () => [],
     loading: false,
-  }
+  },
 );
 
-const emit = defineEmits(["update:modelValue", "proceed"]);
+const emit = defineEmits(['update:modelValue', 'proceed']);
 
 const { value, selectedItem, selectedFlows, isBatchAction } = toRefs(props);
 </script>
 
 <template>
-  <v-dialog :model-value="value" @update:model-value="emit('update:modelValue', false)" :persistent="true">
+  <v-dialog
+    :model-value="value"
+    :persistent="true"
+    @update:model-value="emit('update:modelValue', false)"
+  >
     <v-card>
       <v-card-title>
         <span v-if="isBatchAction">Delete Flows</span>
@@ -39,7 +43,10 @@ const { value, selectedItem, selectedFlows, isBatchAction } = toRefs(props);
           <v-list class="list-process">
             <v-list-item v-for="item in selectedFlows" :key="item.id">
               <v-list-item-icon>
-                <v-icon :color="item.color || 'var(--theme--primary)'" :name="item.icon || 'bolt'" />
+                <v-icon
+                  :color="item.color || 'var(--theme--primary)'"
+                  :name="item.icon || 'bolt'"
+                />
               </v-list-item-icon>
               <v-list-item-content>{{ item.name }}</v-list-item-content>
             </v-list-item>
@@ -47,18 +54,22 @@ const { value, selectedItem, selectedFlows, isBatchAction } = toRefs(props);
         </span>
         <span v-else>
           <span v-if="(selectedItem as IFolder)?.type === 'category'">
-            Are you sure you want to delete folder [<span class="bold-text">{{ selectedItem?.name }}</span
+            Are you sure you want to delete folder [<span class="bold-text">{{
+              selectedItem?.name
+            }}</span
             >]?
           </span>
           <span v-else>
             Are you sure you want to delete [<span class="bold-text">{{ selectedItem?.name }}</span
-            >] {{ (selectedItem as IFolder)?.type === "category" ? "Folder" : "Flow" }}?
+            >] {{ (selectedItem as IFolder)?.type === 'category' ? 'Folder' : 'Flow' }}?
           </span>
         </span>
       </v-card-text>
       <v-card-actions>
         <v-button secondary @click="emit('update:modelValue', false)"> Close </v-button>
-        <v-button :disabled="!selectedItem" @click="emit('proceed')" :loading="loading"> Proceed </v-button>
+        <v-button :disabled="!selectedItem" :loading="loading" @click="emit('proceed')">
+          Proceed
+        </v-button>
       </v-card-actions>
     </v-card>
   </v-dialog>

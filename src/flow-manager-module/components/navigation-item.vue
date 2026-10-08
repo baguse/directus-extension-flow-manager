@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, toRefs, inject, unref, Ref } from "vue";
-import { ICredential, IFlow, IFolder } from "../../types";
-import NavigationItemContent from "./navigation-item-content.vue";
-import { useRouter } from "vue-router";
+import { computed, toRefs, inject, unref } from 'vue';
+import type { FlowManagerUtilsContext, IFlow, IFolder } from '../../types';
+import NavigationItemContent from './navigation-item-content.vue';
+import { useRouter } from 'vue-router';
 
 const router = useRouter();
 const props = defineProps<{
@@ -13,11 +13,13 @@ const props = defineProps<{
 
 const { flow, search, flowChildMap } = toRefs(props);
 
-const currentPath = computed(() => encodeURIComponent((flow.value.id as string) || ""));
+const currentPath = computed(() => encodeURIComponent((flow.value.id as string) || ''));
 
 const childFlows = computed(() => {
   const flows = (flowChildMap.value[flow.value.id as string] || []).sort(
-    (a, b) => ((a as IFlow).flow_manager_metadata_id?.flow_manager_order || 0) - ((b as IFlow).flow_manager_metadata_id?.flow_manager_order || 0)
+    (a, b) =>
+      ((a as IFlow).flow_manager_metadata_id?.flow_manager_order || 0) -
+      ((b as IFlow).flow_manager_metadata_id?.flow_manager_order || 0),
   );
 
   return flows;
@@ -56,67 +58,54 @@ const triggerType = computed(() => {
   return flow.value.trigger?.toUpperCase();
 });
 
-const flowManagerUtils = inject<{
-  duplicate: (item: IFlow, isDuplicate?: boolean) => Promise<void>;
-  backup: (item: IFlow) => Promise<void>;
-  showPushToCloud: (item: IFlow) => Promise<void>;
-  showDeleteItemDialog: (item: IFlow | IFolder) => Promise<void>;
-  showRunDialog: (item: IFlow) => Promise<void>;
-  duplicateFolder: (item: IFolder) => Promise<void>;
-  showEditFolderDialog: (item: IFolder) => Promise<void>;
-  parentId: string | null;
-  onSort: (event: any[], parentId: string) => void;
-  selectedCredential: Ref<string>;
-  showRunWebhookDialog: (item: IFlow) => Promise<void>;
-  credentials: Ref<ICredential[]>;
-}>("flowManagerUtils");
+const flowManagerUtils = inject<FlowManagerUtilsContext>('flowManagerUtils');
 
 const selectedCredential = computed(() => flowManagerUtils?.selectedCredential.value);
 
 const parentId = flowManagerUtils?.parentId;
-const isLocal = computed(() => selectedCredential.value === "local");
+const isLocal = computed(() => selectedCredential.value === 'local');
 
 const duplicate = (item: IFlow, isDuplicate?: boolean) => {
-  flowManagerUtils?.duplicate(item, isDuplicate);
+  flowManagerUtils?.duplicate?.(item, isDuplicate);
 };
 
 const backup = (item: IFlow) => {
-  flowManagerUtils?.backup(item);
+  flowManagerUtils?.backup?.(item);
 };
 
 const showPushToCloud = (item: IFlow) => {
-  flowManagerUtils?.showPushToCloud(item);
+  flowManagerUtils?.showPushToCloud?.(item);
 };
 
 const showDeleteItemDialog = (item: IFlow) => {
-  flowManagerUtils?.showDeleteItemDialog(item);
+  flowManagerUtils?.showDeleteItemDialog?.(item);
 };
 
 const showRunDialog = (item: IFlow) => {
-  flowManagerUtils?.showRunDialog(item);
+  flowManagerUtils?.showRunDialog?.(item);
 };
 
 const duplicateFolder = (item: IFolder) => {
-  flowManagerUtils?.duplicateFolder(item);
+  flowManagerUtils?.duplicateFolder?.(item);
 };
 
 const showEditFolderDialog = (item: IFolder) => {
-  flowManagerUtils?.showEditFolderDialog(item);
+  flowManagerUtils?.showEditFolderDialog?.(item);
 };
 
 const showRunWebhookDialog = (item: IFlow) => {
-  flowManagerUtils?.showRunWebhookDialog(item);
+  flowManagerUtils?.showRunWebhookDialog?.(item);
 };
 
 function moveTo() {
-  const destinationCategory = unref(parentId) || "";
+  const destinationCategory = unref(parentId) || '';
   const destinationFlows = flowChildMap.value[destinationCategory] || [];
   destinationFlows.push({
     ...(flow.value as IFlow | IFolder),
     flow_manager_order: 9999,
   });
 
-  const sourceCategory = flow.value.flow_manager_category || "";
+  const sourceCategory = flow.value.flow_manager_category || '';
   const sourceFlows = flowChildMap.value[sourceCategory] || [];
   const reorderSourceFlows: (IFlow | IFolder)[] = [];
   sourceFlows.forEach((sourceFlow) => {
@@ -127,21 +116,23 @@ function moveTo() {
       });
     }
   });
-  flowManagerUtils?.onSort(destinationFlows, destinationCategory);
-  flowManagerUtils?.onSort(reorderSourceFlows, sourceCategory);
+  flowManagerUtils?.onSort?.(destinationFlows, destinationCategory);
+  flowManagerUtils?.onSort?.(reorderSourceFlows, sourceCategory);
 }
 
 function goToFlow(item: IFlow & IFolder) {
-  if (item.type === "category") return;
+  if (item.type === 'category') return;
 
   if (isLocal.value) {
     router.push(`/settings/flows/${item.id}`);
   } else {
-    const credential = flowManagerUtils?.credentials.value.find((cred) => cred.id === flowManagerUtils?.selectedCredential.value);
+    const credential = flowManagerUtils?.credentials?.value?.find(
+      (cred) => cred.id === flowManagerUtils?.selectedCredential?.value,
+    );
     if (credential) {
-      const a = document.createElement("a");
+      const a = document.createElement('a');
       a.href = `${credential.url}/admin/settings/flows/${item.id}`;
-      a.target = "_blank";
+      a.target = '_blank';
       a.click();
       document.body.removeChild(a);
     }
@@ -169,7 +160,7 @@ function openDashboardDetail(flowId: string) {
         :color="flow.color"
         :search="search"
         :type="flow.type"
-        :triggerType="triggerType"
+        :trigger-type="triggerType"
         :status="flow.status"
       />
     </template>
@@ -182,14 +173,14 @@ function openDashboardDetail(flowId: string) {
     />
   </v-list-group>
 
-  <v-list-item v-context-menu="'contextMenu'" v-else-if="matchesSearch">
+  <v-list-item v-else-if="matchesSearch" v-context-menu="'contextMenu'">
     <navigation-item-content
       :search="search"
       :name="flow.name || 'Flow'"
       :icon="flow.icon"
       :color="flow.color"
       :type="flow.type"
-      :triggerType="triggerType"
+      :trigger-type="triggerType"
       :status="flow.status"
     />
   </v-list-item>

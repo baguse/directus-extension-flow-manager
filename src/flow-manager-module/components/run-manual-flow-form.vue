@@ -1,22 +1,22 @@
 <script setup lang="ts">
-import { ref, toRefs, Ref, computed, watch } from "vue";
-import { IFlow } from "../../types";
-import { useStores, useLayout, useApi } from "@directus/extensions-sdk";
-import { Preset, Collection } from "@directus/types";
-import debounce from "lodash/debounce";
-import formatTitle from "@directus/format-title";
+import { ref, toRefs, Ref, computed, watch } from 'vue';
+import { IFlow } from '../../types';
+import { useStores, useLayout, useApi } from '@directus/extensions-sdk';
+import type { Preset, AppCollection, Field } from '@directus/types';
+import debounce from 'lodash/debounce';
+import formatTitle from '@directus/format-title';
 
 const props = defineProps<{
   selectedItem: Partial<IFlow>;
   value: boolean;
 }>();
 
-const emit = defineEmits(["update:modelValue", "reload:flow", "reload:tabularFlow"]);
+const emit = defineEmits(['update:modelValue', 'reload:flow', 'reload:tabularFlow']);
 
 const { selectedItem, value } = toRefs(props);
 const { usePresetsStore, useCollectionsStore, useNotificationsStore } = useStores();
 const presetsStore = usePresetsStore();
-const { layoutWrapper } = useLayout(ref("tabular"));
+const { layoutWrapper } = useLayout(ref('tabular'));
 const collectionsStore = useCollectionsStore();
 const { allCollections } = collectionsStore;
 const notificationsStore = useNotificationsStore();
@@ -26,16 +26,20 @@ const step = ref(1);
 const selectedCollectionToRun = ref<string | null>(null);
 const selectedItemKeys = ref<string[]>([]);
 const loadingRunFlow = ref(false);
-const confirmValues = ref<Record<string, any>>({});
+const confirmValues = ref<Record<string, unknown>>({});
 
-const requireConfirmation = computed(() => selectedItem.value?.options?.requireConfirmation || false);
+const requireConfirmation = computed(
+  () => selectedItem.value?.options?.requireConfirmation || false,
+);
 const requireSelection = computed(() => selectedItem.value?.options?.requireSelection || false);
 const confirmDetails = computed(() => selectedItem.value?.options);
 const isConfirmButtonDisabled = computed(() => {
   for (const field of confirmDetails.value?.fields || []) {
     if (
       field.meta?.required &&
-      (!confirmValues.value || confirmValues.value[field.field] === null || confirmValues.value[field.field] === undefined)
+      (!confirmValues.value ||
+        confirmValues.value[field.field] === null ||
+        confirmValues.value[field.field] === undefined)
     ) {
       return true;
     }
@@ -45,7 +49,7 @@ const isConfirmButtonDisabled = computed(() => {
 });
 
 const fields = computed(() => {
-  return (confirmDetails.value?.fields ?? []).map((field: Record<string, any>) => ({
+  return (confirmDetails.value?.fields ?? []).map((field: Field) => ({
     ...field,
     name: !field.name && field.field ? formatTitle(field.field) : field.name,
   }));
@@ -75,11 +79,11 @@ watch(
   },
   {
     immediate: true,
-  }
+  },
 );
 
 const existingTabularPreset: Ref<Partial<Preset>> = ref(
-  presetsStore.getPresetForCollection(`flow-manager-${selectedCollectionToRun.value}`)
+  presetsStore.getPresetForCollection(`flow-manager-${selectedCollectionToRun.value}`),
 );
 const updateExistingTabularPreset = debounce(() => {
   presetsStore.update(existingTabularPreset.value.id, {
@@ -190,18 +194,20 @@ const tabularLayoutQuery = computed({
   },
 });
 
-const collectionMap: Record<string, Collection> = allCollections.reduce(
-  (acc: Record<string, Collection>, collection: Collection) => {
+const collectionMap: Record<string, AppCollection> = allCollections.reduce(
+  (acc: Record<string, AppCollection>, collection: AppCollection) => {
     acc[collection.collection] = collection;
     return acc;
   },
-  {}
+  {},
 );
 
 function onSelectCollectionToRun(collection: string) {
   selectedCollectionToRun.value = collection;
   selectedItemKeys.value = [];
-  existingTabularPreset.value = presetsStore.getPresetForCollection(`flow-manager-${selectedCollectionToRun.value}`);
+  existingTabularPreset.value = presetsStore.getPresetForCollection(
+    `flow-manager-${selectedCollectionToRun.value}`,
+  );
 }
 
 function clearTabularFilters() {
@@ -219,23 +225,23 @@ async function runFlow() {
     });
 
     notificationsStore.add({
-      type: "success",
+      type: 'success',
       title: `Flow "${selectedItem.value.name}" has been run successfully`,
       closeable: true,
       persist: true,
     });
-  } catch (error) {
+  } catch {
     notificationsStore.add({
-      type: "error",
+      type: 'error',
       title: `Failed to run Flow "${selectedItem.value.name}"`,
       closeable: true,
       persist: true,
     });
   } finally {
-    emit("reload:flow");
-    emit("reload:tabularFlow");
+    emit('reload:flow');
+    emit('reload:tabularFlow');
     loadingRunFlow.value = false;
-    emit("update:modelValue", false);
+    emit('update:modelValue', false);
   }
 }
 
@@ -256,7 +262,7 @@ function resetConfirm() {
   confirmValues.value = {};
   selectedCollectionToRun.value = null;
   selectedItemKeys.value = [];
-  emit("update:modelValue", false);
+  emit('update:modelValue', false);
 }
 </script>
 
@@ -269,23 +275,31 @@ function resetConfirm() {
           <v-select
             :model-value="selectedCollectionToRun"
             placeholder="Select a Collection"
-            :items="(selectedItem?.options?.collections || [])
-              .map((collection: string) => ({ text: collectionMap[collection]?.name || collection, value: collection }))"
+            :items="
+              (selectedItem?.options?.collections || []).map((collection: string) => ({
+                text: collectionMap[collection]?.name || collection,
+                value: collection,
+              }))
+            "
             @update:model-value="onSelectCollectionToRun($event)"
           />
         </div>
         <div v-if="selectedCollectionToRun" class="mb-2 flex-end">
-          <search-input :collection="selectedCollectionToRun" v-model="tabularSearch" v-model:filter="tabularFilter" />
+          <search-input
+            v-model="tabularSearch"
+            v-model:filter="tabularFilter"
+            :collection="selectedCollectionToRun"
+          />
         </div>
         <div class="overflow-x-scroll">
           <component
+            :is="layoutWrapper"
             v-if="selectedCollectionToRun"
+            ref="layoutRef"
+            v-slot="{ layoutState }"
             v-model:layout-query="tabularLayoutQuery"
             v-model:layout-options="tabularLayoutOptions"
-            :is="layoutWrapper"
-            ref="layoutRef"
             v-model:selection="selectedItemKeys"
-            v-slot="{ layoutState }"
             :filter-user="{}"
             :filter-system="{}"
             :filter="tabularFilter"
@@ -305,7 +319,13 @@ function resetConfirm() {
               </template>
 
               <template #no-items>
-                <v-info title="Item Count" :icon="collectionMap[selectedCollectionToRun]?.icon" center> No Item </v-info>
+                <v-info
+                  title="Item Count"
+                  :icon="collectionMap[selectedCollectionToRun]?.icon"
+                  center
+                >
+                  No Item
+                </v-info>
               </template>
             </component>
           </component>
@@ -315,17 +335,23 @@ function resetConfirm() {
         <v-button secondary @click="resetConfirm"> Cancel </v-button>
         <v-button
           :disabled="(requireSelection && !selectedItemKeys.length) || !selectedCollectionToRun"
-          @click="proceed()"
           :loading="loadingRunFlow"
+          @click="proceed()"
         >
-          {{ requireConfirmation ? "Next" : `Run with ${selectedItemKeys.length} ${selectedItemKeys.length > 1 ? "Items" : "Item"}` }}
+          {{
+            requireConfirmation
+              ? 'Next'
+              : `Run with ${selectedItemKeys.length} ${selectedItemKeys.length > 1 ? 'Items' : 'Item'}`
+          }}
         </v-button>
       </v-card-actions>
     </v-card>
 
     <v-card v-else-if="step === 2">
       <template v-if="confirmDetails">
-        <v-card-title>{{ confirmDetails.confirmationDescription ?? "Run Flow Confirmation" }}</v-card-title>
+        <v-card-title>{{
+          confirmDetails.confirmationDescription ?? 'Run Flow Confirmation'
+        }}</v-card-title>
 
         <v-card-text class="confirm-form">
           <v-form
@@ -341,8 +367,9 @@ function resetConfirm() {
 
       <v-card-actions>
         <v-button secondary @click="resetConfirm"> Cancel </v-button>
-        <v-button :disabled="isConfirmButtonDisabled" @click="runFlow()" :loading="loadingRunFlow">
-          Run with {{ selectedItemKeys.length }} {{ selectedItemKeys.length > 1 ? "Items" : "Item" }}
+        <v-button :disabled="isConfirmButtonDisabled" :loading="loadingRunFlow" @click="runFlow()">
+          Run with {{ selectedItemKeys.length }}
+          {{ selectedItemKeys.length > 1 ? 'Items' : 'Item' }}
         </v-button>
       </v-card-actions>
     </v-card>
