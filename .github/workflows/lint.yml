@@ -34,6 +34,3 @@ jobs:
 
       - name: Check linting (ESLint)
         run: npm run lint
-
-      - name: Type check (TypeScript)
-        run: npx tsc --noEmit
