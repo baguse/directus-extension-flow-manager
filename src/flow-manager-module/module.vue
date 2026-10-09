@@ -1298,23 +1298,6 @@ export default defineComponent({
 .mr-1 {
   margin-right: 5px;
 }
-
-.top-bar-panel {
-  display: flex;
-  gap: 10px;
-}
-
-.table-mode {
-  margin-left: 40px;
-}
-
-.list-view-mode {
-  margin-left: 10px;
-}
-
-.align-content-center {
-  align-content: center;
-}
 </style>
 
 <style lang="scss" scoped>

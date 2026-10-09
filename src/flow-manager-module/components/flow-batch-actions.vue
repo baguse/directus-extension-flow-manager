@@ -123,17 +123,28 @@ const isSelectAll = defineModel<boolean>('isSelectAll', { default: false });
 
 <style scoped lang="scss">
 .top-bar-panel {
+  position: sticky;
+  top: var(--layout-offset-top, var(--header-bar-height, 3.375rem));
+  left: 0;
+  z-index: 4;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
+  background-color: var(--theme--background, var(--background-page, #ffffff));
+  border-bottom: var(--theme--border-width, 1px) solid
+    var(--theme--border-color-subdued, rgba(0, 0, 0, 0.08));
+  box-sizing: border-box;
+  width: 100%;
 }
 
 .table-mode {
+  padding-left: 40px;
   margin-bottom: 8px;
 }
 
 .list-view-mode {
+  padding-left: 16px;
   margin-bottom: 4px;
 }
 
