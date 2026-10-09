@@ -47,6 +47,21 @@
         "type": "module",
         "name": "flow-manager-module",
         "source": "src/flow-manager-module/index.ts"
+      },
+      {
+        "type": "panel",
+        "name": "flow-manager-health-panel",
+        "source": "src/flow-manager-panels/health/index.ts"
+      },
+      {
+        "type": "panel",
+        "name": "flow-manager-trigger-panel",
+        "source": "src/flow-manager-panels/trigger/index.ts"
+      },
+      {
+        "type": "panel",
+        "name": "flow-manager-activity-panel",
+        "source": "src/flow-manager-panels/activity/index.ts"
       }
     ],
     "sandbox": {

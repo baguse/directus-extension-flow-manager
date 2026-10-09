@@ -296,6 +296,7 @@ import { useApi } from '@directus/extensions-sdk';
 import { useRoute } from 'vue-router';
 import { ENDPOINT_EXTENSION_NAME } from '../constants';
 import type { ActivityHistory, IFlow } from '../types';
+import { parseDirectusDate } from '../utils/date.util';
 
 interface ApiErrorResponse {
   response?: {
@@ -478,7 +479,8 @@ export default defineComponent({
 
     function formatDate(dateStr: string): string {
       if (!dateStr) return '—';
-      const d = new Date(dateStr);
+      const d = parseDirectusDate(dateStr);
+      if (!d || isNaN(d.getTime())) return '—';
       return d.toLocaleString(undefined, {
         dateStyle: 'medium',
         timeStyle: 'short',
