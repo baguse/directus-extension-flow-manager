@@ -68,6 +68,10 @@ interface FlowStat {
   name: string;
   flow_manager_success_counter?: number;
   flow_manager_error_counter?: number;
+  flow_manager_metadata_id?: {
+    flow_manager_success_counter?: number;
+    flow_manager_error_counter?: number;
+  } | null;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -263,11 +267,18 @@ export default defineComponent({
       try {
         const { data } = await api.get<{ data: FlowStat[] }>('/flows', {
           params: {
-            fields: 'id,name,flow_manager_success_counter,flow_manager_error_counter',
+            fields:
+              'id,name,flow_manager_metadata_id.flow_manager_success_counter,flow_manager_metadata_id.flow_manager_error_counter',
             limit: -1,
           },
         });
-        flows.value = data.data ?? [];
+        flows.value = (data.data ?? []).map((f) => ({
+          id: f.id,
+          name: f.name,
+          flow_manager_success_counter:
+            f.flow_manager_metadata_id?.flow_manager_success_counter ?? 0,
+          flow_manager_error_counter: f.flow_manager_metadata_id?.flow_manager_error_counter ?? 0,
+        }));
       } catch {
         flows.value = [];
       } finally {

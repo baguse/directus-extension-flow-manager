@@ -388,15 +388,17 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
         },
         fields: [
           'id',
-          'flow_manager_success_counter',
-          'flow_manager_error_counter',
+          'flow_manager_metadata_id.flow_manager_success_counter',
+          'flow_manager_metadata_id.flow_manager_error_counter',
           'operations.id',
           'operations.name',
         ],
       })) as unknown as {
         id: string;
-        flow_manager_success_counter: number;
-        flow_manager_error_counter: number;
+        flow_manager_metadata_id?: {
+          flow_manager_success_counter?: number;
+          flow_manager_error_counter?: number;
+        } | null;
         operations: { id: string; name: string }[];
       }[];
       if (!flow) {
@@ -490,9 +492,12 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
           }
         }
       }
+      const successCount = flow.flow_manager_metadata_id?.flow_manager_success_counter ?? 0;
+      const errorCount = flow.flow_manager_metadata_id?.flow_manager_error_counter ?? 0;
+
       res.status(200).send({
-        successCount: flow.flow_manager_success_counter,
-        errorCount: flow.flow_manager_error_counter,
+        successCount,
+        errorCount,
         activityHistories,
       });
     } catch (e: unknown) {

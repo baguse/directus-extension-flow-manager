@@ -490,7 +490,7 @@ export default defineComponent({
     async function loadFlow() {
       try {
         const { data } = await api.get<{ data: IFlow }>(`/flows/${flowId.value}`, {
-          params: { fields: '*,operations.*' },
+          params: { fields: '*,operations.*,flow_manager_metadata_id.*' },
         });
         flowName.value = data?.data?.name ?? '';
         flow.value = data?.data ?? null;
@@ -514,10 +514,16 @@ export default defineComponent({
           `/${ENDPOINT_EXTENSION_NAME}/flow-manager/dashboard/${flowId.value}?${queries.join('&')}`,
         );
         activityHistories.value = data?.activityHistories ?? [];
-        const count = (data?.successCount ?? 0) + (data?.errorCount ?? 0);
+        const successVal =
+          data?.successCount ??
+          flow.value?.flow_manager_metadata_id?.flow_manager_success_counter ??
+          0;
+        const errorVal =
+          data?.errorCount ?? flow.value?.flow_manager_metadata_id?.flow_manager_error_counter ?? 0;
+        const count = successVal + errorVal;
         totalCount.value = count;
-        successCount.value = data?.successCount ?? 0;
-        errorCount.value = data?.errorCount ?? 0;
+        successCount.value = successVal;
+        errorCount.value = errorVal;
         totalPages.value = Math.max(1, Math.ceil(count / LIMIT));
       } catch (e: unknown) {
         activityHistories.value = [];
