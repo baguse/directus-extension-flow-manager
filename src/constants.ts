@@ -79,10 +79,55 @@ export const REQUIRED_FIELDS = [
     schema: { related_collection: 'flow_manager_metadata' },
     collection: 'directus_flows',
   },
+  {
+    field: 'user',
+    type: 'uuid',
+    meta: { special: ['m2o', 'uuid'], interface: 'select-dropdown-m2o' },
+    schema: { related_collection: 'directus_users' },
+    collection: 'flow_manager_credentials',
+    scope: 'local',
+  },
+  {
+    field: 'salt',
+    type: 'string',
+    schema: { default_value: null },
+    meta: { interface: 'input', special: null, hidden: true },
+    collection: 'flow_manager_credentials',
+    scope: 'local',
+  },
+  {
+    field: 'iv',
+    type: 'string',
+    schema: { default_value: null },
+    meta: { interface: 'input', special: null, hidden: true },
+    collection: 'flow_manager_credentials',
+    scope: 'local',
+  },
+  {
+    field: 'ciphertext',
+    type: 'text',
+    schema: { default_value: null },
+    meta: { interface: 'input-multiline', special: null, hidden: true },
+    collection: 'flow_manager_credentials',
+    scope: 'local',
+  },
+  {
+    field: 'version',
+    type: 'integer',
+    schema: { default_value: '1' },
+    meta: { interface: 'input', special: null, hidden: true },
+    collection: 'flow_manager_credentials',
+    scope: 'local',
+  },
 ] as unknown as Array<Partial<ExtendedField>>;
 
-export const REQUIRED_COLLECTIONS = [
+export const REQUIRED_COLLECTIONS: { collection: string; scope?: 'local' | 'all' }[] = [
   {
     collection: 'flow_manager_metadata',
+    scope: 'all',
+  },
+  {
+    collection: 'flow_manager_credentials',
+    scope: 'local',
   },
 ];

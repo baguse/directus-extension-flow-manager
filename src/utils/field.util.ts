@@ -1,5 +1,5 @@
 import { Ref } from 'vue';
-import { ENDPOINT_EXTENSION_NAME, REQUIRED_FIELDS } from '../constants';
+import { ENDPOINT_EXTENSION_NAME, REQUIRED_FIELDS, REQUIRED_COLLECTIONS } from '../constants';
 import type { ExtendedField, FieldsStore, ICredential } from '../types';
 import { useApi } from '@directus/extensions-sdk';
 
@@ -48,7 +48,13 @@ const useFields = ({
       const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
       if (credential) {
         for (const collectionName in fieldMap) {
-          const requiredFields = fieldMap[collectionName] || [];
+          const isLocalCollection =
+            REQUIRED_COLLECTIONS.find((c) => c.collection === collectionName)?.scope === 'local';
+          if (isLocalCollection) continue;
+          const requiredFields = (fieldMap[collectionName] || []).filter(
+            (f) => f.scope !== 'local',
+          );
+          if (requiredFields.length === 0) continue;
           try {
             const {
               data: { data },

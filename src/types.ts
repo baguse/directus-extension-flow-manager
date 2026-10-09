@@ -150,6 +150,7 @@ export type ExtendedUser = User & {
 };
 
 export type ExtendedField = Field & {
+  scope?: 'local' | 'all';
   schema?: Field['schema'] & {
     related_collection?: string;
   };
@@ -198,6 +199,24 @@ export interface ICredential {
   name: string;
   staticToken: string;
   url: string;
+}
+
+export interface IVaultRecord {
+  id?: string;
+  user: string;
+  salt: string;
+  iv: string;
+  ciphertext: string;
+  version: number;
+  date_created?: string;
+  date_updated?: string;
+}
+
+export type VaultStatus = 'loading' | 'unconfigured' | 'locked' | 'unlocked';
+
+export interface RequiredCollectionConfig {
+  collection: string;
+  scope?: 'local' | 'all';
 }
 
 export type ProcessingItem = {

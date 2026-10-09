@@ -170,6 +170,14 @@
     <CredentialDialog
       v-model:credentials="credentials"
       :value="credentialDialog"
+      :vault-status="vaultStatus"
+      :is-vault-loading="isVaultOperationLoading"
+      :vault-error="vaultErrorMessage"
+      :legacy-credentials="legacyCredentials"
+      :on-unlock-vault="unlockVault"
+      :on-setup-vault="setupVault"
+      :on-change-vault-pin="changeVaultPin"
+      :on-lock-vault="lockVault"
       @update:model-value="credentialDialog = $event"
     />
 
@@ -328,6 +336,14 @@ export default defineComponent({
       currentUser,
       serverInfo,
       credentials,
+      vaultStatus,
+      isVaultOperationLoading,
+      vaultErrorMessage,
+      legacyCredentials,
+      unlockVault,
+      setupVault,
+      changeVaultPin,
+      lockVault,
       reloadFields,
       reloadFolders,
       getServerInfo,
@@ -1063,6 +1079,14 @@ export default defineComponent({
       deleteCategory,
       credentialDialog,
       credentials,
+      vaultStatus,
+      isVaultOperationLoading,
+      vaultErrorMessage,
+      legacyCredentials,
+      unlockVault,
+      setupVault,
+      changeVaultPin,
+      lockVault,
       pushToCloudDialog,
       selectedCredentialId,
       maskingText,

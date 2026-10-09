@@ -1,5 +1,4 @@
 import { ref, computed } from 'vue';
-import SecureLS from 'secure-ls';
 import type { AxiosInstance } from 'axios';
 import type { Field } from '@directus/types';
 import type {
@@ -9,10 +8,19 @@ import type {
   ICredential,
   IFolder,
   IServerInfo,
+  IVaultRecord,
+  VaultStatus,
 } from '../types';
 import { ENDPOINT_EXTENSION_NAME } from '../constants';
 import { formatConnectionError } from '../utils/error.util';
 import { normalizeDirectusUrl } from '../utils/string.util';
+import {
+  encryptCredentials,
+  decryptCredentials,
+  readLegacySecureLSCredentials,
+  purgeLegacySecureLS,
+  base64ToBuffer,
+} from '../utils/vault.util';
 
 export interface CredentialConnectionResult {
   success: boolean;
@@ -42,18 +50,246 @@ export function useFlowCredentials(options: UseFlowCredentialsOptions) {
   const selectedCredential = ref('local');
   const currentUser = ref<ExtendedUser | null>(null);
   const serverInfo = ref<IServerInfo>();
-  const ls = new SecureLS({ encodingType: 'aes' });
-  const storedCredentials = ref<ICredential[]>(ls.get('flow_manager_credentials') || []);
+
+  const vaultStatus = ref<VaultStatus>('loading');
+  const vaultRecord = ref<IVaultRecord | null>(null);
+  const cachedPin = ref<string | null>(null);
+  const localUserId = ref<string | null>(null);
+  const legacyCredentials = ref<ICredential[] | null>(readLegacySecureLSCredentials());
+  const storedCredentials = ref<ICredential[]>([]);
+  const isVaultOperationLoading = ref(false);
+  const vaultErrorMessage = ref<string | null>(null);
 
   const credentials = computed({
     get() {
       return storedCredentials.value;
     },
     set(value: ICredential[]) {
-      ls.set('flow_manager_credentials', value);
       storedCredentials.value = value;
+      if (vaultStatus.value === 'unlocked' && cachedPin.value) {
+        saveCredentialsToVault(value).catch((err) => {
+          console.error('[FLOW MANAGER] Failed to save credentials to vault:', err);
+        });
+      }
     },
   });
+
+  async function loadVault(): Promise<void> {
+    vaultStatus.value = 'loading';
+    vaultErrorMessage.value = null;
+
+    try {
+      if (!localUserId.value) {
+        const { data: userRes } = await api.get<{ data: { id: string } }>('/users/me?fields[]=id');
+        localUserId.value = userRes?.data?.id || null;
+      }
+
+      if (!localUserId.value) {
+        vaultStatus.value = 'unconfigured';
+        return;
+      }
+
+      const { data: vaultRes } = await api.get<{ data: IVaultRecord[] }>(
+        '/items/flow_manager_credentials',
+        {
+          params: {
+            'filter[user][_eq]': localUserId.value,
+            limit: 1,
+          },
+        },
+      );
+
+      const record = vaultRes?.data?.[0];
+
+      if (record && record.ciphertext) {
+        vaultRecord.value = record;
+        const sessionPin = sessionStorage.getItem(`fm_vault_pin_${localUserId.value}`);
+        if (sessionPin) {
+          try {
+            const creds = await decryptCredentials(record, sessionPin);
+            storedCredentials.value = creds;
+            cachedPin.value = sessionPin;
+            vaultStatus.value = 'unlocked';
+            purgeLegacySecureLS();
+            legacyCredentials.value = null;
+            return;
+          } catch {
+            sessionStorage.removeItem(`fm_vault_pin_${localUserId.value}`);
+          }
+        }
+        vaultStatus.value = 'locked';
+      } else {
+        vaultRecord.value = null;
+        vaultStatus.value = 'unconfigured';
+        legacyCredentials.value = readLegacySecureLSCredentials();
+      }
+    } catch {
+      vaultRecord.value = null;
+      vaultStatus.value = 'unconfigured';
+      legacyCredentials.value = readLegacySecureLSCredentials();
+    }
+  }
+
+  async function unlockVault(pin: string): Promise<{ success: boolean; error?: string }> {
+    if (!vaultRecord.value) {
+      return { success: false, error: 'Vault has not been set up yet.' };
+    }
+    isVaultOperationLoading.value = true;
+    vaultErrorMessage.value = null;
+    try {
+      const creds = await decryptCredentials(vaultRecord.value, pin);
+      storedCredentials.value = creds;
+      cachedPin.value = pin;
+      if (localUserId.value) {
+        sessionStorage.setItem(`fm_vault_pin_${localUserId.value}`, pin);
+      }
+      vaultStatus.value = 'unlocked';
+      purgeLegacySecureLS();
+      legacyCredentials.value = null;
+      return { success: true };
+    } catch {
+      const error = 'Incorrect Master PIN. Please try again.';
+      vaultErrorMessage.value = error;
+      return { success: false, error };
+    } finally {
+      isVaultOperationLoading.value = false;
+    }
+  }
+
+  async function setupVault(
+    pin: string,
+    initialCreds?: ICredential[],
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!localUserId.value) {
+      const { data: userRes } = await api.get<{ data: { id: string } }>('/users/me?fields[]=id');
+      localUserId.value = userRes?.data?.id || null;
+    }
+    if (!localUserId.value) {
+      return { success: false, error: 'Failed to identify the current logged-in user.' };
+    }
+
+    isVaultOperationLoading.value = true;
+    vaultErrorMessage.value = null;
+
+    try {
+      const credsToEncrypt = initialCreds || legacyCredentials.value || [];
+      const encrypted = await encryptCredentials(credsToEncrypt, pin);
+
+      let record: IVaultRecord;
+      if (vaultRecord.value?.id) {
+        const { data: updateRes } = await api.patch<{ data: IVaultRecord }>(
+          `/items/flow_manager_credentials/${vaultRecord.value.id}`,
+          {
+            salt: encrypted.salt,
+            iv: encrypted.iv,
+            ciphertext: encrypted.ciphertext,
+            version: encrypted.version,
+          },
+        );
+        record = updateRes.data;
+      } else {
+        const { data: createRes } = await api.post<{ data: IVaultRecord }>(
+          '/items/flow_manager_credentials',
+          {
+            user: localUserId.value,
+            salt: encrypted.salt,
+            iv: encrypted.iv,
+            ciphertext: encrypted.ciphertext,
+            version: encrypted.version,
+          },
+        );
+        record = createRes.data;
+      }
+
+      vaultRecord.value = record;
+      storedCredentials.value = credsToEncrypt;
+      cachedPin.value = pin;
+      sessionStorage.setItem(`fm_vault_pin_${localUserId.value}`, pin);
+      vaultStatus.value = 'unlocked';
+      purgeLegacySecureLS();
+      legacyCredentials.value = null;
+
+      return { success: true };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      vaultErrorMessage.value = msg;
+      return { success: false, error: msg };
+    } finally {
+      isVaultOperationLoading.value = false;
+    }
+  }
+
+  async function saveCredentialsToVault(creds: ICredential[]): Promise<void> {
+    if (vaultStatus.value !== 'unlocked' || !cachedPin.value) {
+      return;
+    }
+    if (!vaultRecord.value?.id) {
+      await setupVault(cachedPin.value, creds);
+      return;
+    }
+
+    const saltBytes = base64ToBuffer(vaultRecord.value.salt);
+    const encrypted = await encryptCredentials(creds, cachedPin.value, saltBytes);
+
+    await api.patch(`/items/flow_manager_credentials/${vaultRecord.value.id}`, {
+      salt: encrypted.salt,
+      iv: encrypted.iv,
+      ciphertext: encrypted.ciphertext,
+      version: encrypted.version,
+    });
+
+    vaultRecord.value.ciphertext = encrypted.ciphertext;
+    vaultRecord.value.iv = encrypted.iv;
+  }
+
+  async function changeVaultPin(
+    oldPin: string,
+    newPin: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!vaultRecord.value) {
+      return { success: false, error: 'Vault record does not exist.' };
+    }
+
+    isVaultOperationLoading.value = true;
+    vaultErrorMessage.value = null;
+
+    try {
+      const creds = await decryptCredentials(vaultRecord.value, oldPin);
+      const encrypted = await encryptCredentials(creds, newPin);
+
+      await api.patch(`/items/flow_manager_credentials/${vaultRecord.value.id}`, {
+        salt: encrypted.salt,
+        iv: encrypted.iv,
+        ciphertext: encrypted.ciphertext,
+        version: encrypted.version,
+      });
+
+      vaultRecord.value.salt = encrypted.salt;
+      vaultRecord.value.iv = encrypted.iv;
+      vaultRecord.value.ciphertext = encrypted.ciphertext;
+      cachedPin.value = newPin;
+      if (localUserId.value) {
+        sessionStorage.setItem(`fm_vault_pin_${localUserId.value}`, newPin);
+      }
+
+      return { success: true };
+    } catch {
+      const error = 'Incorrect current Master PIN.';
+      vaultErrorMessage.value = error;
+      return { success: false, error };
+    } finally {
+      isVaultOperationLoading.value = false;
+    }
+  }
+
+  function lockVault(): void {
+    if (localUserId.value) {
+      sessionStorage.removeItem(`fm_vault_pin_${localUserId.value}`);
+    }
+    cachedPin.value = null;
+    storedCredentials.value = [];
+    vaultStatus.value = 'locked';
+  }
 
   async function reloadFields(collectionName: string): Promise<ExtendedField[]> {
     if (selectedCredential.value === 'local') {
@@ -213,7 +449,6 @@ export function useFlowCredentials(options: UseFlowCredentialsOptions) {
     }
 
     try {
-      // 1. Fetch directus_permissions fields to check for policy field support (Directus 10.10+)
       const { data: fieldsRes } = await api.post<{ data: ExtendedField[] }>(
         `/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`,
         {
@@ -227,7 +462,6 @@ export function useFlowCredentials(options: UseFlowCredentialsOptions) {
         Array.isArray(fieldsRes?.data) &&
         fieldsRes.data.some((f: ExtendedField) => f.field === 'policy');
 
-      // 2. Fetch current user with appropriate policy fields
       const queries: string[] = ['fields[]=*'];
       if (hasPolicyField) {
         queries.push('fields[]=policies.policy.*');
@@ -253,7 +487,6 @@ export function useFlowCredentials(options: UseFlowCredentialsOptions) {
         };
       }
 
-      // 3. Check for admin access
       let isAdmin = false;
       if (hasPolicyField) {
         const policies: ExtendedPolicy[] = [
@@ -279,7 +512,6 @@ export function useFlowCredentials(options: UseFlowCredentialsOptions) {
         };
       }
 
-      // 4. Optionally fetch server info
       let sInfo: IServerInfo | undefined;
       try {
         const { data: serverRes } = await api.post<{ data: IServerInfo }>(
@@ -312,12 +544,26 @@ export function useFlowCredentials(options: UseFlowCredentialsOptions) {
     }
   }
 
+  // Trigger initial vault load
+  loadVault();
+
   return {
     selectedCredential,
     currentUser,
     serverInfo,
     storedCredentials,
     credentials,
+    vaultStatus,
+    vaultRecord,
+    isVaultOperationLoading,
+    vaultErrorMessage,
+    legacyCredentials,
+    loadVault,
+    unlockVault,
+    setupVault,
+    changeVaultPin,
+    lockVault,
+    saveCredentialsToVault,
     reloadFields,
     reloadFolders,
     getUser,

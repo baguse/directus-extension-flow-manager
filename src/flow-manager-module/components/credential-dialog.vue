@@ -1,15 +1,36 @@
 <script setup lang="ts">
 import { type PropType, computed, inject, ref, toRefs, watch } from 'vue';
-import type { ICredential, IFlow } from '../../types';
+import type { ICredential, IFlow, VaultStatus } from '../../types';
 import { generateRandomString } from '../../utils/string.util';
 import { formatConnectionError } from '../../utils/error.util';
 import { useApi } from '@directus/extensions-sdk';
 import { ENDPOINT_EXTENSION_NAME } from '../../constants';
+
 const props = withDefaults(
   defineProps<{
     value: boolean;
+    vaultStatus?: VaultStatus;
+    isVaultLoading?: boolean;
+    vaultError?: string | null;
+    legacyCredentials?: ICredential[] | null;
+    onUnlockVault?: (pin: string) => Promise<{ success: boolean; error?: string }>;
+    onSetupVault?: (pin: string) => Promise<{ success: boolean; error?: string }>;
+    onChangeVaultPin?: (
+      oldPin: string,
+      newPin: string,
+    ) => Promise<{ success: boolean; error?: string }>;
+    onLockVault?: () => void;
   }>(),
-  {},
+  {
+    vaultStatus: 'unlocked',
+    isVaultLoading: false,
+    vaultError: null,
+    legacyCredentials: null,
+    onUnlockVault: undefined,
+    onSetupVault: undefined,
+    onChangeVaultPin: undefined,
+    onLockVault: undefined,
+  },
 );
 
 const emit = defineEmits(['update:modelValue']);
@@ -22,6 +43,94 @@ const credentials = defineModel('credentials', {
 const api = useApi();
 
 const { value } = toRefs(props);
+
+const setupPin = ref('');
+const confirmPin = ref('');
+const unlockPin = ref('');
+const localVaultError = ref<string | null>(null);
+const isVaultActionLoading = ref(false);
+
+const isChangePinModalOpen = ref(false);
+const oldPin = ref('');
+const newPin = ref('');
+const confirmNewPin = ref('');
+const changePinError = ref<string | null>(null);
+const isChangePinLoading = ref(false);
+
+const isSetupValid = computed(() => {
+  return setupPin.value.length >= 6 && setupPin.value === confirmPin.value;
+});
+
+const isNewPinValid = computed(() => {
+  return !!oldPin.value && newPin.value.length >= 6 && newPin.value === confirmNewPin.value;
+});
+
+async function handleUnlockVault() {
+  if (!unlockPin.value) return;
+  isVaultActionLoading.value = true;
+  localVaultError.value = null;
+  try {
+    const res = await props.onUnlockVault?.(unlockPin.value);
+    if (res?.success) {
+      unlockPin.value = '';
+      localVaultError.value = null;
+    } else {
+      localVaultError.value = res?.error || 'Incorrect Master PIN.';
+    }
+  } catch (err: unknown) {
+    localVaultError.value = err instanceof Error ? err.message : String(err);
+  } finally {
+    isVaultActionLoading.value = false;
+  }
+}
+
+async function handleSetupVault() {
+  if (!isSetupValid.value) return;
+  isVaultActionLoading.value = true;
+  localVaultError.value = null;
+  try {
+    const res = await props.onSetupVault?.(setupPin.value);
+    if (res?.success) {
+      setupPin.value = '';
+      confirmPin.value = '';
+      localVaultError.value = null;
+    } else {
+      localVaultError.value = res?.error || 'Failed to set up vault.';
+    }
+  } catch (err: unknown) {
+    localVaultError.value = err instanceof Error ? err.message : String(err);
+  } finally {
+    isVaultActionLoading.value = false;
+  }
+}
+
+function handleLockVault() {
+  props.onLockVault?.();
+  unlockPin.value = '';
+  localVaultError.value = null;
+}
+
+async function handleChangePin() {
+  if (!isNewPinValid.value) return;
+  isChangePinLoading.value = true;
+  changePinError.value = null;
+  try {
+    const res = await props.onChangeVaultPin?.(oldPin.value, newPin.value);
+    if (res?.success) {
+      isChangePinModalOpen.value = false;
+      oldPin.value = '';
+      newPin.value = '';
+      confirmNewPin.value = '';
+      changePinError.value = null;
+    } else {
+      changePinError.value = res?.error || 'Failed to change Master PIN.';
+    }
+  } catch (err: unknown) {
+    changePinError.value = err instanceof Error ? err.message : String(err);
+  } finally {
+    isChangePinLoading.value = false;
+  }
+}
 
 const credentialName = ref('');
 const credentialUrl = ref('');
@@ -96,6 +205,12 @@ watch(value, (isOpen) => {
   if (!isOpen) {
     testResult.value = null;
     errors.value = [];
+    localVaultError.value = null;
+    unlockPin.value = '';
+    setupPin.value = '';
+    confirmPin.value = '';
+    isChangePinModalOpen.value = false;
+    changePinError.value = null;
   }
 });
 
@@ -513,8 +628,139 @@ function parseUrl(url: string) {
     @update:model-value="emit('update:modelValue', false)"
   >
     <v-card>
-      <v-card-title>Credentials</v-card-title>
-      <v-card-text>
+      <v-card-title class="dialog-title-bar">
+        <span>Credentials Vault</span>
+        <div v-if="vaultStatus === 'unlocked'" class="vault-header-actions">
+          <v-button
+            v-tooltip.bottom="'Change Master PIN'"
+            x-small
+            secondary
+            @click="isChangePinModalOpen = true"
+          >
+            <v-icon name="key" left /> Change PIN
+          </v-button>
+          <v-button
+            v-tooltip.bottom="'Lock Vault'"
+            x-small
+            secondary
+            class="ml-2"
+            @click="handleLockVault"
+          >
+            <v-icon name="lock" left /> Lock
+          </v-button>
+        </div>
+      </v-card-title>
+
+      <!-- Case 1: Vault is loading -->
+      <v-card-text v-if="vaultStatus === 'loading'">
+        <div class="vault-loading-box">
+          <v-progress-circular indeterminate />
+          <span>Loading Credentials Vault...</span>
+        </div>
+      </v-card-text>
+
+      <!-- Case 2: Vault is unconfigured -->
+      <v-card-text v-else-if="vaultStatus === 'unconfigured'">
+        <div class="vault-state-container">
+          <div class="vault-hero">
+            <v-icon name="shield" class="vault-hero-icon" />
+            <div class="vault-hero-title">Set Up Zero-Knowledge Vault</div>
+            <div class="vault-hero-subtitle">
+              Protect your external Directus credentials with a personal Master PIN. Your tokens are
+              encrypted in your browser with AES-256 before being synced to the server. No other
+              users or administrators can read them.
+            </div>
+          </div>
+
+          <v-notice
+            v-if="legacyCredentials && legacyCredentials.length > 0"
+            type="warning"
+            class="mb-3"
+          >
+            Found {{ legacyCredentials.length }} legacy credential(s) in this browser. Setting your
+            PIN will encrypt and migrate them into your private cloud vault, and safely delete the
+            unencrypted local copies.
+          </v-notice>
+
+          <v-input
+            v-model="setupPin"
+            type="password"
+            placeholder="Master PIN (minimum 6 characters)"
+            class="input-form"
+          />
+          <v-input
+            v-model="confirmPin"
+            type="password"
+            placeholder="Confirm Master PIN"
+            class="input-form"
+            @keyup.enter="handleSetupVault"
+          />
+
+          <v-notice v-if="setupPin && setupPin.length < 6" type="warning" class="mt-2 mb-2">
+            PIN must be at least 6 characters.
+          </v-notice>
+          <v-notice
+            v-else-if="confirmPin && setupPin !== confirmPin"
+            type="warning"
+            class="mt-2 mb-2"
+          >
+            PINs do not match.
+          </v-notice>
+
+          <v-notice v-if="localVaultError" type="danger" class="mt-2 mb-2">
+            {{ localVaultError }}
+          </v-notice>
+
+          <div class="vault-form-actions">
+            <v-button
+              :disabled="!isSetupValid || isVaultActionLoading"
+              :loading="isVaultActionLoading"
+              @click="handleSetupVault"
+            >
+              Encrypt & Set Up Vault
+            </v-button>
+          </div>
+        </div>
+      </v-card-text>
+
+      <!-- Case 3: Vault is locked -->
+      <v-card-text v-else-if="vaultStatus === 'locked'">
+        <div class="vault-state-container">
+          <div class="vault-hero">
+            <v-icon name="lock" class="vault-hero-icon" />
+            <div class="vault-hero-title">Unlock Credentials Vault</div>
+            <div class="vault-hero-subtitle">
+              Enter your Master PIN to decrypt and access your external Directus instances.
+            </div>
+          </div>
+
+          <v-input
+            v-model="unlockPin"
+            type="password"
+            placeholder="Master PIN"
+            class="input-form"
+            autofocus
+            @keyup.enter="handleUnlockVault"
+          />
+
+          <v-notice v-if="localVaultError" type="danger" class="mt-2 mb-2">
+            {{ localVaultError }}
+          </v-notice>
+
+          <div class="vault-form-actions">
+            <v-button
+              :disabled="!unlockPin || isVaultActionLoading"
+              :loading="isVaultActionLoading"
+              @click="handleUnlockVault"
+            >
+              Unlock Vault
+            </v-button>
+          </div>
+        </div>
+      </v-card-text>
+
+      <!-- Case 4: Vault is unlocked (Normal Credentials Management) -->
+      <v-card-text v-else>
         <v-error
           v-if="isPullingFlowError"
           :error="{
@@ -621,6 +867,63 @@ function parseUrl(url: string) {
     </v-card>
   </v-dialog>
 
+  <!-- Change Master PIN Modal -->
+  <v-dialog
+    :model-value="isChangePinModalOpen"
+    :persistent="true"
+    @update:model-value="isChangePinModalOpen = false"
+  >
+    <v-card class="change-pin-card">
+      <v-card-title>Change Master PIN</v-card-title>
+      <v-card-text>
+        <v-input
+          v-model="oldPin"
+          type="password"
+          placeholder="Current Master PIN"
+          class="input-form"
+        />
+        <v-input
+          v-model="newPin"
+          type="password"
+          placeholder="New Master PIN (minimum 6 characters)"
+          class="input-form"
+        />
+        <v-input
+          v-model="confirmNewPin"
+          type="password"
+          placeholder="Confirm New Master PIN"
+          class="input-form"
+          @keyup.enter="handleChangePin"
+        />
+
+        <v-notice v-if="newPin && newPin.length < 6" type="warning" class="mt-2 mb-2">
+          New PIN must be at least 6 characters.
+        </v-notice>
+        <v-notice
+          v-else-if="confirmNewPin && newPin !== confirmNewPin"
+          type="warning"
+          class="mt-2 mb-2"
+        >
+          New PINs do not match.
+        </v-notice>
+
+        <v-notice v-if="changePinError" type="danger" class="mt-2 mb-2">
+          {{ changePinError }}
+        </v-notice>
+      </v-card-text>
+      <v-card-actions>
+        <v-button
+          :disabled="!isNewPinValid || isChangePinLoading"
+          :loading="isChangePinLoading"
+          @click="handleChangePin"
+        >
+          Update PIN
+        </v-button>
+        <v-button secondary @click="isChangePinModalOpen = false"> Cancel </v-button>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
+
   <v-dialog
     :model-value="pullFlowsDialog"
     :persistent="true"
@@ -695,5 +998,69 @@ function parseUrl(url: string) {
 
 .mt-2 {
   margin-top: 10px;
+}
+
+.dialog-title-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.vault-header-actions {
+  display: flex;
+  align-items: center;
+}
+
+.vault-state-container {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 0;
+}
+
+.vault-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.vault-hero-icon {
+  --v-icon-size: 48px;
+  margin-bottom: 12px;
+  color: var(--theme--primary);
+}
+
+.vault-hero-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.vault-hero-subtitle {
+  font-size: 14px;
+  color: var(--theme--foreground-subdued);
+  max-width: 480px;
+  line-height: 1.5;
+}
+
+.vault-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 15px;
+}
+
+.vault-loading-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  gap: 16px;
+  color: var(--theme--foreground-subdued);
+}
+
+.change-pin-card {
+  --v-card-min-width: 420px;
 }
 </style>

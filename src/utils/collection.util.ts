@@ -28,7 +28,8 @@ const useCollections = ({
     } else {
       const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
       if (credential) {
-        for (const c of REQUIRED_COLLECTIONS) {
+        const remoteCollections = REQUIRED_COLLECTIONS.filter((c) => c.scope !== 'local');
+        for (const c of remoteCollections) {
           try {
             await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
               url: `${credential?.url}/fields/${c.collection}`,

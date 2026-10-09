@@ -161,21 +161,27 @@ export function useFlowDatabase(options: UseFlowDatabaseOptions) {
       }
       for (const field of notCreatedFields.value) {
         if (!field.collection || !field.field) continue;
-        await fieldsStore.createField(field.collection, field);
+        const fieldPayload = { ...field };
+        delete (fieldPayload as Record<string, unknown>).scope;
+        await fieldsStore.createField(field.collection, fieldPayload);
         if (field.meta?.special?.includes('m2o')) {
           await relationsStore.upsertRelation(field.collection, field.field, {
             collection: field.collection,
             field: field.field,
             related_collection: field.schema?.related_collection,
             meta: { sort_field: null },
-            schema: { on_delete: 'SET NULL' },
+            schema: {
+              on_delete: field.collection === 'flow_manager_credentials' ? 'CASCADE' : 'SET NULL',
+            },
           });
         }
       }
       for (const field of differentFields.value) {
         if (!field.collection || !field.field) continue;
+        const fieldPayload = { ...field };
+        delete (fieldPayload as Record<string, unknown>).scope;
         await fieldsStore.deleteField(field.collection, field.field);
-        await fieldsStore.createField(field.collection, field);
+        await fieldsStore.createField(field.collection, fieldPayload);
       }
       await fieldsStore.hydrate();
       await collectionsStore.hydrate();
@@ -238,11 +244,13 @@ export function useFlowDatabase(options: UseFlowDatabaseOptions) {
         }
         for (const field of notCreatedFields.value) {
           if (!field.collection || !field.field) continue;
+          const fieldPayload = { ...field };
+          delete (fieldPayload as Record<string, unknown>).scope;
           await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
             url: `${credential?.url}/fields/${field.collection}`,
             staticToken: credential?.staticToken,
             method: 'POST',
-            payload: field,
+            payload: fieldPayload,
           });
           if (field.meta?.special?.includes('m2o')) {
             await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
@@ -261,6 +269,8 @@ export function useFlowDatabase(options: UseFlowDatabaseOptions) {
         }
         for (const field of differentFields.value) {
           if (!field.collection || !field.field) continue;
+          const fieldPayload = { ...field };
+          delete (fieldPayload as Record<string, unknown>).scope;
           await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
             url: `${credential?.url}/fields/${field.collection}/${field.field}`,
             staticToken: credential?.staticToken,
@@ -270,7 +280,7 @@ export function useFlowDatabase(options: UseFlowDatabaseOptions) {
             url: `${credential?.url}/fields/${field.collection}`,
             staticToken: credential?.staticToken,
             method: 'POST',
-            payload: field,
+            payload: fieldPayload,
           });
         }
 
