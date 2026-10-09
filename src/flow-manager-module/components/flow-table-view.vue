@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import type { Header, IFlow, IFolder } from '../../types';
 import { TRIGGER_TYPES } from '../../constants';
 
@@ -26,12 +26,16 @@ const props = withDefaults(
     getCategoryName: (categoryId: string) => string;
     getCategoryIcon: (categoryId: string) => { name?: string; color?: string };
     formatDateLong: (date?: string | null) => string;
+    totalVisible?: number;
+    showFirstLast?: boolean;
   }>(),
   {
     sort: null,
     loading: false,
     showSelect: false,
     selectedCredential: 'local',
+    totalVisible: 5,
+    showFirstLast: true,
   },
 );
 
@@ -52,8 +56,69 @@ const emit = defineEmits<{
 
 const headers = defineModel<Header[]>('headers', { default: () => [] });
 const selectedItems = defineModel<string[]>('modelValue', { default: () => [] });
+const page = defineModel<number>('page', { default: 1 });
+const limit = defineModel<number>('limit', { default: 25 });
 
 const selectedContextMenuCategory = ref<string>('');
+
+const defaultLimits = [10, 25, 50, 100];
+const limitOptions = computed(() => {
+  const currentLimit = Number(limit.value) || 25;
+  const values = [...defaultLimits];
+  if (!values.includes(currentLimit) && currentLimit > 0) {
+    values.push(currentLimit);
+    values.sort((a, b) => a - b);
+  }
+  return values.map((val) => ({ text: String(val), value: val }));
+});
+
+const totalItems = computed(() => props.items?.length || 0);
+
+const totalPages = computed(() => {
+  const l = Number(limit.value) || 25;
+  return Math.max(1, Math.ceil(totalItems.value / l));
+});
+
+const paginatedItems = computed(() => {
+  const l = Number(limit.value) || 25;
+  const currentPage = Math.max(1, Math.min(page.value, totalPages.value));
+  const start = (currentPage - 1) * l;
+  return props.items.slice(start, start + l);
+});
+
+const paginationLabel = computed(() => {
+  const total = totalItems.value;
+  if (total === 0) return '0 flows';
+  const l = Number(limit.value) || 25;
+  const currentPage = Math.max(1, Math.min(page.value, totalPages.value));
+  const start = (currentPage - 1) * l + 1;
+  const end = Math.min(currentPage * l, total);
+  if (total === 1) return '1 flow';
+  return `${start}–${end} of ${total} flows`;
+});
+
+function onLimitChange(val: unknown) {
+  const numericVal = Number(val) || 25;
+  limit.value = numericVal;
+  const newTotalPages = Math.max(1, Math.ceil(totalItems.value / numericVal));
+  if (page.value > newTotalPages) {
+    page.value = Math.max(1, newTotalPages);
+  }
+}
+
+watch([totalItems, limit], () => {
+  if (page.value > totalPages.value) {
+    page.value = Math.max(1, totalPages.value);
+  }
+});
+
+watch(
+  () => props.selectedShortcutFilter,
+  () => {
+    page.value = 1;
+  },
+  { deep: true },
+);
 
 function onContextMenuTable(text: string) {
   selectedContextMenuCategory.value = text;
@@ -87,7 +152,7 @@ async function copySelectedTextToClipboard() {
         v-model="selectedItems"
         v-model:headers="headers"
         class="table"
-        :items="items"
+        :items="paginatedItems"
         :sort="props.sort"
         :loading="loading"
         show-resize
@@ -310,6 +375,32 @@ async function copySelectedTextToClipboard() {
         </template>
       </v-table>
     </div>
+
+    <!-- Pagination footer -->
+    <div v-if="totalItems > 0" class="pagination-footer">
+      <div class="pagination-info">
+        <span class="pagination-label">{{ paginationLabel }}</span>
+        <div class="per-page-selector">
+          <span class="per-page-label">Per page:</span>
+          <v-select
+            :model-value="limit"
+            class="limit-select small"
+            inline
+            :items="limitOptions"
+            @update:model-value="onLimitChange"
+          />
+        </div>
+      </div>
+
+      <v-pagination
+        v-model="page"
+        :length="totalPages"
+        :total-visible="props.totalVisible"
+        :show-first-last="props.showFirstLast"
+        :disabled="loading"
+        class="pagination-controls"
+      />
+    </div>
   </div>
 </template>
 
@@ -334,5 +425,56 @@ async function copySelectedTextToClipboard() {
 
 .flip {
   transform: scaleY(-1);
+}
+
+.pagination-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px var(--content-padding, 32px);
+  border-top: var(--theme--border-width, 1px) solid
+    var(--theme--border-color, var(--border-subdued, rgba(0, 0, 0, 0.08)));
+  background-color: var(--theme--background, var(--background-page, #ffffff));
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.pagination-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--theme--foreground-subdued, var(--foreground-subdued, #666));
+}
+
+.pagination-label {
+  white-space: nowrap;
+}
+
+.per-page-selector {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.per-page-label {
+  font-size: 13px;
+  white-space: nowrap;
+  color: var(--theme--foreground-subdued, var(--foreground-subdued, #666));
+}
+
+.limit-select {
+  --v-select-height: 32px;
+  min-width: 80px;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  margin: 0;
 }
 </style>

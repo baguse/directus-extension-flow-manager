@@ -147,6 +147,25 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
     },
   });
 
+  const tablePage = ref(1);
+
+  const tableLimit = computed<number>({
+    get() {
+      const savedLimit = preset.value?.layout_options?.limit;
+      return typeof savedLimit === 'number' && savedLimit > 0 ? savedLimit : 25;
+    },
+    set(value: number) {
+      preset.value = {
+        ...(preset.value || {}),
+        layout_options: {
+          ...(preset.value?.layout_options || {}),
+          limit: value,
+        },
+      };
+      updatePreset();
+    },
+  });
+
   const tableFlowFilter = computed<Preset['filter']>({
     get: () => {
       return preset.value?.filter ?? null;
@@ -156,6 +175,7 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
         ...(preset.value || {}),
         filter: value,
       };
+      tablePage.value = 1;
       updatePreset();
     },
   });
@@ -169,6 +189,7 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
         ...(preset.value || {}),
         search: value,
       };
+      tablePage.value = 1;
       updatePreset();
     },
   });
@@ -392,6 +413,7 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
           sort: tableSort.value,
           headers: headers.value,
           viewListMode: viewListMode.value,
+          limit: tableLimit.value,
         },
         layout_query: {
           sort: tableSort.value,
@@ -412,6 +434,7 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
               sort: tableSort.value,
               headers: headers.value,
               viewListMode: viewListMode.value,
+              limit: tableLimit.value,
             },
             layout_query: {
               sort: tableSort.value,
@@ -434,6 +457,7 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
           sort: tableSort.value,
           headers: headers.value,
           viewListMode: viewListMode.value,
+          limit: tableLimit.value,
         },
         layout_query: {
           sort: tableSort.value,
@@ -456,6 +480,7 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
               sort: tableSort.value,
               headers: headers.value,
               viewListMode: viewListMode.value,
+              limit: tableLimit.value,
             },
             layout_query: {
               sort: tableSort.value,
@@ -610,6 +635,8 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
     viewListMode,
     processedFlows,
     headers,
+    tablePage,
+    tableLimit,
     reloadTabularFlow,
     reloadExternalPreset,
     updatePreset,

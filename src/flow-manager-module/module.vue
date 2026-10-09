@@ -47,6 +47,8 @@
         v-else
         v-model="selectedItems"
         v-model:headers="headers"
+        v-model:page="tablePage"
+        v-model:limit="tableLimit"
         :items="tabularFlows"
         :sort="tableSort"
         :loading="isTabularFlowLoading"
@@ -507,6 +509,8 @@ export default defineComponent({
       viewListMode,
       processedFlows,
       headers,
+      tablePage,
+      tableLimit,
       reloadTabularFlow,
       reloadExternalPreset,
       onTableSortChange,
@@ -1093,6 +1097,8 @@ export default defineComponent({
       isTabularFlowLoading,
       tableFlowFilter,
       tableFlowSearch,
+      tablePage,
+      tableLimit,
       getCategoryIcon,
       setStatusFilter,
       TRIGGER_TYPES,
