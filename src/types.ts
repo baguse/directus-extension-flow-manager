@@ -179,12 +179,17 @@ export interface DirectusExtensionInfo {
 
 export interface CollectionsStore {
   getCollection(collection: string): AppCollection | Record<string, unknown> | null | undefined;
+  upsertCollection(name: string, data: unknown): Promise<unknown>;
+  hydrate(): Promise<void>;
   allCollections?: AppCollection[];
   [key: string]: unknown;
 }
 
 export interface FieldsStore {
   getFieldsForCollection(collection: string): ExtendedField[];
+  createField(collection: string, field: unknown): Promise<unknown>;
+  deleteField(collection: string, field: string): Promise<unknown>;
+  hydrate(): Promise<void>;
   [key: string]: unknown;
 }
 
@@ -210,6 +215,7 @@ export interface Header {
   value: string;
   sortable: boolean;
   width: number;
+  [key: string]: unknown;
 }
 
 export interface ISyncFlowCounter {

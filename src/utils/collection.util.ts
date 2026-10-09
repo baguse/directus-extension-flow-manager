@@ -35,8 +35,16 @@ const useCollections = ({
               staticToken: credential?.staticToken,
               method: 'GET',
             });
-          } catch {
-            notExistsCollections.push(c.collection);
+          } catch (err: unknown) {
+            const anyErr = err as {
+              response?: { data?: { status?: number }; status?: number };
+            };
+            const status = anyErr?.response?.data?.status ?? anyErr?.response?.status;
+            if (status === 404) {
+              notExistsCollections.push(c.collection);
+            } else {
+              throw err;
+            }
           }
         }
       }

@@ -18,3 +18,22 @@ export function maskingText(text?: string) {
   const maskedText = text.slice(0, 2) + '*'.repeat(text.length - 4) + text.slice(text.length - 2);
   return maskedText;
 }
+
+export function normalizeDirectusUrl(url: string): string {
+  try {
+    let cleanUrl = url.trim();
+    if (!cleanUrl) return '';
+    if (!/^https?:\/\//i.test(cleanUrl)) {
+      cleanUrl = `http://${cleanUrl}`;
+    }
+    const urlParsed = new URL(cleanUrl);
+    if (!urlParsed.origin || urlParsed.origin === 'null') {
+      throw new Error('Invalid URL');
+    }
+    let full = urlParsed.href.replace(/\/+$/, '');
+    full = full.replace(/\/admin(\/.*)?$/, '');
+    return full;
+  } catch {
+    return url.trim().replace(/\/+$/, '');
+  }
+}

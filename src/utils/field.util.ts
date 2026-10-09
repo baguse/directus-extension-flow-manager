@@ -68,8 +68,16 @@ const useFields = ({
                 differentFields.push(requiredField);
               }
             }
-          } catch {
-            notExistsFields.push(...requiredFields);
+          } catch (err: unknown) {
+            const anyErr = err as {
+              response?: { data?: { status?: number }; status?: number };
+            };
+            const status = anyErr?.response?.data?.status ?? anyErr?.response?.status;
+            if (status === 404) {
+              notExistsFields.push(...requiredFields);
+            } else {
+              throw err;
+            }
           }
         }
       }

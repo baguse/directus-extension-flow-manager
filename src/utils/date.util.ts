@@ -12,7 +12,7 @@ export const formatDate = (date?: Date): string => {
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 };
 
-export const formatDateLong = (date?: Date): string => {
+export const formatDateLong = (date?: Date | string | null): string => {
   if (!date) return '';
   const toDate = new Date(date);
   const year = toDate.getFullYear();

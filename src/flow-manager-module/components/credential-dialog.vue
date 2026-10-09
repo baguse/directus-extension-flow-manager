@@ -2,6 +2,7 @@
 import { type PropType, computed, inject, ref, toRefs, watch } from 'vue';
 import type { ICredential, IFlow } from '../../types';
 import { generateRandomString } from '../../utils/string.util';
+import { formatConnectionError } from '../../utils/error.util';
 import { useApi } from '@directus/extensions-sdk';
 import { ENDPOINT_EXTENSION_NAME } from '../../constants';
 const props = withDefaults(
@@ -35,6 +36,7 @@ const pullFlowsDialog = ref(false);
 const isPreviousIdPersisted = ref(false);
 const isPullingFlows = ref(false);
 const isPullingFlowError = ref(false);
+const pullingFlowErrorMessage = ref('');
 
 const errors = ref<string[]>([]);
 
@@ -48,14 +50,25 @@ const credentialHeaders = ref([
   {
     text: 'Name',
     value: 'name',
-    width: 300,
+    width: 180,
   },
   {
     text: 'URL',
     value: 'url',
-    width: 400,
+    width: 180,
   },
 ]);
+
+export interface TestResult {
+  success: boolean;
+  status: 'success' | 'warning' | 'error';
+  message: string;
+}
+
+const isTesting = ref(false);
+const testResult = ref<TestResult | null>(null);
+const testingRowId = ref<string | null>(null);
+const rowTestResults = ref<Record<string, TestResult>>({});
 
 watch(
   [selectedFlows],
@@ -73,12 +86,215 @@ watch(
   },
 );
 
+watch([credentialUrl, credentialStaticToken], () => {
+  if (testResult.value) {
+    testResult.value = null;
+  }
+});
+
+watch(value, (isOpen) => {
+  if (!isOpen) {
+    testResult.value = null;
+    errors.value = [];
+  }
+});
+
 const isValid = computed(() => {
   if (isEdit.value) {
     return !!credentialName.value && !!credentialUrl.value;
   }
   return !!credentialName.value && !!credentialUrl.value && !!credentialStaticToken.value;
 });
+
+const canTest = computed(() => {
+  if (isEdit.value) {
+    return (
+      !!credentialUrl.value &&
+      (!!credentialStaticToken.value || !!selectedCredential.value.staticToken)
+    );
+  }
+  return !!credentialUrl.value && !!credentialStaticToken.value;
+});
+
+interface PolicyAccessItem {
+  admin_access?: boolean | number | string;
+  policy?: { admin_access?: boolean | number | string };
+}
+
+function checkAdminAccess(userData: Record<string, unknown>): boolean {
+  const hasAdmin = (val: unknown): boolean =>
+    val === true || val === 1 || val === 'true' || val === '1';
+
+  if (hasAdmin(userData.admin_access)) return true;
+
+  const role = userData.role as
+    (Record<string, unknown> & { policies?: PolicyAccessItem[] }) | undefined;
+  if (role && hasAdmin(role.admin_access)) return true;
+
+  const userPolicies = userData.policies as PolicyAccessItem[] | undefined;
+  if (Array.isArray(userPolicies)) {
+    if (userPolicies.some((p) => hasAdmin(p?.admin_access) || hasAdmin(p?.policy?.admin_access))) {
+      return true;
+    }
+  }
+
+  const rolePolicies = role?.policies;
+  if (Array.isArray(rolePolicies)) {
+    if (rolePolicies.some((p) => hasAdmin(p?.admin_access) || hasAdmin(p?.policy?.admin_access))) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+async function runTest(url: string, token: string): Promise<TestResult> {
+  let parsedUrl = '';
+  try {
+    parsedUrl = parseUrl(url);
+  } catch {
+    return {
+      success: false,
+      status: 'error',
+      message: 'Invalid URL format.',
+    };
+  }
+
+  if (!token) {
+    return {
+      success: false,
+      status: 'error',
+      message: 'Static token cannot be empty.',
+    };
+  }
+
+  try {
+    const fields = [
+      'id',
+      'first_name',
+      'last_name',
+      'email',
+      'role.*',
+      'policies.policy.admin_access',
+      'role.policies.policy.admin_access',
+    ];
+
+    const { data: userRes } = await api.post<{ data: Record<string, unknown> }>(
+      `/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`,
+      {
+        url: `${parsedUrl}/users/me?${fields.map((f) => `fields[]=${f}`).join('&')}`,
+        staticToken: token,
+        method: 'GET',
+      },
+    );
+
+    const userData = userRes?.data;
+    if (!userData) {
+      return {
+        success: false,
+        status: 'error',
+        message: 'No user data returned from the server.',
+      };
+    }
+
+    const nameParts = [userData.first_name, userData.last_name].filter(Boolean);
+    const displayName =
+      nameParts.length > 0
+        ? nameParts.join(' ')
+        : (userData.email as string) || (userData.id as string) || 'User';
+    const roleName = (userData.role as { name?: string } | undefined)?.name;
+    const roleLabel = roleName ? ` (${roleName})` : '';
+
+    const isAdmin = checkAdminAccess(userData);
+
+    let versionLabel = '';
+    try {
+      const { data: serverRes } = await api.post<{ data?: { version?: string } }>(
+        `/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`,
+        {
+          url: `${parsedUrl}/server/info`,
+          staticToken: token,
+          method: 'GET',
+        },
+      );
+      if (serverRes?.data?.version) {
+        versionLabel = ` · Directus v${serverRes.data.version}`;
+      }
+    } catch {
+      // server info is optional
+    }
+
+    if (!isAdmin) {
+      return {
+        success: false,
+        status: 'warning',
+        message: `Connected to ${displayName}${roleLabel}${versionLabel}, but this user does not have admin permissions required by Flow Manager.`,
+      };
+    }
+
+    return {
+      success: true,
+      status: 'success',
+      message: `Connection successful! Connected as ${displayName}${roleLabel} [Admin]${versionLabel}.`,
+    };
+  } catch (err: unknown) {
+    const errorMsg = formatConnectionError(
+      err,
+      'Failed to connect to the remote Directus instance.',
+    );
+
+    return {
+      success: false,
+      status: 'error',
+      message: `Connection failed: ${errorMsg}`,
+    };
+  }
+}
+
+async function testInputtedCredential() {
+  if (!canTest.value) return;
+  isTesting.value = true;
+  testResult.value = null;
+  errors.value = [];
+  const tokenToUse =
+    credentialStaticToken.value || (isEdit.value ? selectedCredential.value.staticToken : '');
+  const result = await runTest(credentialUrl.value, tokenToUse);
+  testResult.value = result;
+  isTesting.value = false;
+}
+
+async function testSavedCredential(item: ICredential) {
+  testingRowId.value = item.id;
+  const result = await runTest(item.url, item.staticToken);
+  testResult.value = {
+    ...result,
+    message: `[${item.name}] ${result.message}`,
+  };
+  rowTestResults.value[item.id] = result;
+  testingRowId.value = null;
+}
+
+function getTestIconName(id: string) {
+  const res = rowTestResults.value[id];
+  if (res?.status === 'success') return 'check_circle';
+  if (res?.status === 'warning') return 'warning';
+  if (res?.status === 'error') return 'error';
+  return 'cable';
+}
+
+function getTestIconColor(id: string) {
+  const res = rowTestResults.value[id];
+  if (res?.status === 'success') return 'var(--theme--success, var(--success, #2ec4b6))';
+  if (res?.status === 'warning') return 'var(--theme--warning, var(--warning, #ff9f1c))';
+  if (res?.status === 'error') return 'var(--theme--danger, var(--danger, #e71d36))';
+  return undefined;
+}
+
+function getTooltipForTestIcon(id: string) {
+  const res = rowTestResults.value[id];
+  if (res) return `${res.message} (Click to re-test)`;
+  return 'Test Connection';
+}
 
 const flowManagerUtils = inject<{
   createFlow: (flow: IFlow) => Promise<void>;
@@ -96,6 +312,7 @@ function saveCredential() {
     errors.value = ['Invalid URL'];
     return;
   }
+  testResult.value = null;
   if (isEdit.value) {
     const newCredentials = [...credentials.value];
     const credentialIndex = newCredentials.findIndex(
@@ -144,6 +361,8 @@ function saveCredential() {
 }
 
 function deleteCredential(item: ICredential) {
+  testResult.value = null;
+  delete rowTestResults.value[item.id];
   const newCredentials = [...credentials.value];
   const credentialIndex = newCredentials.findIndex((credential) => credential.id === item.id);
   if (credentialIndex !== -1) {
@@ -171,6 +390,12 @@ function selectCredential(item: ICredential) {
   selectedCredential.value = item;
   credentialName.value = item.name;
   credentialUrl.value = item.url;
+  credentialStaticToken.value = '';
+  testResult.value = null;
+}
+
+function onRowClick({ item }: { item: ICredential }) {
+  selectCredential(item);
 }
 
 function cancelEditCredential() {
@@ -184,6 +409,7 @@ function cancelEditCredential() {
   credentialName.value = '';
   credentialUrl.value = '';
   credentialStaticToken.value = '';
+  testResult.value = null;
 }
 
 const pullFlowsHeaders = ref([
@@ -208,6 +434,7 @@ async function pullFlows(credential: ICredential) {
   try {
     flows.value = [];
     isPullingFlowError.value = false;
+    pullingFlowErrorMessage.value = '';
     const fields = ['*', 'operations.*'];
     const {
       data: { data },
@@ -220,8 +447,12 @@ async function pullFlows(credential: ICredential) {
     pullFlowsDialog.value = true;
     flowDuplicatedName.value = '';
     isPreviousIdPersisted.value = false;
-  } catch {
+  } catch (err: unknown) {
     isPullingFlowError.value = true;
+    pullingFlowErrorMessage.value = formatConnectionError(
+      err,
+      'Failed to pull flows from the instance.',
+    );
   }
 }
 
@@ -259,17 +490,16 @@ async function proceedPull() {
 
 function parseUrl(url: string) {
   try {
-    const urlParsed = new URL(url);
+    let cleanUrl = url.trim();
+    if (!/^https?:\/\//i.test(cleanUrl)) {
+      cleanUrl = `http://${cleanUrl}`;
+    }
+    const urlParsed = new URL(cleanUrl);
     if (!urlParsed.origin || urlParsed.origin === 'null') {
       throw new Error('Invalid URL');
     }
-    const regex = /^\/([^/]+)(\/admin\/)/;
-    const match = urlParsed.pathname.match(regex);
-
-    if (match) {
-      return `${urlParsed.origin}/${match[1]}`;
-    }
-    return urlParsed.origin;
+    const pathname = urlParsed.pathname.replace(/\/admin(\/.*)?$/, '').replace(/\/+$/, '');
+    return `${urlParsed.origin}${pathname}`;
   } catch {
     throw new Error('Invalid URL');
   }
@@ -287,29 +517,45 @@ function parseUrl(url: string) {
       <v-card-text>
         <v-error
           v-if="isPullingFlowError"
-          :error="{ extensions: { code: 'Error' }, message: 'Failed to pull flows' }"
+          :error="{
+            extensions: { code: 'Error' },
+            message: pullingFlowErrorMessage || 'Failed to pull flows',
+          }"
         ></v-error>
-        <v-table :headers="credentialHeaders" :items="credentials">
+        <v-table
+          :headers="credentialHeaders"
+          :items="credentials"
+          class="credentials-table"
+          :active="isEdit ? [selectedCredential.id] : []"
+          @click:row="onRowClick"
+        >
           <template #item-append="{ item }">
-            <v-icon
-              v-tooltip.bottom="'Pull Flows'"
-              class="button-delete-category"
-              name="download"
-              @click="pullFlows(item)"
+            <v-progress-circular
+              v-if="testingRowId === item.id"
+              indeterminate
+              x-small
+              class="button-action"
             />
             <v-icon
-              v-tooltip.bottom="'Edit Credential'"
-              class="button-delete-category"
-              name="edit"
-              color="var(--warning)"
-              @click="selectCredential(item)"
+              v-else
+              v-tooltip.bottom="getTooltipForTestIcon(item.id)"
+              class="button-action"
+              :name="getTestIconName(item.id)"
+              :color="getTestIconColor(item.id)"
+              @click.stop="testSavedCredential(item)"
+            />
+            <v-icon
+              v-tooltip.bottom="'Pull Flows'"
+              class="button-action"
+              name="download"
+              @click.stop="pullFlows(item)"
             />
             <v-icon
               v-tooltip.bottom="'Delete Credential'"
-              class="button-delete-category"
+              class="button-action"
               name="delete"
               color="var(--danger)"
-              @click="deleteCredential(item)"
+              @click.stop="deleteCredential(item)"
             />
           </template>
         </v-table>
@@ -332,18 +578,42 @@ function parseUrl(url: string) {
           :placeholder="isEdit ? '(Unchanged)' : 'Static Token'"
           class="input-form"
         ></v-input>
+        <v-notice
+          v-if="testResult"
+          class="mb-2 mt-2"
+          :type="
+            testResult.status === 'success'
+              ? 'success'
+              : testResult.status === 'warning'
+                ? 'warning'
+                : 'danger'
+          "
+        >
+          {{ testResult.message }}
+        </v-notice>
         <v-error
           v-for="(error, indexError) in errors"
           :key="`errorIndex-${indexError}`"
           class="mb-2"
           :error="{ extensions: { code: 'Error' }, message: error }"
         ></v-error>
-        <v-button :disabled="!isValid" @click="saveCredential">
-          {{ isEdit ? 'Save' : 'Add' }}
-        </v-button>
-        <v-button v-if="isEdit" secondary class="ml-2" @click="cancelEditCredential">
-          Cancel
-        </v-button>
+        <div class="actions-row">
+          <v-button :disabled="!isValid || isTesting" @click="saveCredential">
+            {{ isEdit ? 'Save' : 'Add' }}
+          </v-button>
+          <v-button
+            secondary
+            class="ml-2"
+            :disabled="!canTest || isTesting"
+            :loading="isTesting"
+            @click="testInputtedCredential"
+          >
+            Test Connection
+          </v-button>
+          <v-button v-if="isEdit" secondary class="ml-2" @click="cancelEditCredential">
+            Cancel
+          </v-button>
+        </div>
       </v-card-text>
       <v-card-actions>
         <v-button secondary @click="emit('update:modelValue', false)"> Close </v-button>
@@ -408,8 +678,22 @@ function parseUrl(url: string) {
   --v-card-min-width: 1000px;
 }
 
+.credentials-table :deep(tbody tr) {
+  cursor: pointer;
+}
+
+.button-action,
 .button-delete-category {
   cursor: pointer;
   margin-left: 10px;
+}
+
+.actions-row {
+  display: flex;
+  align-items: center;
+}
+
+.mt-2 {
+  margin-top: 10px;
 }
 </style>

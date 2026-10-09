@@ -38,22 +38,34 @@ export default defineModule({
     },
   ],
   preRegisterCheck(user) {
+    if (!user) return false;
     const adminUser = user as unknown as ExtendedUser;
 
-    if (adminUser?.admin_access === true) return true;
-    if (adminUser?.role?.admin_access === true) return true;
+    const hasAdminAccess = (val: unknown): boolean => {
+      return val === true || val === 1 || val === 'true' || val === '1';
+    };
 
-    const userPolicies = adminUser?.policies as unknown as PolicyAccessItem[] | undefined;
+    if (hasAdminAccess(adminUser.admin_access)) return true;
+    if (hasAdminAccess(adminUser.role?.admin_access)) return true;
+
+    const userPolicies = adminUser.policies as unknown as PolicyAccessItem[] | undefined;
     if (Array.isArray(userPolicies)) {
-      if (userPolicies.some((p) => p?.admin_access === true || p?.policy?.admin_access === true)) {
+      if (
+        userPolicies.some(
+          (p) => hasAdminAccess(p?.admin_access) || hasAdminAccess(p?.policy?.admin_access),
+        )
+      ) {
         return true;
       }
     }
 
-    const rolePolicies = (adminUser?.role as unknown as { policies?: PolicyAccessItem[] })
-      ?.policies;
+    const rolePolicies = (adminUser.role as unknown as { policies?: PolicyAccessItem[] })?.policies;
     if (Array.isArray(rolePolicies)) {
-      if (rolePolicies.some((p) => p?.admin_access === true || p?.policy?.admin_access === true)) {
+      if (
+        rolePolicies.some(
+          (p) => hasAdminAccess(p?.admin_access) || hasAdminAccess(p?.policy?.admin_access),
+        )
+      ) {
         return true;
       }
     }

@@ -21,6 +21,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
       const { data } = await axios.request({
         url,
         method,
+        timeout: 15000,
         headers: {
           'Content-Type': 'application/json',
           ...(staticToken ? { Authorization: `Bearer ${staticToken}` } : {}),
@@ -32,8 +33,9 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
     } catch (e: unknown) {
       if (axios.isAxiosError(e)) {
         res.status(500).send({
-          error: e.response?.data,
+          error: e.response?.data || e.message,
           status: e.response?.status ?? e.status,
+          code: e.code,
         });
       } else {
         const error = e instanceof Error ? e.message : String(e);
@@ -496,8 +498,9 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
     } catch (e: unknown) {
       if (axios.isAxiosError(e)) {
         res.status(500).send({
-          error: e.response?.data,
+          error: e.response?.data || e.message,
           status: e.response?.status ?? e.status,
+          code: e.code,
         });
       } else {
         const error = e instanceof Error ? e.message : String(e);
