@@ -67,7 +67,11 @@ const { value, selectedItem, selectedFlows, isBatchAction } = toRefs(props);
       </v-card-text>
       <v-card-actions>
         <v-button secondary @click="emit('update:modelValue', false)"> Close </v-button>
-        <v-button :disabled="!selectedItem" :loading="loading" @click="emit('proceed')">
+        <v-button
+          :disabled="isBatchAction ? !selectedFlows?.length : !selectedItem?.id"
+          :loading="loading"
+          @click="emit('proceed')"
+        >
           Proceed
         </v-button>
       </v-card-actions>

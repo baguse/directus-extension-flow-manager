@@ -237,6 +237,16 @@ export interface Header {
   [key: string]: unknown;
 }
 
+export interface PendingDelete {
+  id: string;
+  type: 'flow' | 'category' | 'batch';
+  message: string;
+  flows?: IFlow[];
+  category?: IFolder;
+  categoryIndex?: number;
+  duration: number;
+}
+
 export interface ISyncFlowCounter {
   type: 'local' | 'remote';
   url?: string;

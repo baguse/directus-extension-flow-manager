@@ -1,6 +1,13 @@
-import { ref, type Ref, type ComputedRef } from 'vue';
+import { onBeforeUnmount, ref, type Ref, type ComputedRef } from 'vue';
 import type { useApi } from '@directus/extensions-sdk';
-import type { ICredential, IFlow, IFolder, IOperation, ProcessingItem } from '../types';
+import type {
+  ICredential,
+  IFlow,
+  IFolder,
+  IOperation,
+  PendingDelete,
+  ProcessingItem,
+} from '../types';
 import { ENDPOINT_EXTENSION_NAME } from '../constants';
 import { getTimestamp } from '../utils/date.util';
 import { sleep } from '../utils/common.util';
@@ -16,8 +23,12 @@ export interface UseFlowActionsOptions {
   selectedFlows: ComputedRef<IFlow[]>;
   isSelectAll: Ref<boolean>;
   deleteCategory: (category: IFolder) => Promise<void>;
+  saveCategories?: () => Promise<void>;
   reloadFlow: () => Promise<void>;
   reloadTabularFlow: () => Promise<void>;
+  flows: Ref<IFlow[]>;
+  flowCategories: Ref<IFolder[]>;
+  tabularFlows?: Ref<IFlow[]>;
   notificationsStore: {
     add: (notification: {
       type: string;
@@ -46,8 +57,12 @@ export function useFlowActions(options: UseFlowActionsOptions) {
     selectedFlows,
     isSelectAll,
     deleteCategory,
+    saveCategories,
     reloadFlow,
     reloadTabularFlow,
+    flows,
+    flowCategories,
+    tabularFlows,
     notificationsStore,
     processingDialogState,
   } = options;
@@ -397,99 +412,335 @@ export function useFlowActions(options: UseFlowActionsOptions) {
     } catch {}
   }
 
-  async function deleteItem() {
-    const deleteFunc =
-      selectedCredential.value === 'local'
-        ? async (id: string) => {
-            await api.delete(`/flows/${id}`);
-          }
-        : async (id: string) => {
-            const credential = credentials.value.find(
-              (cred) => cred.id === selectedCredential.value,
-            );
-            await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
-              url: `${credential?.url}/flows/${id}`,
-              staticToken: credential?.staticToken,
-              method: 'DELETE',
-            });
-          };
-    if (isBatchAction.value) {
-      if (!selectedItems.value.length) return;
-      deleteItemDialog.value = false;
-      processingDialogState.indeterminate.value = false;
-      processingDialogState.title.value = 'Deleting Flows';
-      processingDialogState.dialog.value = true;
-      processingDialogState.list.value = [];
-      processingDialogState.progress.value = 0;
-      let totalSuccess = 0;
-      let totalError = 0;
+  const pendingDelete = ref<PendingDelete | null>(null);
+  let deleteTimeout: ReturnType<typeof setTimeout> | null = null;
+  let timerStart = 0;
+  let remainingTime = 5000;
 
-      for (const item of selectedFlows.value) {
-        try {
-          await deleteFunc(`${item.id}`);
-          processingDialogState.list.value.push({
-            status: 'success',
-            message: `Flow "${item.name}"`,
-          });
-          totalSuccess++;
-        } catch {
-          processingDialogState.list.value.push({
-            status: 'error',
-            message: `Flow "${item.name}"`,
-          });
-          totalError++;
+  function clearDeleteTimer() {
+    if (deleteTimeout) {
+      clearTimeout(deleteTimeout);
+      deleteTimeout = null;
+    }
+  }
+
+  function startDeleteTimer(duration = 5000) {
+    clearDeleteTimer();
+    remainingTime = duration;
+    timerStart = Date.now();
+    deleteTimeout = setTimeout(() => {
+      commitPermanentDelete();
+    }, duration);
+  }
+
+  function pauseDeleteTimer() {
+    if (!deleteTimeout) return;
+    clearDeleteTimer();
+    const elapsed = Date.now() - timerStart;
+    remainingTime = Math.max(1000, remainingTime - elapsed);
+  }
+
+  function resumeDeleteTimer() {
+    if (deleteTimeout || !pendingDelete.value) return;
+    timerStart = Date.now();
+    deleteTimeout = setTimeout(() => {
+      commitPermanentDelete();
+    }, remainingTime);
+  }
+
+  const getDeleteFunc = () =>
+    selectedCredential.value === 'local'
+      ? async (id: string) => {
+          await api.delete(`/flows/${id}`);
         }
-        processingDialogState.progress.value = Math.round(
-          (processingDialogState.list.value.length / selectedFlows.value.length) * 100,
-        );
-      }
-      notificationsStore.add({
-        type: 'success',
-        title: `${totalSuccess} Flows deleted successfully. ${totalError} Flows deletion failed`,
-        closeable: true,
-        persist: true,
-      });
-      reloadFlow();
-      reloadTabularFlow();
-      selectedItems.value = [];
-      isSelectAll.value = false;
-      sleep(3000).then(() => {
-        processingDialogState.dialog.value = false;
-      });
-    } else {
-      if (!selectedItem.value) return;
-      let type = 'Flow';
+      : async (id: string) => {
+          const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
+          await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+            url: `${credential?.url}/flows/${id}`,
+            staticToken: credential?.staticToken,
+            method: 'DELETE',
+          });
+        };
+
+  async function commitPermanentDelete() {
+    clearDeleteTimer();
+    if (!pendingDelete.value) return;
+
+    const current = pendingDelete.value;
+    pendingDelete.value = null;
+    const deleteFunc = getDeleteFunc();
+
+    if (current.type === 'category' && current.category) {
       try {
-        loadingDeleteItem.value = true;
-        if ((selectedItem.value as IFolder).type === 'category') {
-          type = 'Folder';
-          await deleteCategory(selectedItem.value as IFolder);
+        if (saveCategories) {
+          await saveCategories();
         } else {
-          await deleteFunc((selectedItem.value as IFlow).id);
-
-          await reloadFlow();
-          await reloadTabularFlow();
+          await deleteCategory(current.category);
         }
-
-        notificationsStore.add({
-          type: 'success',
-          title: `${type} Deleted successfully`,
-          closeable: true,
-          persist: true,
-        });
       } catch {
+        if (typeof current.categoryIndex === 'number' && current.categoryIndex >= 0) {
+          flowCategories.value.splice(current.categoryIndex, 0, current.category);
+        } else {
+          flowCategories.value.push(current.category);
+        }
         notificationsStore.add({
           type: 'error',
-          title: `${type} Deletion failed`,
+          title: `Folder "${current.category.name}" deletion failed`,
           closeable: true,
           persist: true,
         });
-      } finally {
-        loadingDeleteItem.value = false;
-        deleteItemDialog.value = false;
+      }
+    } else if (
+      current.type === 'flow' &&
+      current.flows &&
+      current.flows.length > 0 &&
+      current.flows[0]
+    ) {
+      const flow = current.flows[0];
+      try {
+        await deleteFunc(flow.id);
+      } catch {
+        flows.value.push(flow);
+        if (tabularFlows?.value) tabularFlows.value.push(flow);
+        notificationsStore.add({
+          type: 'error',
+          title: `Flow "${flow.name}" deletion failed`,
+          closeable: true,
+          persist: true,
+        });
+      }
+    } else if (current.type === 'batch' && current.flows && current.flows.length > 0) {
+      let totalSuccess = 0;
+      let totalError = 0;
+      const failedFlows: IFlow[] = [];
+
+      for (const flow of current.flows) {
+        try {
+          await deleteFunc(`${flow.id}`);
+          totalSuccess++;
+        } catch {
+          totalError++;
+          failedFlows.push(flow);
+        }
+      }
+
+      if (failedFlows.length > 0) {
+        flows.value.push(...failedFlows);
+        if (tabularFlows?.value) tabularFlows.value.push(...failedFlows);
+        notificationsStore.add({
+          type: 'error',
+          title: `${totalError} Flows deletion failed and were restored`,
+          closeable: true,
+          persist: true,
+        });
+      } else {
+        notificationsStore.add({
+          type: 'success',
+          title: `${totalSuccess} ${totalSuccess === 1 ? 'Flow' : 'Flows'} permanently deleted`,
+          closeable: true,
+        });
       }
     }
   }
+
+  function undoDelete() {
+    clearDeleteTimer();
+    if (!pendingDelete.value) return;
+
+    const current = pendingDelete.value;
+    pendingDelete.value = null;
+
+    if (current.type === 'category' && current.category) {
+      if (typeof current.categoryIndex === 'number' && current.categoryIndex >= 0) {
+        flowCategories.value.splice(current.categoryIndex, 0, current.category);
+      } else {
+        flowCategories.value.push(current.category);
+      }
+      if (!selectedItem.value?.id) {
+        selectedItem.value = current.category;
+      }
+    } else if (
+      current.type === 'flow' &&
+      current.flows &&
+      current.flows.length > 0 &&
+      current.flows[0]
+    ) {
+      const flow = current.flows[0];
+      flows.value.push(flow);
+      if (tabularFlows?.value) tabularFlows.value.push(flow);
+      if (!selectedItem.value?.id) {
+        selectedItem.value = flow;
+      }
+    } else if (current.type === 'batch' && current.flows && current.flows.length > 0) {
+      flows.value.push(...current.flows);
+      if (tabularFlows?.value) tabularFlows.value.push(...current.flows);
+    }
+
+    notificationsStore.add({
+      type: 'info',
+      title: 'Deletion undone',
+      closeable: true,
+    });
+  }
+
+  async function deleteItem() {
+    if (pendingDelete.value) {
+      await commitPermanentDelete();
+    }
+
+    const duration = 5000;
+
+    if (isBatchAction.value) {
+      if (!selectedItems.value.length) return;
+      deleteItemDialog.value = false;
+
+      const flowsToDelete = [...selectedFlows.value];
+      if (!flowsToDelete.length) return;
+
+      const idsToDelete = new Set(flowsToDelete.map((f) => f.id));
+
+      flows.value = flows.value.filter((f) => !idsToDelete.has(f.id));
+      if (tabularFlows?.value) {
+        tabularFlows.value = tabularFlows.value.filter((f) => !idsToDelete.has(f.id));
+      }
+
+      if (selectedItem.value?.id && idsToDelete.has(selectedItem.value.id)) {
+        selectedItem.value = {
+          id: '',
+          name: '',
+          icon: '',
+          color: '',
+          description: '',
+          trigger: '',
+          options: { collections: [] },
+          operations: [],
+          operation: '',
+          status: '',
+          accountability: '',
+          flow_manager_metadata_id: {
+            flow_manager_order: 0,
+            flow_manager_category: '',
+          },
+        };
+      }
+
+      selectedItems.value = [];
+      isSelectAll.value = false;
+      isBatchAction.value = false;
+
+      const count = flowsToDelete.length;
+      pendingDelete.value = {
+        id: `batch-${Date.now()}`,
+        type: 'batch',
+        flows: flowsToDelete,
+        message: `${count} ${count === 1 ? 'Flow' : 'Flows'} deleted`,
+        duration,
+      };
+
+      startDeleteTimer(duration);
+    } else {
+      if (!selectedItem.value?.id) return;
+      deleteItemDialog.value = false;
+
+      if ((selectedItem.value as IFolder).type === 'category') {
+        const categoryToDelete = { ...selectedItem.value } as IFolder;
+        const categoryIndex = flowCategories.value.findIndex(
+          (c) => c.id === categoryToDelete.id || c.name === categoryToDelete.name,
+        );
+
+        if (categoryIndex !== -1) {
+          flowCategories.value.splice(categoryIndex, 1);
+        }
+
+        selectedItem.value = {
+          id: '',
+          name: '',
+          icon: '',
+          color: '',
+          description: '',
+          trigger: '',
+          options: { collections: [] },
+          operations: [],
+          operation: '',
+          status: '',
+          accountability: '',
+          flow_manager_metadata_id: {
+            flow_manager_order: 0,
+            flow_manager_category: '',
+          },
+        };
+
+        pendingDelete.value = {
+          id: `category-${categoryToDelete.id || Date.now()}`,
+          type: 'category',
+          category: categoryToDelete,
+          categoryIndex: categoryIndex !== -1 ? categoryIndex : undefined,
+          message: `Folder "${categoryToDelete.name}" deleted`,
+          duration,
+        };
+
+        startDeleteTimer(duration);
+      } else {
+        const flowToDelete = { ...selectedItem.value } as IFlow;
+
+        flows.value = flows.value.filter((f) => f.id !== flowToDelete.id);
+        if (tabularFlows?.value) {
+          tabularFlows.value = tabularFlows.value.filter((f) => f.id !== flowToDelete.id);
+        }
+
+        if (selectedItem.value?.id === flowToDelete.id) {
+          selectedItem.value = {
+            id: '',
+            name: '',
+            icon: '',
+            color: '',
+            description: '',
+            trigger: '',
+            options: { collections: [] },
+            operations: [],
+            operation: '',
+            status: '',
+            accountability: '',
+            flow_manager_metadata_id: {
+              flow_manager_order: 0,
+              flow_manager_category: '',
+            },
+          };
+        }
+
+        selectedItems.value = selectedItems.value.filter((id) => id !== flowToDelete.id);
+
+        pendingDelete.value = {
+          id: `flow-${flowToDelete.id}`,
+          type: 'flow',
+          flows: [flowToDelete],
+          message: `Flow "${flowToDelete.name}" deleted`,
+          duration,
+        };
+
+        startDeleteTimer(duration);
+      }
+    }
+  }
+
+  const handleBeforeUnload = () => {
+    if (pendingDelete.value) {
+      commitPermanentDelete();
+    }
+  };
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('beforeunload', handleBeforeUnload);
+  }
+
+  onBeforeUnmount(() => {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    }
+    if (pendingDelete.value) {
+      commitPermanentDelete();
+    }
+  });
 
   async function deleteSelectedItems() {
     isBatchAction.value = true;
@@ -606,6 +857,11 @@ export function useFlowActions(options: UseFlowActionsOptions) {
     backupSelectedItems,
     deleteItem,
     deleteSelectedItems,
+    pendingDelete,
+    undoDelete,
+    commitPermanentDelete,
+    pauseDeleteTimer,
+    resumeDeleteTimer,
     pushToCloud,
     changeFlowStatus,
     showDeleteItemDialog,

@@ -224,6 +224,17 @@
       @update:model-value="processingDialog = $event"
     />
 
+    <UndoToast
+      :key="pendingDelete?.id"
+      :active="!!pendingDelete"
+      :message="pendingDelete?.message || ''"
+      :duration="pendingDelete?.duration || 5000"
+      @undo="undoDelete"
+      @commit="commitPermanentDelete"
+      @pause="pauseDeleteTimer"
+      @resume="resumeDeleteTimer"
+    />
+
     <v-overlay :value="true" />
   </private-view>
 </template>
@@ -264,6 +275,7 @@ import SettingDialog from './components/setting-dialog.vue';
 import FlowBatchActions from './components/flow-batch-actions.vue';
 import FlowTableView from './components/flow-table-view.vue';
 import FlowSidebarDetail from './components/flow-sidebar-detail.vue';
+import UndoToast from './components/undo-toast.vue';
 import { useFlowRestore } from '../composables/use-flow-restore';
 import { useFlowCategories } from '../composables/use-flow-categories';
 import { useFlowDatabase } from '../composables/use-flow-database';
@@ -288,6 +300,7 @@ export default defineComponent({
     FlowBatchActions,
     FlowTableView,
     FlowSidebarDetail,
+    UndoToast,
   },
 
   props: {
@@ -561,6 +574,11 @@ export default defineComponent({
       backupSelectedItems,
       deleteItem,
       deleteSelectedItems,
+      pendingDelete,
+      undoDelete,
+      commitPermanentDelete,
+      pauseDeleteTimer,
+      resumeDeleteTimer,
       pushToCloud,
       changeFlowStatus,
       showDeleteItemDialog,
@@ -577,8 +595,12 @@ export default defineComponent({
       selectedFlows,
       isSelectAll,
       deleteCategory,
+      saveCategories,
       reloadFlow,
       reloadTabularFlow,
+      flows,
+      flowCategories,
+      tabularFlows,
       notificationsStore,
       processingDialogState: {
         dialog: processingDialog,
@@ -1145,6 +1167,11 @@ export default defineComponent({
       backupSelectedItems,
       processingDialogTitle,
       deleteSelectedItems,
+      pendingDelete,
+      undoDelete,
+      commitPermanentDelete,
+      pauseDeleteTimer,
+      resumeDeleteTimer,
       isBatchAction,
       selectedFlows,
       showRunDialog,
