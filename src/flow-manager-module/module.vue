@@ -74,13 +74,36 @@
       />
     </template>
     <div v-else class="flex justify-center h-full items-center">
-      <div class="error not-configured-notes">
-        <div>Flow Manager needs to be configured before you can use it.</div>
-        <div>Please follow these steps:</div>
-        <div>1. Click the <strong>Settings</strong> button (⚙️ gear icon).</div>
-        <div>2. Click <strong>Configure</strong>.</div>
-        <div>3. Flow Manager will automatically configure the required settings for you.</div>
-        <div>4. Once the configuration is complete, you can start using Flow Manager.</div>
+      <div class="not-configured-notes">
+        <v-notice type="warning" class="not-configured-notice">
+          <div class="notice-title">Configuration Required</div>
+          <div class="notice-desc">
+            Flow Manager database collections and fields need to be configured before you can use
+            it.
+          </div>
+          <div class="notice-steps">
+            <div>Please follow these steps:</div>
+            <ol>
+              <li>
+                Click the <strong>Open Settings</strong> button below (or select
+                <strong>Settings</strong> from the <strong>Options</strong> menu
+                <v-icon name="more_vert" class="inline-icon" /> in the header).
+              </li>
+              <li>Click <strong>Configure</strong>.</li>
+              <li>
+                Flow Manager will automatically configure the required collections and fields for
+                you.
+              </li>
+              <li>Once the configuration is complete, you can start using Flow Manager.</li>
+            </ol>
+          </div>
+          <div class="notice-action">
+            <v-button @click="settingDialog = true">
+              <v-icon name="settings" left />
+              Open Settings
+            </v-button>
+          </div>
+        </v-notice>
       </div>
     </div>
 
@@ -94,28 +117,62 @@
         :is-database-updated="isDatabaseUpdated"
       />
     </template>
-    <template v-if="isDatabaseUpdated" #actions>
-      <v-checkbox v-model="viewListMode" label="List View" />
+    <template #actions>
       <search-input
-        v-if="!viewListMode"
+        v-if="isDatabaseUpdated && !viewListMode"
         v-model="tableFlowSearch"
         v-model:filter="tableFlowFilter"
         :collection="'directus_flows'"
       />
-      <v-button v-tooltip.bottom="'Settings'" rounded icon @click="settingDialog = true">
-        <v-icon name="settings" />
+
+      <v-button
+        v-if="isDatabaseUpdated"
+        v-tooltip.bottom="viewListMode ? 'Switch to Table View' : 'Switch to List View'"
+        rounded
+        icon
+        secondary
+        @click="viewListMode = !viewListMode"
+      >
+        <v-icon :name="viewListMode ? 'table_rows' : 'view_list'" />
       </v-button>
-      <v-button v-tooltip.bottom="'Credentials'" rounded icon @click="credentialDialog = true">
-        <v-icon name="database" />
-      </v-button>
-      <v-button v-tooltip.bottom="'Restore'" rounded icon @click="onRestoreButtonClicked">
-        <v-icon name="file_upload" />
-      </v-button>
-    </template>
-    <template v-else #actions>
-      <v-button v-tooltip.bottom="'Settings'" rounded icon @click="settingDialog = true">
-        <v-icon name="settings" />
-      </v-button>
+
+      <v-menu placement="bottom-end" show-arrow :close-on-content-click="true">
+        <template #activator="{ toggle, active }">
+          <v-button
+            v-tooltip.bottom="'Options'"
+            rounded
+            icon
+            secondary
+            :active="active"
+            @click="toggle"
+          >
+            <v-icon name="more_vert" />
+          </v-button>
+        </template>
+
+        <v-list>
+          <v-list-item clickable @click="settingDialog = true">
+            <v-list-item-icon>
+              <v-icon name="settings" />
+            </v-list-item-icon>
+            <v-list-item-content>Settings</v-list-item-content>
+          </v-list-item>
+
+          <v-list-item clickable @click="credentialDialog = true">
+            <v-list-item-icon>
+              <v-icon name="database" />
+            </v-list-item-icon>
+            <v-list-item-content>Credentials</v-list-item-content>
+          </v-list-item>
+
+          <v-list-item v-if="isDatabaseUpdated" clickable @click="onRestoreButtonClicked">
+            <v-list-item-icon>
+              <v-icon name="file_upload" />
+            </v-list-item-icon>
+            <v-list-item-content>Restore</v-list-item-content>
+          </v-list-item>
+        </v-list>
+      </v-menu>
     </template>
 
     <template #sidebar>
@@ -1301,6 +1358,10 @@ export default defineComponent({
 </style>
 
 <style lang="scss" scoped>
+:deep(.actions) {
+  align-items: center;
+}
+
 .main-table > .v-table > table > .table-header > tr > .select.cell[scope='col'] > button {
   display: none;
 }
@@ -1319,11 +1380,47 @@ export default defineComponent({
 }
 
 .not-configured-notes {
-  width: 700px;
-  height: 261px;
-  row-gap: 21px;
-  display: flex;
-  flex-direction: column;
+  width: 100%;
+  max-width: 680px;
+  padding: 1rem;
+}
+
+.not-configured-notice {
+  padding: 1.5rem;
+}
+
+.notice-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.notice-desc {
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+
+.notice-steps {
+  margin-bottom: 1.25rem;
+  line-height: 1.6;
+
+  ol {
+    margin-top: 0.5rem;
+    padding-left: 1.25rem;
+
+    li {
+      margin-bottom: 0.375rem;
+    }
+  }
+}
+
+.inline-icon {
+  vertical-align: middle;
+  display: inline-flex;
+}
+
+.notice-action {
+  margin-top: 1rem;
 }
 
 .flex {
@@ -1340,18 +1437,6 @@ export default defineComponent({
 
 .items-center {
   align-items: center;
-}
-
-.error {
-  max-block-size: 50vh;
-  padding: 6px 12px;
-  overflow: auto;
-  color: var(--theme--danger);
-  font-family:
-    var(--theme--fonts--monospace--font-family) 'Fira Mono',
-    monospace;
-  background-color: var(--danger-alt);
-  border-radius: var(--theme--border-radius);
 }
 
 code {

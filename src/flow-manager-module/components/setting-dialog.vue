@@ -99,12 +99,11 @@ function onUpdateCategoryIcon(icon: string) {
       <v-card-title>Settings</v-card-title>
       <v-card-text>
         <div v-if="!isDatabaseUpdated">
-          <v-error
-            :error="{
-              extensions: { code: 'Error' },
-              message: `Flow Manager fields and collections are not configured. By clicking the 'Configure' button, you will create the necessary fields/collections or re-create the existing fields.`,
-            }"
-          ></v-error>
+          <v-notice type="warning" class="mb-3">
+            Flow Manager fields and collections are not configured. By clicking the 'Configure'
+            button, you will create the necessary fields/collections or re-create the existing
+            fields.
+          </v-notice>
           <div v-if="notCreatedCollections.length" class="section-container">
             <div class="bold-text">Collections to be created:</div>
             <ul>

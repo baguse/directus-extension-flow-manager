@@ -171,6 +171,10 @@ function emitValue() {
 
 <style lang="scss" scoped>
 .search-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
   --v-badge-background-color: var(--theme--primary);
   --v-badge-offset-y: 8px;
   --v-badge-offset-x: 8px;
@@ -180,11 +184,12 @@ function emitValue() {
   display: flex;
   align-items: center;
   width: 68px;
+  height: 44px;
   max-width: 100%;
-  box-sizing: content-box;
+  box-sizing: border-box;
   overflow: hidden;
   border: var(--theme--border-width) solid var(--theme--form--field--input--border-color);
-  border-radius: calc((40px + var(--theme--border-width) * 2) / 2);
+  border-radius: 22px;
   transition:
     width var(--slow) var(--transition),
     border-bottom-left-radius var(--fast) var(--transition),
