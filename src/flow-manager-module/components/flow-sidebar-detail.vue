@@ -8,6 +8,11 @@ const props = defineProps<{
   getOperationNameById: (operationId: string) => IOperation | undefined;
 }>();
 
+const emit = defineEmits<{
+  (e: 'openVersionDialog', flow: IFlow): void;
+  (e: 'openGitExportDialog', flow: IFlow): void;
+}>();
+
 const selectedFlow = computed<IFlow | null>(() => {
   if (!props.selectedItem?.id || (props.selectedItem as IFolder).type === 'category') {
     return null;
@@ -61,6 +66,28 @@ const selectedFlow = computed<IFlow | null>(() => {
           )?.name || 'N/A'
         }}
       </div>
+
+      <div class="sidebar-actions mt-3">
+        <v-button
+          small
+          secondary
+          class="sidebar-action-btn"
+          @click="emit('openVersionDialog', selectedFlow)"
+        >
+          <v-icon name="history" class="mr-1" />
+          Version History
+        </v-button>
+
+        <v-button
+          small
+          secondary
+          class="sidebar-action-btn mt-1"
+          @click="emit('openGitExportDialog', selectedFlow)"
+        >
+          <v-icon name="terminal" class="mr-1" />
+          Export for Git
+        </v-button>
+      </div>
     </div>
   </sidebar-detail>
 </template>
@@ -80,5 +107,27 @@ const selectedFlow = computed<IFlow | null>(() => {
 
 .mt-2 {
   margin-top: 8px;
+}
+
+.mt-3 {
+  margin-top: 14px;
+}
+
+.mt-1 {
+  margin-top: 6px;
+}
+
+.mr-1 {
+  margin-right: 4px;
+}
+
+.sidebar-actions {
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-action-btn {
+  width: 100%;
+  justify-content: flex-start;
 }
 </style>

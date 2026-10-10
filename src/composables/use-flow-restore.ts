@@ -1,12 +1,98 @@
 import { ref, unref, type Ref } from 'vue';
 import type { IFlow, ProcessingItem } from '../types';
-import { sleep } from '../utils/common.util';
+import { sleep, generateUUID } from '../utils/common.util';
+
+interface CanonicalFlowItem {
+  $schema?: string;
+  version?: string;
+  flow?: {
+    name?: string;
+    icon?: string;
+    color?: string;
+    description?: string;
+    status?: 'active' | 'inactive';
+    trigger?: string;
+    accountability?: string;
+    options?: Record<string, unknown>;
+    root_operation_key?: string | null;
+    category?: string | null;
+  };
+  operations?: Array<{
+    key: string;
+    name?: string | null;
+    type: string;
+    position_x: number;
+    position_y: number;
+    options?: Record<string, unknown> | null;
+    resolve?: string | null;
+    reject?: string | null;
+  }>;
+}
+
+function normalizeSingleFlow(item: unknown): IFlow {
+  if (!item || typeof item !== 'object') return item as IFlow;
+
+  const candidate = item as CanonicalFlowItem;
+
+  // Check if item is a canonical .flow.json (contains item.flow object and item.operations array)
+  if (candidate.flow && typeof candidate.flow === 'object' && Array.isArray(candidate.operations)) {
+    const keyToTempId = new Map<string, string>();
+    for (const op of candidate.operations) {
+      if (op.key) {
+        keyToTempId.set(op.key, generateUUID());
+      }
+    }
+
+    const transformedOperations = candidate.operations.map((op) => ({
+      id: keyToTempId.get(op.key) || generateUUID(),
+      key: op.key,
+      name: op.name ?? null,
+      type: op.type,
+      position_x: op.position_x,
+      position_y: op.position_y,
+      options: op.options || {},
+      resolve: op.resolve ? keyToTempId.get(op.resolve) || op.resolve : null,
+      reject: op.reject ? keyToTempId.get(op.reject) || op.reject : null,
+    }));
+
+    const rootId = candidate.flow.root_operation_key
+      ? keyToTempId.get(candidate.flow.root_operation_key) || null
+      : null;
+
+    return {
+      name: candidate.flow.name || 'Restored Flow',
+      icon: candidate.flow.icon || 'bolt',
+      color: candidate.flow.color || '#6366F1',
+      description: candidate.flow.description || '',
+      status: candidate.flow.status || 'inactive',
+      trigger: candidate.flow.trigger || 'manual',
+      accountability: candidate.flow.accountability || 'all',
+      options: candidate.flow.options || {},
+      operation: rootId,
+      operations: transformedOperations,
+      flow_manager_metadata_id: {
+        flow_manager_category: candidate.flow.category || '',
+      },
+    } as unknown as IFlow;
+  }
+
+  return item as IFlow;
+}
+
+function normalizeFlowInput(raw: unknown): IFlow | IFlow[] {
+  if (!raw || typeof raw !== 'object') return raw as IFlow;
+  if (Array.isArray(raw)) {
+    return raw.map(normalizeSingleFlow);
+  }
+  return normalizeSingleFlow(raw);
+}
 
 export interface UseFlowRestoreOptions {
   collectionMap: Ref<Record<string, unknown>> | Record<string, unknown>;
   createFlow: (payload: Omit<IFlow, 'id'> & { id?: string }) => Promise<unknown>;
   reloadFlow: () => Promise<void>;
   reloadTabularFlow: () => Promise<void>;
+  hydrateLocalFlow: () => Promise<void>;
   notificationsStore: {
     add: (notification: {
       type: string;
@@ -30,6 +116,7 @@ export function useFlowRestore(options: UseFlowRestoreOptions) {
     createFlow,
     reloadFlow,
     reloadTabularFlow,
+    hydrateLocalFlow,
     notificationsStore,
     processingDialogState,
   } = options;
@@ -59,7 +146,8 @@ export function useFlowRestore(options: UseFlowRestoreOptions) {
     reader.onload = async (e) => {
       try {
         const result = e.target?.result;
-        const parsedResult = JSON.parse(result as string) as IFlow | IFlow[];
+        const rawJson = JSON.parse(result as string);
+        const parsedResult = normalizeFlowInput(rawJson) as IFlow | IFlow[];
         const colMap = getCollectionDict();
 
         errors.value = [];
@@ -196,6 +284,7 @@ export function useFlowRestore(options: UseFlowRestoreOptions) {
 
       await reloadFlow();
       await reloadTabularFlow();
+      await hydrateLocalFlow();
       isPreviousIdPersisted.value = false;
       notificationsStore.add({
         type: 'success',
@@ -229,6 +318,7 @@ export function useFlowRestore(options: UseFlowRestoreOptions) {
         await createFlow(payload);
         await reloadFlow();
         await reloadTabularFlow();
+        await hydrateLocalFlow();
         isPreviousIdPersisted.value = false;
 
         notificationsStore.add({

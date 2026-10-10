@@ -99,8 +99,8 @@ export function useFlowDatabase(options: UseFlowDatabaseOptions) {
 
   async function ensureDatabase() {
     try {
-      const { notExistsFields, differentFields: differentFieldsResult } = await ensureFields();
       const { notExistsCollections } = await ensureCollections();
+      const { notExistsFields, differentFields: differentFieldsResult } = await ensureFields();
       notCreatedFields.value = notExistsFields;
       differentFields.value = differentFieldsResult;
       notCreatedCollections.value = notExistsCollections;

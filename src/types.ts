@@ -62,6 +62,68 @@ export interface IFlowMetadata {
   [key: string]: unknown;
 }
 
+export interface IFlowSnapshotData {
+  flow: {
+    name: string;
+    icon?: string;
+    color?: string;
+    description?: string;
+    status: string;
+    trigger?: string;
+    accountability?: string;
+    options?: Record<string, unknown>;
+  };
+  operations: Array<{
+    key: string;
+    name?: string | null;
+    type: string;
+    position_x: number;
+    position_y: number;
+    options?: Record<string, unknown> | null;
+    resolve?: string | null;
+    reject?: string | null;
+  }>;
+  rootOperationKey?: string | null;
+  category?: string | null;
+}
+
+export interface IFlowSnapshot {
+  id: string;
+  flow: string;
+  version: string;
+  name: string;
+  description?: string;
+  tag: 'manual' | 'release' | 'auto_pre_restore' | 'auto_pre_rollback';
+  data: IFlowSnapshotData;
+  user_created?:
+    string | { id: string; first_name?: string; last_name?: string; email?: string } | null;
+  date_created?: string;
+}
+
+export interface IOperationDiffItem {
+  key: string;
+  name?: string | null;
+  type: string;
+  changeType: 'added' | 'removed' | 'modified' | 'unchanged';
+  details?: {
+    field: string;
+    from: unknown;
+    to: unknown;
+  }[];
+}
+
+export interface IFlowDiffResult {
+  hasChanges: boolean;
+  metadataChanges: {
+    field: string;
+    from: unknown;
+    to: unknown;
+  }[];
+  operationsDiff: IOperationDiffItem[];
+  rawSourceJson: string;
+  rawTargetJson: string;
+}
+
 export interface IFlow {
   id: string;
   type?: string;
@@ -274,6 +336,10 @@ export interface FlowManagerUtilsContext {
   createFlow: (item: Omit<IFlow, 'id'> & { id?: string }) => Promise<void>;
   reloadFlow: () => Promise<void> | void;
   reloadTabularFlow: () => Promise<void> | void;
+  openVersionDialog?: (item: IFlow) => void;
+  openGitExportDialog?: (item?: IFlow) => void;
+  goToFlow({ item }: { item: IFlow }): Promise<void>;
+  hydrateLocalFlow: () => Promise<void>;
 }
 
 /* ==========================================================================
@@ -342,4 +408,9 @@ export interface ActivityHistory {
     steps: FlowStepExecution[];
     [key: string]: unknown;
   };
+}
+
+export interface FlowsStore {
+  hydrate: () => Promise<void>;
+  flows: IFlow[];
 }

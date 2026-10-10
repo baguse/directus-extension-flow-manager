@@ -41,7 +41,7 @@ const useCollections = ({
               response?: { data?: { status?: number }; status?: number };
             };
             const status = anyErr?.response?.data?.status ?? anyErr?.response?.status;
-            if (status === 404) {
+            if ([403, 404].includes(status || 0)) {
               notExistsCollections.push(c.collection);
             } else {
               throw err;

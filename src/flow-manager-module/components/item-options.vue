@@ -32,6 +32,18 @@
         </v-list-item-icon>
         <v-list-item-content> Open Dashboard </v-list-item-content>
       </v-list-item>
+      <v-list-item clickable @click="openVersionDialog(item)">
+        <v-list-item-icon>
+          <v-icon name="history" />
+        </v-list-item-icon>
+        <v-list-item-content> Version History </v-list-item-content>
+      </v-list-item>
+      <v-list-item clickable @click="openGitExportDialog(item)">
+        <v-list-item-icon>
+          <v-icon name="terminal" />
+        </v-list-item-icon>
+        <v-list-item-content> Export for Git </v-list-item-content>
+      </v-list-item>
       <v-list-item clickable @click="duplicate(item)">
         <v-list-item-icon>
           <v-icon name="content_copy" />
@@ -81,8 +93,8 @@
 </template>
 
 <script lang="ts">
-import { type PropType, type Ref, computed, defineComponent, inject } from 'vue';
-import type { IFlow, IFolder } from '../../types';
+import { type PropType, computed, defineComponent, inject } from 'vue';
+import type { IFlow, IFolder, FlowManagerUtilsContext } from '../../types';
 import { useRouter } from 'vue-router';
 
 export default defineComponent({
@@ -98,19 +110,9 @@ export default defineComponent({
   },
   setup() {
     const router = useRouter();
-    const flowManagerUtils = inject<{
-      duplicate: (item: IFlow, isDuplicate?: boolean) => Promise<void>;
-      backup: (item: IFlow) => Promise<void>;
-      showPushToCloud: (item: IFlow) => Promise<void>;
-      showDeleteItemDialog: (item: IFlow) => Promise<void>;
-      duplicateFolder: (item: IFolder) => Promise<void>;
-      showEditFolderDialog: (item: IFolder) => Promise<void>;
-      showRunDialog: (item: IFlow) => Promise<void>;
-      showRunWebhookDialog: (item: IFlow) => Promise<void>;
-      selectedCredential: Ref<string>;
-    }>('flowManagerUtils');
+    const flowManagerUtils = inject<FlowManagerUtilsContext>('flowManagerUtils');
 
-    const selectedCredential = computed(() => flowManagerUtils?.selectedCredential.value);
+    const selectedCredential = computed(() => flowManagerUtils?.selectedCredential?.value);
 
     return {
       duplicate,
@@ -123,6 +125,8 @@ export default defineComponent({
       showRunWebhookDialog,
       selectedCredential,
       openDashboardDetail,
+      openVersionDialog,
+      openGitExportDialog,
     };
 
     function duplicate(item: IFlow, isDuplicate?: boolean) {
@@ -159,6 +163,14 @@ export default defineComponent({
 
     function openDashboardDetail(itemId: string) {
       router.push(`/flow-manager/dashboard/${itemId}`);
+    }
+
+    function openVersionDialog(item: IFlow) {
+      flowManagerUtils?.openVersionDialog?.(item);
+    }
+
+    function openGitExportDialog(item: IFlow) {
+      flowManagerUtils?.openGitExportDialog?.(item);
     }
   },
 });

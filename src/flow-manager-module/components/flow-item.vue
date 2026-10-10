@@ -2,7 +2,6 @@
 import { toRefs, computed, inject } from 'vue';
 import type { FlowManagerUtilsContext, IFlow, IFolder } from '../../types';
 import Draggable from 'vuedraggable';
-import { useRouter } from 'vue-router';
 import { useLocalStorage } from '../../composables/use-local-storage';
 import itemOptions from './item-options.vue';
 
@@ -22,7 +21,6 @@ const props = withDefaults(
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const emit = defineEmits(['selectItem']);
 
-const router = useRouter();
 const { item, items, selectedItems, showSelect } = toRefs(props);
 const flowManagerUtils = inject<FlowManagerUtilsContext>('flowManagerUtils');
 const nestedFlows = computed(() =>
@@ -64,25 +62,6 @@ function toggleCollapse() {
 
 function onGroupSortChange(updates: IFlow[]) {
   flowManagerUtils?.onSort?.(updates, item.value.id);
-}
-
-function goToFlow(item: IFlow & IFolder) {
-  if (item.type === 'category') return;
-
-  if (isLocal.value) {
-    router.push(`/settings/flows/${item.id}`);
-  } else {
-    const credential = flowManagerUtils?.credentials?.value?.find(
-      (cred) => cred.id === flowManagerUtils?.selectedCredential?.value,
-    );
-    if (credential) {
-      const a = document.createElement('a');
-      a.href = `${credential.url}/admin/settings/flows/${item.id}`;
-      a.target = '_blank';
-      a.click();
-      document.body.removeChild(a);
-    }
-  }
 }
 
 function selectItem() {
@@ -154,7 +133,7 @@ function selectItem() {
         v-tooltip="'Go to Flow'"
         name="open_in_new"
         clickable
-        @click.stop.prevent="goToFlow(item)"
+        @click.stop.prevent="() => flowManagerUtils?.goToFlow({ item })"
       />
       <v-icon
         v-if="nestedFlows?.length"

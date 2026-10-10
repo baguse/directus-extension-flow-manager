@@ -79,7 +79,7 @@ const useFields = ({
               response?: { data?: { status?: number }; status?: number };
             };
             const status = anyErr?.response?.data?.status ?? anyErr?.response?.status;
-            if (status === 404) {
+            if ([403, 404].includes(status || 0)) {
               notExistsFields.push(...requiredFields);
             } else {
               throw err;

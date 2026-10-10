@@ -37,3 +37,20 @@ export function normalizeDirectusUrl(url: string): string {
     return url.trim().replace(/\/+$/, '');
   }
 }
+
+export function slugify(text?: string | null): string {
+  if (text === null || text === undefined) {
+    return 'flow';
+  }
+  const clean = String(text).trim();
+  if (!clean) return 'flow';
+  return (
+    clean
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^\w.-]+/g, '')
+      .replace(/--+/g, '-')
+      .replace(/^-+/, '')
+      .replace(/-+$/, '') || 'flow'
+  );
+}

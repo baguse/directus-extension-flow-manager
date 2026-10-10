@@ -24,6 +24,7 @@ const emit = defineEmits<{
   (e: 'duplicateSelected'): void;
   (e: 'deleteSelected'): void;
   (e: 'pushToCloudSelected'): void;
+  (e: 'exportGitSelected'): void;
 }>();
 
 const showSelect = defineModel<boolean>('showSelect', { default: false });
@@ -113,6 +114,18 @@ const isSelectAll = defineModel<boolean>('isSelectAll', { default: false });
       @click="emit('pushToCloudSelected')"
     >
       <v-icon name="cloud_upload" />
+    </v-button>
+
+    <v-button
+      v-if="showSelect"
+      v-tooltip.bottom="'Export for Git Selected'"
+      icon
+      rounded
+      small
+      :disabled="!props.selectedItemsCount"
+      @click="emit('exportGitSelected')"
+    >
+      <v-icon name="terminal" />
     </v-button>
 
     <div v-if="showSelect" class="align-content-center">

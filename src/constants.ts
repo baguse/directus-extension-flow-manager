@@ -119,6 +119,54 @@ export const REQUIRED_FIELDS = [
     collection: 'flow_manager_credentials',
     scope: 'local',
   },
+  {
+    field: 'flow',
+    type: 'uuid',
+    meta: { special: ['m2o', 'uuid'], interface: 'select-dropdown-m2o' },
+    schema: { related_collection: 'directus_flows', on_delete: 'CASCADE' },
+    collection: 'flow_manager_snapshots',
+  },
+  {
+    field: 'version',
+    type: 'string',
+    schema: { default_value: 'v1.0.0' },
+    meta: { interface: 'input', special: null, hidden: false },
+    collection: 'flow_manager_snapshots',
+  },
+  {
+    field: 'name',
+    type: 'string',
+    schema: { default_value: '' },
+    meta: { interface: 'input', special: null, hidden: false },
+    collection: 'flow_manager_snapshots',
+  },
+  {
+    field: 'description',
+    type: 'text',
+    schema: { default_value: '' },
+    meta: { interface: 'input-multiline', special: null, hidden: false },
+    collection: 'flow_manager_snapshots',
+  },
+  {
+    field: 'tag',
+    type: 'string',
+    schema: { default_value: 'manual' },
+    meta: { interface: 'input', special: null, hidden: false },
+    collection: 'flow_manager_snapshots',
+  },
+  {
+    field: 'data',
+    type: 'json',
+    meta: { interface: 'input-code', special: ['cast-json'], hidden: false },
+    collection: 'flow_manager_snapshots',
+  },
+  {
+    field: 'user_created',
+    type: 'uuid',
+    meta: { special: ['user-created', 'm2o'], interface: 'select-dropdown-m2o', hidden: true },
+    schema: { related_collection: 'directus_users' },
+    collection: 'flow_manager_snapshots',
+  },
 ] as unknown as Array<Partial<ExtendedField>>;
 
 export const REQUIRED_COLLECTIONS: { collection: string; scope?: 'local' | 'all' }[] = [
@@ -129,5 +177,9 @@ export const REQUIRED_COLLECTIONS: { collection: string; scope?: 'local' | 'all'
   {
     collection: 'flow_manager_credentials',
     scope: 'local',
+  },
+  {
+    collection: 'flow_manager_snapshots',
+    scope: 'all',
   },
 ];

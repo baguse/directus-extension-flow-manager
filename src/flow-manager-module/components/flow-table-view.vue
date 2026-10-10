@@ -49,6 +49,8 @@ const emit = defineEmits<{
   (e: 'backup', item: IFlow): void;
   (e: 'pushToCloud', item: IFlow): void;
   (e: 'delete', item: IFlow): void;
+  (e: 'openVersionDialog', item: IFlow): void;
+  (e: 'openGitExportDialog', item: IFlow): void;
   (e: 'setStatusFilter', status: string): void;
   (e: 'setTriggerFilter', trigger: string): void;
   (e: 'setCategoryFilter', category: string): void;
@@ -240,6 +242,20 @@ async function copySelectedTextToClipboard() {
                   <v-icon name="insights" />
                 </v-list-item-icon>
                 <v-list-item-content> Open Dashboard </v-list-item-content>
+              </v-list-item>
+
+              <v-list-item clickable @click="emit('openVersionDialog', item)">
+                <v-list-item-icon>
+                  <v-icon name="history" />
+                </v-list-item-icon>
+                <v-list-item-content> Version History </v-list-item-content>
+              </v-list-item>
+
+              <v-list-item clickable @click="emit('openGitExportDialog', item)">
+                <v-list-item-icon>
+                  <v-icon name="terminal" />
+                </v-list-item-icon>
+                <v-list-item-content> Export for Git </v-list-item-content>
               </v-list-item>
 
               <v-list-item clickable @click="emit('duplicate', item)">

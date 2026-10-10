@@ -34,6 +34,7 @@
         @duplicate-selected="duplicateSelectedItems"
         @delete-selected="deleteSelectedItems"
         @push-to-cloud-selected="() => (pushToCloudDialog = true)"
+        @export-git-selected="exportGitSelected"
       />
       <FlowListView
         v-if="viewListMode"
@@ -64,6 +65,8 @@
         @run="showRunDialog"
         @go-to-flow="goToFlow"
         @open-dashboard="openDashboardDetail"
+        @open-version-dialog="openVersionDialog"
+        @open-git-export-dialog="openGitExportDialog"
         @duplicate="duplicate"
         @backup="backup"
         @push-to-cloud="showPushToCloud"
@@ -171,6 +174,13 @@
             </v-list-item-icon>
             <v-list-item-content>Restore</v-list-item-content>
           </v-list-item>
+
+          <v-list-item v-if="isDatabaseUpdated" clickable @click="exportAllGit">
+            <v-list-item-icon>
+              <v-icon name="terminal" />
+            </v-list-item-icon>
+            <v-list-item-content>Export All for Git</v-list-item-content>
+          </v-list-item>
         </v-list>
       </v-menu>
     </template>
@@ -180,6 +190,8 @@
         :selected-item="selectedItem"
         :format-date-long="formatDateLong"
         :get-operation-name-by-id="getOperationNameById"
+        @open-version-dialog="openVersionDialog"
+        @open-git-export-dialog="openGitExportDialog"
       />
     </template>
 
@@ -292,6 +304,25 @@
       @resume="resumeDeleteTimer"
     />
 
+    <FlowVersionDialog
+      :value="versionDialog"
+      :flow="selectedFlowForVersion"
+      :all-flows="flows"
+      :categories-map="categoriesMap"
+      :selected-credential="selectedCredential"
+      :credentials="credentials"
+      @update:model-value="versionDialog = $event"
+      @flow-restored="onFlowRestoredFromSnapshot"
+    />
+
+    <FlowGitExportModal
+      :value="gitExportDialog"
+      :flow="selectedFlowForVersion"
+      :flows="flowsToExportForGit"
+      :categories-map="categoriesMap"
+      @update:model-value="gitExportDialog = $event"
+    />
+
     <v-overlay :value="true" />
   </private-view>
 </template>
@@ -311,7 +342,7 @@ import { useStores, useApi, useLayout } from '@directus/extensions-sdk';
 import { useRouter } from 'vue-router';
 import type { AppCollection, Field } from '@directus/types';
 
-import type { IFlow, IFolder, ProcessingItem } from '../types';
+import type { FlowsStore, IFlow, IFolder, ProcessingItem } from '../types';
 import { ENDPOINT_EXTENSION_NAME, TRIGGER_TYPES } from '../constants';
 
 import { formatDate, formatDateLong } from '../utils/date.util';
@@ -333,6 +364,8 @@ import FlowBatchActions from './components/flow-batch-actions.vue';
 import FlowTableView from './components/flow-table-view.vue';
 import FlowSidebarDetail from './components/flow-sidebar-detail.vue';
 import UndoToast from './components/undo-toast.vue';
+import FlowVersionDialog from './components/flow-version-dialog.vue';
+import FlowGitExportModal from './components/flow-git-export-modal.vue';
 import { useFlowRestore } from '../composables/use-flow-restore';
 import { useFlowCategories } from '../composables/use-flow-categories';
 import { useFlowDatabase } from '../composables/use-flow-database';
@@ -358,6 +391,8 @@ export default defineComponent({
     FlowTableView,
     FlowSidebarDetail,
     UndoToast,
+    FlowVersionDialog,
+    FlowGitExportModal,
   },
 
   props: {
@@ -375,10 +410,12 @@ export default defineComponent({
       useFieldsStore,
       usePresetsStore,
       useRelationsStore,
+      useFlowsStore,
     } = useStores();
     const notificationsStore = useNotificationsStore();
     const collectionsStore = useCollectionsStore();
     const relationsStore = useRelationsStore();
+    const flowsStore: FlowsStore = useFlowsStore();
     const api = useApi();
     const router = useRouter();
     const settingsStore = useSettingsStore();
@@ -691,6 +728,7 @@ export default defineComponent({
         progress: progressValue,
         indeterminate: indeterminateProcess,
       },
+      hydrateLocalFlow,
     });
 
     const usedCategoryList = computed(() => {
@@ -793,7 +831,7 @@ export default defineComponent({
       reloadFolders,
     });
 
-    function goToFlow({ item }: { item: IFlow }) {
+    async function goToFlow({ item }: { item: IFlow }) {
       if (selectedCredential.value === 'local') {
         router.push(`/settings/flows/${item.id}`);
       } else {
@@ -1019,7 +1057,7 @@ export default defineComponent({
       processingDialogTitle.value = `Connecting to ${targetCred.name}...`;
       processingDialog.value = true;
 
-      // 1. Verify connection and admin permissions on target instance BEFORE changing active state
+      // Verify connection and admin permissions on target instance BEFORE changing active state
       const checkResult = await checkCredentialConnection(targetCred);
       if (!checkResult.success) {
         const errorDetails = checkResult.error || 'Failed to connect to the remote instance.';
@@ -1042,7 +1080,7 @@ export default defineComponent({
         return;
       }
 
-      // 2. Connection verified and user has admin permissions! Safely switch active state
+      // Connection verified and user has admin permissions! Safely switch active state
       selectedCredential.value = credential;
       currentUser.value = checkResult.user || null;
       serverInfo.value = checkResult.serverInfo;
@@ -1094,6 +1132,70 @@ export default defineComponent({
       router.push(`/flow-manager/dashboard/${flowId}`);
     }
 
+    const versionDialog = ref(false);
+    const gitExportDialog = ref(false);
+    const selectedFlowForVersion = ref<IFlow | null>(null);
+    const flowsToExportForGit = ref<IFlow[]>([]);
+
+    const categoriesMap = computed(() => {
+      const map = new Map<string, string>();
+      for (const cat of flowCategories.value || []) {
+        if (cat.id && cat.name) {
+          map.set(cat.id, cat.name);
+        }
+      }
+      return map;
+    });
+
+    function openVersionDialog(flow: IFlow) {
+      selectedFlowForVersion.value = flow;
+      versionDialog.value = true;
+    }
+
+    function openGitExportDialog(flow?: IFlow) {
+      selectedFlowForVersion.value = flow || null;
+      flowsToExportForGit.value = flows.value;
+      gitExportDialog.value = true;
+    }
+
+    function exportGitSelected() {
+      selectedFlowForVersion.value = null;
+      flowsToExportForGit.value = flows.value.filter((f) => selectedItems.value.includes(f.id));
+      gitExportDialog.value = true;
+    }
+
+    function exportAllGit() {
+      selectedFlowForVersion.value = null;
+      flowsToExportForGit.value = flows.value;
+      gitExportDialog.value = true;
+    }
+
+    async function onFlowRestoredFromSnapshot(flowId?: string) {
+      await reloadFlow();
+      await reloadTabularFlow();
+      if (flowId) {
+        const fresh = flows.value.find((f) => f.id === flowId);
+        if (fresh) {
+          selectedFlowForVersion.value = fresh;
+        }
+      }
+      notificationsStore.add({
+        type: 'success',
+        title: 'Flow Reverted',
+        text: 'Successfully rolled back flow to snapshot state.',
+      });
+    }
+
+    async function hydrateLocalFlow() {
+      if (selectedCredential.value === 'local') {
+        try {
+          await flowsStore.hydrate();
+        } catch {
+          // ignore store hydration errors
+        }
+      }
+    }
+
     // call this method on loaded
     reloadFlow();
     reloadTabularFlow();
@@ -1119,6 +1221,10 @@ export default defineComponent({
       credentials,
       setCredential,
       selectedCredential,
+      openVersionDialog,
+      openGitExportDialog,
+      goToFlow,
+      hydrateLocalFlow,
     });
 
     onMounted(() => {
@@ -1247,6 +1353,16 @@ export default defineComponent({
       openDashboardDetail,
       isDatabaseUpdated,
       notCreatedCollections,
+      versionDialog,
+      gitExportDialog,
+      selectedFlowForVersion,
+      flowsToExportForGit,
+      categoriesMap,
+      openVersionDialog,
+      openGitExportDialog,
+      exportGitSelected,
+      exportAllGit,
+      onFlowRestoredFromSnapshot,
     };
   },
 });

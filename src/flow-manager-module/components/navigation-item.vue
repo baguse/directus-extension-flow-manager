@@ -120,25 +120,6 @@ function moveTo() {
   flowManagerUtils?.onSort?.(reorderSourceFlows, sourceCategory);
 }
 
-function goToFlow(item: IFlow & IFolder) {
-  if (item.type === 'category') return;
-
-  if (isLocal.value) {
-    router.push(`/settings/flows/${item.id}`);
-  } else {
-    const credential = flowManagerUtils?.credentials?.value?.find(
-      (cred) => cred.id === flowManagerUtils?.selectedCredential?.value,
-    );
-    if (credential) {
-      const a = document.createElement('a');
-      a.href = `${credential.url}/admin/settings/flows/${item.id}`;
-      a.target = '_blank';
-      a.click();
-      document.body.removeChild(a);
-    }
-  }
-}
-
 function openDashboardDetail(flowId: string) {
   router.push(`/flow-manager/dashboard/${flowId}`);
 }
@@ -211,7 +192,10 @@ function openDashboardDetail(flowId: string) {
           <v-text-overflow :text="'Run'" />
         </v-list-item-content>
       </v-list-item>
-      <v-list-item clickable @click="goToFlow(flow as IFolder & IFlow)">
+      <v-list-item
+        clickable
+        @click="flowManagerUtils?.goToFlow({ item: flow as unknown as IFlow })"
+      >
         <v-list-item-icon>
           <v-icon name="bolt" />
         </v-list-item-icon>
