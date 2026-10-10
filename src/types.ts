@@ -340,6 +340,7 @@ export interface FlowManagerUtilsContext {
   openGitExportDialog?: (item?: IFlow) => void;
   goToFlow({ item }: { item: IFlow }): Promise<void>;
   hydrateLocalFlow: () => Promise<void>;
+  reload?: () => Promise<void>;
 }
 
 /* ==========================================================================

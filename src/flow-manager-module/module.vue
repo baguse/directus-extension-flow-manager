@@ -154,6 +154,13 @@
         </template>
 
         <v-list>
+          <v-list-item clickable :disabled="isReloading" @click="reload">
+            <v-list-item-icon>
+              <v-icon :name="isReloading ? 'sync' : 'refresh'" />
+            </v-list-item-icon>
+            <v-list-item-content>{{ isReloading ? 'Reloading...' : 'Reload' }}</v-list-item-content>
+          </v-list-item>
+
           <v-list-item clickable @click="settingDialog = true">
             <v-list-item-icon>
               <v-icon name="settings" />
@@ -1196,6 +1203,38 @@ export default defineComponent({
       }
     }
 
+    const isReloading = ref(false);
+
+    async function reload() {
+      if (isReloading.value) return;
+      isReloading.value = true;
+      try {
+        await reloadExternalPreset?.();
+        await reloadFlow();
+        await reloadTabularFlow();
+        const folders = await reloadFolders?.();
+        if (folders) {
+          flowCategories.value = folders;
+        }
+        await hydrateLocalFlow();
+        notificationsStore.add({
+          type: 'success',
+          title: 'Reloaded',
+          text: 'Flows and categories reloaded successfully.',
+        });
+      } catch (err: unknown) {
+        const errorMsg = formatConnectionError(err, 'Failed to reload flows.');
+        notificationsStore.add({
+          type: 'error',
+          title: 'Reload Failed',
+          text: errorMsg,
+          closeable: true,
+        });
+      } finally {
+        isReloading.value = false;
+      }
+    }
+
     // call this method on loaded
     reloadFlow();
     reloadTabularFlow();
@@ -1225,6 +1264,7 @@ export default defineComponent({
       openGitExportDialog,
       goToFlow,
       hydrateLocalFlow,
+      reload,
     });
 
     onMounted(() => {
@@ -1363,6 +1403,8 @@ export default defineComponent({
       exportGitSelected,
       exportAllGit,
       onFlowRestoredFromSnapshot,
+      reload,
+      isReloading,
     };
   },
 });
