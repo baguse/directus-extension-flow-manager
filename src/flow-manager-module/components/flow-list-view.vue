@@ -5,7 +5,7 @@ import FlowItem from './flow-item.vue';
 
 withDefaults(
   defineProps<{
-    items: Partial<IFlow | IFolder>[];
+    items: (IFlow | IFolder)[];
     allFlows: (IFlow | IFolder)[];
     showSelect?: boolean;
     selectedItems?: string[];

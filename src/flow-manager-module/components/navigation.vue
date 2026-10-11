@@ -157,12 +157,18 @@ import NavigationItem from './navigation-item.vue';
 import type { ICredential, IFlow, IFolder, IServerInfo } from '../../types';
 import { useLocalStorage } from '../../composables/use-local-storage';
 
+export interface NavigationFlowItem {
+  id: string;
+  name?: string;
+  [key: string]: unknown;
+}
+
 const props = withDefaults(
   defineProps<{
     currentCollection?: string;
-    rootFlows?: Partial<IFlow & IFolder>[];
+    rootFlows?: (IFlow | IFolder | Partial<IFlow & IFolder>)[];
     flowChildMap?: Record<string, (IFlow | IFolder)[]>;
-    allFlows?: (IFolder | IFlow)[];
+    allFlows?: (IFolder | IFlow | NavigationFlowItem)[];
     viewMode?: string;
     serverInfo?: IServerInfo;
     isDatabaseUpdated?: boolean;

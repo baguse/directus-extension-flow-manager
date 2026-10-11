@@ -6,7 +6,7 @@ import { useRouter } from 'vue-router';
 
 const router = useRouter();
 const props = defineProps<{
-  flow: Partial<IFlow & IFolder>;
+  flow: Partial<IFlow & IFolder> | IFlow | IFolder;
   search?: string;
   flowChildMap: Record<string, (IFlow | IFolder)[]>;
 }>();
@@ -54,8 +54,10 @@ const matchesSearch = computed<boolean>(() => {
   }
 });
 
+const flowItem = computed(() => flow.value as Partial<IFlow>);
+
 const triggerType = computed(() => {
-  return flow.value.trigger?.toUpperCase();
+  return flowItem.value.trigger?.toUpperCase();
 });
 
 const flowManagerUtils = inject<FlowManagerUtilsContext>('flowManagerUtils');
@@ -77,7 +79,7 @@ const showPushToCloud = (item: IFlow) => {
   flowManagerUtils?.showPushToCloud?.(item);
 };
 
-const showDeleteItemDialog = (item: IFlow) => {
+const showDeleteItemDialog = (item: IFlow | IFolder) => {
   flowManagerUtils?.showDeleteItemDialog?.(item);
 };
 
@@ -161,7 +163,7 @@ function onActivatorClick() {
         :search="search"
         :type="flow.type"
         :trigger-type="triggerType"
-        :status="flow.status"
+        :status="flowItem.status"
         :child-count="childFlows.length"
         @click="onActivatorClick"
       />
@@ -188,7 +190,7 @@ function onActivatorClick() {
       :color="flow.color"
       :type="flow.type"
       :trigger-type="triggerType"
-      :status="flow.status"
+      :status="flowItem.status"
       :child-count="childFlows?.length || 0"
     />
   </v-list-item>
@@ -196,7 +198,7 @@ function onActivatorClick() {
   <v-menu ref="contextMenu" show-arrow placement="bottom-start">
     <v-list v-if="flow.type !== 'category'">
       <v-list-item
-        v-if="flow.trigger === 'manual' && flow.status === 'active' && isLocal"
+        v-if="flowItem.trigger === 'manual' && flowItem.status === 'active' && isLocal"
         clickable
         @click="showRunDialog(flow as IFlow)"
       >
@@ -208,7 +210,7 @@ function onActivatorClick() {
         </v-list-item-content>
       </v-list-item>
       <v-list-item
-        v-else-if="flow.trigger === 'webhook' && flow.status === 'active'"
+        v-else-if="flowItem.trigger === 'webhook' && flowItem.status === 'active'"
         clickable
         @click="showRunWebhookDialog(flow as IFlow)"
       >
@@ -290,7 +292,7 @@ function onActivatorClick() {
         </v-list-item-icon>
         <v-list-item-content> Edit Folder </v-list-item-content>
       </v-list-item>
-      <v-list-item clickable @click="showDeleteItemDialog(flow as IFlow)">
+      <v-list-item clickable @click="showDeleteItemDialog(flow as IFolder)">
         <v-list-item-icon>
           <v-icon name="delete" />
         </v-list-item-icon>

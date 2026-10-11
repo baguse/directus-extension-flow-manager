@@ -784,7 +784,7 @@ export default defineComponent({
       return categories.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     });
 
-    const rootFlows = computed<Partial<IFlow & IFolder>[]>(() => {
+    const rootFlows = computed<(IFlow | IFolder)[]>(() => {
       if (!flowFieldConfiguration.value.isConfigured || !isSettingFieldConfigured.value) {
         return [...flows.value];
       }
@@ -805,7 +805,7 @@ export default defineComponent({
       );
     });
 
-    const currentFlows = computed<Partial<IFlow & IFolder>[]>(() => {
+    const currentFlows = computed<(IFlow | IFolder)[]>(() => {
       if (parentId.value) {
         const childFlows = flowChildMap.value[parentId.value] || [];
         return [...childFlows].sort(
@@ -818,12 +818,12 @@ export default defineComponent({
       return [];
     });
 
-    const allFlows = computed(() => {
+    const allFlows = computed<(IFlow | IFolder)[]>(() => {
       if (!flowFieldConfiguration.value.isConfigured || !isSettingFieldConfigured.value) {
-        return [...flows.value] as IFlow[];
+        return [...flows.value];
       }
 
-      return [...flowCategories.value, ...flows.value] as IFlow[] | IFolder[];
+      return [...flowCategories.value, ...flows.value];
     });
 
     const {

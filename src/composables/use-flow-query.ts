@@ -596,7 +596,7 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
     return categoryId;
   }
 
-  function getCategoryIcon(categoryId: string) {
+  function getCategoryIcon(categoryId: string): { name?: string; color?: string | null } {
     if (!categoryId) {
       return {
         name: '',
@@ -604,14 +604,14 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
     }
     if (folderMap.value[categoryId || '']?.icon) {
       return {
-        name: folderMap.value[categoryId || '']?.icon,
-        color: folderMap.value[categoryId || '']?.color,
+        name: folderMap.value[categoryId || '']?.icon || undefined,
+        color: folderMap.value[categoryId || '']?.color || null,
       };
     }
     if (flowIdMap.value[categoryId]?.icon) {
       return {
-        name: flowIdMap.value[categoryId]?.icon,
-        color: flowIdMap.value[categoryId]?.color,
+        name: flowIdMap.value[categoryId]?.icon || undefined,
+        color: flowIdMap.value[categoryId]?.color || null,
       };
     }
 

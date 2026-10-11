@@ -24,7 +24,7 @@ const props = withDefaults(
     selectedShortcutFilter: ShortcutFilter;
     usedCategoryList: Partial<IFolder>[];
     getCategoryName: (categoryId: string) => string;
-    getCategoryIcon: (categoryId: string) => { name?: string; color?: string };
+    getCategoryIcon: (categoryId: string) => { name?: string; color?: string | null };
     formatDateLong: (date?: string | null) => string;
     totalVisible?: number;
     showFirstLast?: boolean;

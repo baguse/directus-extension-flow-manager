@@ -51,8 +51,8 @@ const props = withDefaults(
   defineProps<{
     name: string;
     search?: string;
-    icon?: string;
-    color?: string;
+    icon?: string | null;
+    color?: string | null;
     type?: string;
     triggerType?: string;
     status?: string;

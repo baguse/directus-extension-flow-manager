@@ -179,9 +179,9 @@ export interface IFlow {
 export interface IFolder {
   id: string;
   name: string;
-  icon: string;
+  icon: string | null;
   type: string;
-  color: string;
+  color: string | null;
 
   /**
    * @deprecated moved to flow_manager_metadata_id
@@ -328,7 +328,7 @@ export interface FlowManagerUtilsContext {
   parentId?: Ref<string | null> | string | null;
   onSort: (event: (IFlow | IFolder)[], parentId?: string | null) => void | Promise<void>;
   selectedItems?: Ref<string[]>;
-  selectItem: (item: IFlow) => void;
+  selectItem: (item: IFlow | IFolder) => void;
   selectItemKey: (key: string, isSelected: boolean) => void;
   selectedCredential: Ref<string>;
   showRunWebhookDialog: (item: IFlow) => Promise<void> | void;

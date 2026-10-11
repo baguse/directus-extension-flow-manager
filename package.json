@@ -79,7 +79,8 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "typecheck": "vue-tsc --noEmit"
   },
   "devDependencies": {
     "@directus/composables": "^11.6.2",
@@ -99,10 +100,11 @@
     "prettier": "^3.9.8",
     "sass": "^1.76.0",
     "secure-ls": "^2.0.0",
-    "typescript": "^5.4.5",
+    "typescript": "5.5",
     "typescript-eslint": "^8.70.1",
     "vue": "^3.4.26",
     "vue-eslint-parser": "^9.4.3",
+    "vue-tsc": "^3.3.13",
     "vuedraggable": "^4.1.0"
   }
 }

@@ -21,6 +21,7 @@ interface FlowStatItem {
   flow_manager_last_run_at: string | null;
   flow_manager_last_run_message: string | null;
   flow_manager_last_run_operation: string | null;
+  [key: string]: unknown;
 }
 
 const api = useApi();
@@ -335,9 +336,7 @@ function mapRawFlows(rawList: Record<string, unknown>[]): FlowStatItem[] {
       name: String(f.name || 'Untitled Flow'),
       icon: f.icon ? String(f.icon) : 'bolt',
       color:
-        f.color &&
-        f.color !== 'var(--theme--primary)' &&
-        f.color !== 'var(--theme-primary)'
+        f.color && f.color !== 'var(--theme--primary)' && f.color !== 'var(--theme-primary)'
           ? String(f.color)
           : undefined,
       status: String(f.status || 'inactive'),

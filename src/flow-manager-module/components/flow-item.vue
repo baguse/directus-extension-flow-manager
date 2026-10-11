@@ -7,7 +7,7 @@ import itemOptions from './item-options.vue';
 
 const props = withDefaults(
   defineProps<{
-    item: IFlow & IFolder;
+    item: (IFlow & IFolder) | IFlow | IFolder;
     items: (IFlow | IFolder)[];
     showSelect: boolean;
     selectedItems: string[];
@@ -40,7 +40,9 @@ const { data: isItemExpanded } = useLocalStorage<boolean>(
   true,
 );
 
-const isActive = computed(() => item.value.status === 'active');
+const flowItem = computed(() => item.value as IFlow);
+
+const isActive = computed(() => !isCategory.value && flowItem.value.status === 'active');
 
 const isCategory = computed(() => item.value.type === 'category');
 
@@ -58,7 +60,7 @@ const resolvedColor = computed(() => {
 });
 
 const triggerType = computed(() => {
-  return item.value.trigger?.toUpperCase();
+  return flowItem.value.trigger?.toUpperCase();
 });
 
 const isLocal = computed(() => flowManagerUtils?.selectedCredential?.value === 'local');
@@ -113,7 +115,7 @@ function selectItem() {
       />
       <v-icon
         v-else
-        v-tooltip.bottom="item.status === 'active' ? 'Active' : 'Inactive'"
+        v-tooltip.bottom="isActive ? 'Active' : 'Inactive'"
         :name="resolvedIcon"
         :color="resolvedColor"
         :style="{ color: resolvedColor }"
@@ -122,10 +124,10 @@ function selectItem() {
       <div v-if="!isCategory && !isActive" class="item-detail">
         <v-badge
           v-if="triggerType"
-          :value="item.flow_manager_metadata_id?.flow_manager_run_counter || 0"
+          :value="flowItem.flow_manager_metadata_id?.flow_manager_run_counter || 0"
           :class="{
-            'badge-success': !item.flow_manager_metadata_id?.flow_manager_last_run_message,
-            'badge-error': !!item.flow_manager_metadata_id?.flow_manager_last_run_message,
+            'badge-success': !flowItem.flow_manager_metadata_id?.flow_manager_last_run_message,
+            'badge-error': !!flowItem.flow_manager_metadata_id?.flow_manager_last_run_message,
           }"
         >
           <v-chip x-small active class="item-name mr-4 trigger-chip is-inactive">{{
@@ -133,28 +135,32 @@ function selectItem() {
           }}</v-chip>
         </v-badge>
         <span ref="itemName" class="item-name text-gray">{{ item.name }}</span>
-        <span v-if="item.description" class="item-note text-gray">{{ item.description }}</span>
+        <span v-if="flowItem.description" class="item-note text-gray">{{
+          flowItem.description
+        }}</span>
       </div>
       <div v-else class="item-detail">
         <v-badge
           v-if="triggerType"
-          :value="item.flow_manager_metadata_id?.flow_manager_run_counter || 0"
+          :value="flowItem.flow_manager_metadata_id?.flow_manager_run_counter || 0"
           :class="{
-            'badge-success': !item.flow_manager_metadata_id?.flow_manager_last_run_message,
-            'badge-error': !!item.flow_manager_metadata_id?.flow_manager_last_run_message,
+            'badge-success': !flowItem.flow_manager_metadata_id?.flow_manager_last_run_message,
+            'badge-error': !!flowItem.flow_manager_metadata_id?.flow_manager_last_run_message,
           }"
         >
           <v-chip x-small active class="item-name mr-4 trigger-chip">{{ triggerType }}</v-chip>
         </v-badge>
         <span ref="itemName" class="item-name">{{ item.name }}</span>
-        <span v-if="item.description" class="item-note">{{ item.description }}</span>
+        <span v-if="!isCategory && flowItem.description" class="item-note">{{
+          flowItem.description
+        }}</span>
       </div>
       <v-icon
         v-if="!isCategory"
         v-tooltip="'Go to Flow'"
         name="open_in_new"
         clickable
-        @click.stop.prevent="() => flowManagerUtils?.goToFlow({ item })"
+        @click.stop.prevent="() => flowManagerUtils?.goToFlow({ item: flowItem })"
       />
       <v-icon
         v-if="nestedFlows?.length"

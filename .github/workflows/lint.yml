@@ -1,4 +1,4 @@
-name: Lint and Format
+name: Lint, Format, and Typecheck
 
 on:
   push:
@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   lint:
-    name: Lint & Code Style
+    name: Lint, Style & Types
     runs-on: ubuntu-latest
 
     steps:
@@ -34,3 +34,6 @@ jobs:
 
       - name: Check linting (ESLint)
         run: npm run lint
+
+      - name: Check type correctness (vue-tsc)
+        run: npm run typecheck

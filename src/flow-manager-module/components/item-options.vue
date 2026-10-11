@@ -6,10 +6,12 @@
     <v-list v-if="item.type !== 'category'">
       <v-list-item
         v-if="
-          item.trigger === 'manual' && item.status === 'active' && selectedCredential === 'local'
+          flowItem.trigger === 'manual' &&
+          flowItem.status === 'active' &&
+          selectedCredential === 'local'
         "
         clickable
-        @click="showRunDialog(item)"
+        @click="showRunDialog(flowItem)"
       >
         <v-list-item-icon>
           <v-icon name="play_arrow" />
@@ -17,58 +19,58 @@
         <v-list-item-content> Run </v-list-item-content>
       </v-list-item>
       <v-list-item
-        v-else-if="item.trigger === 'webhook' && item.status === 'active'"
+        v-else-if="flowItem.trigger === 'webhook' && flowItem.status === 'active'"
         clickable
-        @click="showRunWebhookDialog(item)"
+        @click="showRunWebhookDialog(flowItem)"
       >
         <v-list-item-icon>
           <v-icon name="play_arrow" />
         </v-list-item-icon>
         <v-list-item-content> Run </v-list-item-content>
       </v-list-item>
-      <v-list-item v-if="isLocal" clickable @click="openDashboardDetail(item.id)">
+      <v-list-item v-if="isLocal" clickable @click="openDashboardDetail(flowItem.id)">
         <v-list-item-icon>
           <v-icon name="insights" />
         </v-list-item-icon>
         <v-list-item-content> Open Dashboard </v-list-item-content>
       </v-list-item>
-      <v-list-item clickable @click="openVersionDialog(item)">
+      <v-list-item clickable @click="openVersionDialog(flowItem)">
         <v-list-item-icon>
           <v-icon name="history" />
         </v-list-item-icon>
         <v-list-item-content> Version History </v-list-item-content>
       </v-list-item>
-      <v-list-item clickable @click="openGitExportDialog(item)">
+      <v-list-item clickable @click="openGitExportDialog(flowItem)">
         <v-list-item-icon>
           <v-icon name="terminal" />
         </v-list-item-icon>
         <v-list-item-content> Export for Git </v-list-item-content>
       </v-list-item>
-      <v-list-item clickable @click="showEditFlowDialog(item)">
+      <v-list-item clickable @click="showEditFlowDialog(flowItem)">
         <v-list-item-icon>
           <v-icon name="edit" />
         </v-list-item-icon>
         <v-list-item-content> Edit Flow </v-list-item-content>
       </v-list-item>
-      <v-list-item clickable @click="duplicate(item)">
+      <v-list-item clickable @click="duplicate(flowItem)">
         <v-list-item-icon>
           <v-icon name="content_copy" />
         </v-list-item-icon>
         <v-list-item-content> Duplicate </v-list-item-content>
       </v-list-item>
-      <v-list-item clickable @click="backup(item)">
+      <v-list-item clickable @click="backup(flowItem)">
         <v-list-item-icon>
           <v-icon name="file_download" />
         </v-list-item-icon>
         <v-list-item-content> Backup </v-list-item-content>
       </v-list-item>
-      <v-list-item clickable @click="showPushToCloud(item)">
+      <v-list-item clickable @click="showPushToCloud(flowItem)">
         <v-list-item-icon>
           <v-icon name="cloud_upload" />
         </v-list-item-icon>
         <v-list-item-content> Push to Cloud </v-list-item-content>
       </v-list-item>
-      <v-list-item clickable @click="showDeleteItemDialog(item)">
+      <v-list-item clickable @click="showDeleteItemDialog(flowItem)">
         <v-list-item-icon>
           <v-icon name="delete" />
         </v-list-item-icon>
@@ -88,7 +90,7 @@
         </v-list-item-icon>
         <v-list-item-content> Edit Folder </v-list-item-content>
       </v-list-item>
-      <v-list-item clickable @click="showDeleteItemDialog(item)">
+      <v-list-item clickable @click="showDeleteItemDialog(item as IFolder)">
         <v-list-item-icon>
           <v-icon name="delete" />
         </v-list-item-icon>
@@ -106,7 +108,7 @@ import { useRouter } from 'vue-router';
 export default defineComponent({
   props: {
     item: {
-      type: Object as PropType<IFlow>,
+      type: Object as PropType<IFlow | IFolder>,
       required: true,
     },
     isLocal: {
@@ -114,13 +116,15 @@ export default defineComponent({
       required: true,
     },
   },
-  setup() {
+  setup(props) {
     const router = useRouter();
     const flowManagerUtils = inject<FlowManagerUtilsContext>('flowManagerUtils');
 
     const selectedCredential = computed(() => flowManagerUtils?.selectedCredential?.value);
+    const flowItem = computed(() => props.item as IFlow);
 
     return {
+      flowItem,
       showEditFlowDialog,
       duplicate,
       backup,
@@ -152,7 +156,7 @@ export default defineComponent({
       flowManagerUtils?.showPushToCloud?.(item);
     }
 
-    function showDeleteItemDialog(item: IFlow) {
+    function showDeleteItemDialog(item: IFlow | IFolder) {
       flowManagerUtils?.showDeleteItemDialog?.(item);
     }
 
