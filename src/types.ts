@@ -65,9 +65,9 @@ export interface IFlowMetadata {
 export interface IFlowSnapshotData {
   flow: {
     name: string;
-    icon?: string;
-    color?: string;
-    description?: string;
+    icon?: string | null;
+    color?: string | null;
+    description?: string | null;
     status: string;
     trigger?: string;
     accountability?: string;
@@ -128,9 +128,9 @@ export interface IFlow {
   id: string;
   type?: string;
   name: string;
-  icon: string;
-  color: string;
-  description: string;
+  icon: string | null;
+  color: string | null;
+  description: string | null;
   status: string;
   trigger: string;
   accountability: string;
@@ -324,6 +324,7 @@ export interface FlowManagerUtilsContext {
   showRunDialog: (item: IFlow) => Promise<void> | void;
   duplicateFolder: (item: IFolder) => Promise<void> | void;
   showEditFolderDialog: (item: IFolder) => Promise<void> | void;
+  showEditFlowDialog?: (item: IFlow) => void;
   parentId?: Ref<string | null> | string | null;
   onSort: (event: (IFlow | IFolder)[], parentId?: string | null) => void | Promise<void>;
   selectedItems?: Ref<string[]>;

@@ -203,6 +203,17 @@ const failedOperationName = computed(() => {
         </v-button>
 
         <v-button
+          v-if="flowManagerUtils?.showEditFlowDialog"
+          small
+          secondary
+          class="sidebar-btn"
+          @click="flowManagerUtils.showEditFlowDialog(selectedFlow)"
+        >
+          <v-icon name="edit" class="mr-1" />
+          Edit Flow Options
+        </v-button>
+
+        <v-button
           small
           secondary
           class="sidebar-btn"

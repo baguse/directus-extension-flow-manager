@@ -44,6 +44,12 @@
         </v-list-item-icon>
         <v-list-item-content> Export for Git </v-list-item-content>
       </v-list-item>
+      <v-list-item clickable @click="showEditFlowDialog(item)">
+        <v-list-item-icon>
+          <v-icon name="edit" />
+        </v-list-item-icon>
+        <v-list-item-content> Edit Flow </v-list-item-content>
+      </v-list-item>
       <v-list-item clickable @click="duplicate(item)">
         <v-list-item-icon>
           <v-icon name="content_copy" />
@@ -115,6 +121,7 @@ export default defineComponent({
     const selectedCredential = computed(() => flowManagerUtils?.selectedCredential?.value);
 
     return {
+      showEditFlowDialog,
       duplicate,
       backup,
       showPushToCloud,
@@ -128,6 +135,10 @@ export default defineComponent({
       openVersionDialog,
       openGitExportDialog,
     };
+
+    function showEditFlowDialog(item: IFlow) {
+      flowManagerUtils?.showEditFlowDialog?.(item);
+    }
 
     function duplicate(item: IFlow, isDuplicate?: boolean) {
       flowManagerUtils?.duplicate?.(item, isDuplicate);

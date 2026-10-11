@@ -67,6 +67,7 @@
         @open-dashboard="openDashboardDetail"
         @open-version-dialog="openVersionDialog"
         @open-git-export-dialog="openGitExportDialog"
+        @edit-flow="showEditFlowDialog"
         @duplicate="duplicate"
         @backup="backup"
         @push-to-cloud="showPushToCloud"
@@ -330,6 +331,14 @@
       @update:model-value="gitExportDialog = $event"
     />
 
+    <FlowEditDialog
+      :value="editFlowDialog"
+      :flow="flowToEdit"
+      :loading="isSavingFlow"
+      @update:model-value="editFlowDialog = $event"
+      @save="onSaveFlow"
+    />
+
     <v-overlay :value="true" />
   </private-view>
 </template>
@@ -374,6 +383,7 @@ import FlowSidebarDetail from './components/flow-sidebar-detail.vue';
 import UndoToast from './components/undo-toast.vue';
 import FlowVersionDialog from './components/flow-version-dialog.vue';
 import FlowGitExportModal from './components/flow-git-export-modal.vue';
+import FlowEditDialog from './components/flow-edit-dialog.vue';
 import { useFlowRestore } from '../composables/use-flow-restore';
 import { useFlowCategories } from '../composables/use-flow-categories';
 import { useFlowDatabase } from '../composables/use-flow-database';
@@ -401,6 +411,7 @@ export default defineComponent({
     UndoToast,
     FlowVersionDialog,
     FlowGitExportModal,
+    FlowEditDialog,
   },
 
   props: {
@@ -1326,6 +1337,90 @@ export default defineComponent({
       }
     });
 
+    const editFlowDialog = ref(false);
+    const flowToEdit = ref<IFlow | null>(null);
+    const isSavingFlow = ref(false);
+
+    function showEditFlowDialog(item: IFlow) {
+      flowToEdit.value = item;
+      editFlowDialog.value = true;
+    }
+
+    async function onSaveFlow(flowData: {
+      id: string;
+      name: string;
+      status: string;
+      description: string | null;
+      icon: string | null;
+      color: string | null;
+    }) {
+      isSavingFlow.value = true;
+      try {
+        const payload = {
+          name: flowData.name,
+          status: flowData.status,
+          description: flowData.description,
+          icon: flowData.icon,
+          color:
+            flowData.color &&
+            flowData.color !== 'var(--theme--primary)' &&
+            flowData.color !== 'var(--theme-primary)'
+              ? flowData.color
+              : null,
+        };
+
+        if (selectedCredential.value === 'local') {
+          await api.patch(`/flows/${flowData.id}`, payload);
+        } else {
+          const cred = credentials.value.find((c) => c.id === selectedCredential.value);
+          if (!cred) throw new Error('Remote credential not found');
+          await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+            url: `${cred.url}/flows/${flowData.id}`,
+            staticToken: cred.staticToken,
+            method: 'PATCH',
+            payload,
+          });
+        }
+
+        // Optimistically update existing flow in local state
+        const targetFlow = flows.value.find((f) => f.id === flowData.id);
+        if (targetFlow) {
+          Object.assign(targetFlow, payload);
+        }
+        const targetTabular = tabularFlows.value.find((f) => f.id === flowData.id);
+        if (targetTabular) {
+          Object.assign(targetTabular, payload);
+        }
+        if (selectedItem.value && selectedItem.value.id === flowData.id) {
+          Object.assign(selectedItem.value, payload);
+        }
+
+        await reloadFlow();
+        await reloadTabularFlow();
+
+        notificationsStore.add({
+          type: 'success',
+          title: 'Flow Updated',
+          text: `Flow "${flowData.name}" has been updated successfully.`,
+          closeable: true,
+        });
+
+        editFlowDialog.value = false;
+        flowToEdit.value = null;
+      } catch (err: unknown) {
+        console.error('[FLOW MANAGER] Failed to update flow:', err);
+        const errorMsg = formatConnectionError(err, 'Failed to update flow.');
+        notificationsStore.add({
+          type: 'error',
+          title: 'Update Failed',
+          text: errorMsg,
+          closeable: true,
+        });
+      } finally {
+        isSavingFlow.value = false;
+      }
+    }
+
     // call this method on loaded
     reloadFlow();
     reloadTabularFlow();
@@ -1340,6 +1435,7 @@ export default defineComponent({
       showDeleteItemDialog,
       duplicateFolder,
       showEditFolderDialog,
+      showEditFlowDialog,
       selectItem,
       selectItemKey,
       parentId,
@@ -1496,6 +1592,11 @@ export default defineComponent({
       onFlowRestoredFromSnapshot,
       reload,
       isReloading,
+      editFlowDialog,
+      flowToEdit,
+      isSavingFlow,
+      showEditFlowDialog,
+      onSaveFlow,
     };
   },
 });

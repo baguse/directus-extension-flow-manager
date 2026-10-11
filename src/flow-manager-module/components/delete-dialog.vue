@@ -44,7 +44,13 @@ const { value, selectedItem, selectedFlows, isBatchAction } = toRefs(props);
             <v-list-item v-for="item in selectedFlows" :key="item.id">
               <v-list-item-icon>
                 <v-icon
-                  :color="item.color || 'var(--theme--primary)'"
+                  :color="
+                    item.color &&
+                    item.color !== 'var(--theme--primary)' &&
+                    item.color !== 'var(--theme-primary)'
+                      ? item.color
+                      : undefined
+                  "
                   :name="item.icon || 'bolt'"
                 />
               </v-list-item-icon>

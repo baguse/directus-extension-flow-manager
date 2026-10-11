@@ -493,10 +493,19 @@ onMounted(() => {
           <div class="flow-banner-main">
             <div
               class="flow-banner-avatar"
-              :style="{
-                backgroundColor: `${flow.color || 'var(--theme--primary)'}18`,
-                color: flow.color || 'var(--theme--primary)',
-              }"
+              :style="
+                flow.color &&
+                flow.color !== 'var(--theme--primary)' &&
+                flow.color !== 'var(--theme-primary)'
+                  ? {
+                      backgroundColor: `${flow.color}18`,
+                      color: flow.color,
+                    }
+                  : {
+                      backgroundColor: 'var(--theme--background-subdued, rgba(128, 128, 128, 0.1))',
+                      color: 'var(--theme--foreground, #1e293b)',
+                    }
+              "
             >
               <v-icon :name="flow.icon || 'bolt'" />
             </div>

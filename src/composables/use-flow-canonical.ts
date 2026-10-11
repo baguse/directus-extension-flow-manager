@@ -7,9 +7,9 @@ export interface ICanonicalFlowFile {
   version: string;
   flow: {
     name: string;
-    icon: string;
-    color: string;
-    description: string;
+    icon: string | null;
+    color: string | null;
+    description: string | null;
     status: string;
     trigger: string;
     accountability: string;
@@ -65,7 +65,7 @@ export function useFlowCanonical() {
         flow: {
           name: 'Unnamed Flow',
           icon: 'bolt',
-          color: 'var(--theme--primary)',
+          color: null,
           description: '',
           status: 'active',
           trigger: 'manual',
@@ -114,7 +114,12 @@ export function useFlowCanonical() {
         flow: {
           name: String(flowObj.name || ''),
           icon: String(flowObj.icon || 'bolt'),
-          color: String(flowObj.color || 'var(--theme--primary)'),
+          color:
+            flowObj.color &&
+            flowObj.color !== 'var(--theme--primary)' &&
+            flowObj.color !== 'var(--theme-primary)'
+              ? String(flowObj.color)
+              : null,
           description: String(flowObj.description || ''),
           status: String(flowObj.status || 'active'),
           trigger: String(flowObj.trigger || 'manual'),
@@ -172,7 +177,12 @@ export function useFlowCanonical() {
         flow: {
           name: flow.name || '',
           icon: flow.icon || 'bolt',
-          color: flow.color || 'var(--theme--primary)',
+          color:
+            flow.color &&
+            flow.color !== 'var(--theme--primary)' &&
+            flow.color !== 'var(--theme-primary)'
+              ? flow.color
+              : null,
           description: flow.description || '',
           status: flow.status || 'active',
           trigger: flow.trigger || 'manual',
@@ -232,7 +242,12 @@ export function useFlowCanonical() {
       flow: {
         name: snapshotData.flow?.name ?? '',
         icon: snapshotData.flow?.icon ?? 'bolt',
-        color: snapshotData.flow?.color ?? 'var(--theme--primary)',
+        color:
+          snapshotData.flow?.color &&
+          snapshotData.flow.color !== 'var(--theme--primary)' &&
+          snapshotData.flow.color !== 'var(--theme-primary)'
+            ? snapshotData.flow.color
+            : null,
         description: snapshotData.flow?.description ?? '',
         status: snapshotData.flow?.status ?? 'active',
         trigger: snapshotData.flow?.trigger ?? 'manual',

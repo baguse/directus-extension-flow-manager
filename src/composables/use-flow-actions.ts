@@ -76,6 +76,12 @@ export function useFlowActions(options: UseFlowActionsOptions) {
   const isBatchAction = ref(false);
 
   async function createFlow(item: Omit<IFlow, 'id'> & { id?: string }) {
+    const rawColor = item.color ? String(item.color).trim() : '';
+    const cleanColor =
+      rawColor && rawColor !== 'var(--theme--primary)' && rawColor !== 'var(--theme-primary)'
+        ? rawColor
+        : null;
+
     if (selectedCredential.value === 'local') {
       const response = (await api.post('/flows', {
         id: item.id,
@@ -86,7 +92,7 @@ export function useFlowActions(options: UseFlowActionsOptions) {
         description: item.description,
         trigger: item.trigger,
         options: item.options,
-        color: item.color,
+        color: cleanColor,
         flow_manager_metadata_id: {
           flow_manager_category: item.flow_manager_metadata_id?.flow_manager_category,
         },
@@ -115,7 +121,7 @@ export function useFlowActions(options: UseFlowActionsOptions) {
           description: item.description,
           trigger: item.trigger,
           options: item.options,
-          color: item.color,
+          color: cleanColor,
           flow_manager_metadata_id: {
             flow_manager_category: item.flow_manager_metadata_id?.flow_manager_category,
           },
@@ -140,6 +146,12 @@ export function useFlowActions(options: UseFlowActionsOptions) {
 
   async function duplicate(item: IFlow) {
     try {
+      const rawColor = item.color ? String(item.color).trim() : '';
+      const cleanColor =
+        rawColor && rawColor !== 'var(--theme--primary)' && rawColor !== 'var(--theme-primary)'
+          ? rawColor
+          : null;
+
       const payload: Omit<IFlow, 'id'> & { id?: string } = {
         name: `${item.name} - Duplicated`,
         status: 'inactive',
@@ -148,7 +160,7 @@ export function useFlowActions(options: UseFlowActionsOptions) {
         description: item.description,
         trigger: item.trigger,
         options: item.options,
-        color: item.color,
+        color: cleanColor,
         flow_manager_metadata_id: {
           flow_manager_category: item.flow_manager_metadata_id?.flow_manager_category,
         },
@@ -351,6 +363,14 @@ export function useFlowActions(options: UseFlowActionsOptions) {
       for (const item of selectedFlows.value) {
         if (item) {
           try {
+            const rawColor = item.color ? String(item.color).trim() : '';
+            const cleanColor =
+              rawColor &&
+              rawColor !== 'var(--theme--primary)' &&
+              rawColor !== 'var(--theme-primary)'
+                ? rawColor
+                : null;
+
             await createFlow({
               name: `${item.name} - Duplicated`,
               status: 'inactive',
@@ -359,7 +379,7 @@ export function useFlowActions(options: UseFlowActionsOptions) {
               description: item.description,
               trigger: item.trigger,
               options: item.options,
-              color: item.color,
+              color: cleanColor,
               flow_manager_metadata_id: {
                 flow_manager_category: item.flow_manager_metadata_id?.flow_manager_category,
               },

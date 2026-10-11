@@ -85,6 +85,10 @@ const showRunDialog = (item: IFlow) => {
   flowManagerUtils?.showRunDialog?.(item);
 };
 
+const showEditFlowDialog = (item: IFlow) => {
+  flowManagerUtils?.showEditFlowDialog?.(item);
+};
+
 const duplicateFolder = (item: IFolder) => {
   flowManagerUtils?.duplicateFolder?.(item);
 };
@@ -232,6 +236,14 @@ function onActivatorClick() {
         </v-list-item-icon>
         <v-list-item-content>
           <v-text-overflow :text="'Open Dashboard'" />
+        </v-list-item-content>
+      </v-list-item>
+      <v-list-item clickable @click="showEditFlowDialog(flow as unknown as IFlow)">
+        <v-list-item-icon>
+          <v-icon name="edit" />
+        </v-list-item-icon>
+        <v-list-item-content>
+          <v-text-overflow :text="'Edit Flow'" />
         </v-list-item-content>
       </v-list-item>
       <v-list-item clickable @click="duplicate(flow as IFlow)">

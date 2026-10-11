@@ -334,7 +334,12 @@ function mapRawFlows(rawList: Record<string, unknown>[]): FlowStatItem[] {
       id: String(f.id),
       name: String(f.name || 'Untitled Flow'),
       icon: f.icon ? String(f.icon) : 'bolt',
-      color: f.color ? String(f.color) : 'var(--theme--primary)',
+      color:
+        f.color &&
+        f.color !== 'var(--theme--primary)' &&
+        f.color !== 'var(--theme-primary)'
+          ? String(f.color)
+          : undefined,
       status: String(f.status || 'inactive'),
       trigger: f.trigger ? String(f.trigger) : 'manual',
       flow_manager_run_counter: Number(meta.flow_manager_run_counter || 0),

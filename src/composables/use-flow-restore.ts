@@ -62,7 +62,12 @@ function normalizeSingleFlow(item: unknown): IFlow {
     return {
       name: candidate.flow.name || 'Restored Flow',
       icon: candidate.flow.icon || 'bolt',
-      color: candidate.flow.color || '#6366F1',
+      color:
+        candidate.flow.color &&
+        candidate.flow.color !== 'var(--theme--primary)' &&
+        candidate.flow.color !== 'var(--theme-primary)'
+          ? candidate.flow.color
+          : null,
       description: candidate.flow.description || '',
       status: candidate.flow.status || 'inactive',
       trigger: candidate.flow.trigger || 'manual',
@@ -254,7 +259,12 @@ export function useFlowRestore(options: UseFlowRestoreOptions) {
             name: newName,
             status: 'inactive',
             icon: flow?.icon,
-            color: flow?.color,
+            color:
+              flow?.color &&
+              flow.color !== 'var(--theme--primary)' &&
+              flow.color !== 'var(--theme-primary)'
+                ? flow.color
+                : null,
             description: flow?.description,
             trigger: flow?.trigger,
             options: flow?.options,
@@ -307,7 +317,12 @@ export function useFlowRestore(options: UseFlowRestoreOptions) {
           description: item.description,
           trigger: item.trigger,
           options: item.options,
-          color: item.color,
+          color:
+            item?.color &&
+            item.color !== 'var(--theme--primary)' &&
+            item.color !== 'var(--theme-primary)'
+              ? item.color
+              : null,
           flow_manager_metadata_id: {
             flow_manager_category: item.flow_manager_metadata_id?.flow_manager_category,
           },

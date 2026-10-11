@@ -59,7 +59,16 @@ const singleRestoredItem = computed(() => {
         <v-list v-if="Array.isArray(restoredFileObj)">
           <v-list-item v-for="item in restoredFileObj" :key="item?.id">
             <v-list-item-icon>
-              <v-icon :color="item?.color || 'var(--theme--primary)'" :name="item?.icon" />
+              <v-icon
+                :color="
+                  item?.color &&
+                  item.color !== 'var(--theme--primary)' &&
+                  item.color !== 'var(--theme-primary)'
+                    ? item.color
+                    : undefined
+                "
+                :name="item?.icon || 'bolt'"
+              />
             </v-list-item-icon>
             <v-list-item-content>{{ item?.name }}</v-list-item-content>
           </v-list-item>
@@ -68,8 +77,14 @@ const singleRestoredItem = computed(() => {
           <v-list-item>
             <v-list-item-icon>
               <v-icon
-                :color="singleRestoredItem.color || 'var(--theme--primary)'"
-                :name="singleRestoredItem.icon"
+                :color="
+                  singleRestoredItem.color &&
+                  singleRestoredItem.color !== 'var(--theme--primary)' &&
+                  singleRestoredItem.color !== 'var(--theme-primary)'
+                    ? singleRestoredItem.color
+                    : undefined
+                "
+                :name="singleRestoredItem.icon || 'bolt'"
               />
             </v-list-item-icon>
             <v-list-item-content>{{ singleRestoredItem.name }}</v-list-item-content>

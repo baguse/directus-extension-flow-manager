@@ -80,7 +80,16 @@ function onSubmit() {
       <v-card-text>
         <div v-if="flow" class="flow-preview-banner">
           <div class="flow-pill">
-            <v-icon :name="flow.icon || 'bolt'" :color="flow.color || 'var(--theme--primary)'" />
+            <v-icon
+              :name="flow.icon || 'bolt'"
+              :color="
+                flow.color &&
+                flow.color !== 'var(--theme--primary)' &&
+                flow.color !== 'var(--theme-primary)'
+                  ? flow.color
+                  : undefined
+              "
+            />
             <span class="flow-name">{{ flow.name }}</span>
           </div>
           <span class="flow-meta">
