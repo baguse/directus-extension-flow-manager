@@ -4,6 +4,7 @@ import type { useApi } from '@directus/extensions-sdk';
 import type { Filter, Preset } from '@directus/types';
 import type { DirectusFilter, ExtendedUser, Header, ICredential, IFlow, IFolder } from '../types';
 import { ENDPOINT_EXTENSION_NAME } from '../constants';
+import { cleanFilter } from '../utils/filter.util';
 
 export interface UseFlowQueryOptions {
   api: ReturnType<typeof useApi>;
@@ -353,6 +354,7 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
         }
       }
       const fields = ['*', 'operations.*', 'flow_manager_metadata_id.*'];
+      const cleanedFilter = cleanFilter(tableFlowFilter.value);
 
       let response: { data: { data: IFlow[] } } = { data: { data: [] } };
       if (selectedCredential.value === 'local') {
@@ -360,7 +362,7 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
           params: {
             fields: fields.join(','),
             sort,
-            filter: tableFlowFilter.value,
+            filter: cleanedFilter || undefined,
             search: tableFlowSearch.value,
           },
         });
@@ -368,8 +370,8 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
         const c = credentials.value.find((cred) => cred.id === selectedCredential.value);
         if (c) {
           const queries = [`fields=${fields.join(',')}`, `sort=${sort}`];
-          if (tableFlowFilter.value) {
-            queries.push(`filter=${JSON.stringify(tableFlowFilter.value)}`);
+          if (cleanedFilter) {
+            queries.push(`filter=${JSON.stringify(cleanedFilter)}`);
           }
           if (tableFlowSearch.value) {
             queries.push(`search=${tableFlowSearch.value}`);
@@ -407,6 +409,7 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
 
   const updateExistingPreset = debounce(async () => {
     if (!preset.value?.id) return;
+    const cleanedFilter = cleanFilter(tableFlowFilter.value);
     if (selectedCredential.value === 'local') {
       await presetsStore.update(preset.value.id, {
         layout_options: {
@@ -418,7 +421,7 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
         layout_query: {
           sort: tableSort.value,
         },
-        filter: tableFlowFilter.value,
+        filter: cleanedFilter,
         search: tableFlowSearch.value,
       });
       presetsStore.hydrate();
@@ -439,7 +442,7 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
             layout_query: {
               sort: tableSort.value,
             },
-            filter: tableFlowFilter.value,
+            filter: cleanedFilter,
             search: tableFlowSearch.value,
           },
         });
@@ -449,6 +452,7 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
   }, 500);
 
   const createNewPreset = debounce(async () => {
+    const cleanedFilter = cleanFilter(tableFlowFilter.value);
     if (selectedCredential.value === 'local') {
       await presetsStore.savePreset({
         bookmark: null,
@@ -462,7 +466,7 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
         layout_query: {
           sort: tableSort.value,
         },
-        filter: tableFlowFilter.value,
+        filter: cleanedFilter,
         search: tableFlowSearch.value,
       });
       presetsStore.hydrate();
@@ -485,7 +489,7 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
             layout_query: {
               sort: tableSort.value,
             },
-            filter: tableFlowFilter.value,
+            filter: cleanedFilter,
             search: tableFlowSearch.value,
             user: currentUser.value?.id,
           },

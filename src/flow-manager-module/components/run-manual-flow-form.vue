@@ -5,6 +5,7 @@ import { useStores, useLayout, useApi } from '@directus/extensions-sdk';
 import type { Preset, AppCollection, Field } from '@directus/types';
 import debounce from 'lodash/debounce';
 import formatTitle from '@directus/format-title';
+import { cleanFilter } from '../../utils/filter.util';
 
 const props = defineProps<{
   selectedItem: Partial<IFlow>;
@@ -302,7 +303,7 @@ function resetConfirm() {
             v-model:selection="selectedItemKeys"
             :filter-user="{}"
             :filter-system="{}"
-            :filter="tabularFilter"
+            :filter="cleanFilter(tabularFilter) || undefined"
             :search="tabularSearch"
             :collection="selectedCollectionToRun"
             :clear-filters="clearTabularFilters"

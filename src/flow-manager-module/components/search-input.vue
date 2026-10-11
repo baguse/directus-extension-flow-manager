@@ -1,335 +1,431 @@
 <script setup lang="ts">
-import { useElementSize } from '@directus/composables';
-import { Filter } from '@directus/types';
-import isObject from 'lodash/isObject';
-import { Ref, computed, inject, ref, watch } from 'vue';
-import { useI18n } from 'vue-i18n';
+import type { Filter } from '@directus/types';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { cleanFilter } from '../../utils/filter.util';
 
-const props = defineProps<{
-  modelValue: string | null;
-  collection: string;
-  filter?: Filter | null;
-}>();
+const props = withDefaults(
+  defineProps<{
+    modelValue: string | null;
+    collection: string;
+    filter?: Filter | null;
+    placeholder?: string;
+  }>(),
+  {
+    filter: null,
+    placeholder: 'Search flows...',
+  },
+);
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string | null): void;
   (e: 'update:filter', value: Filter | null): void;
 }>();
 
-const { t } = useI18n();
-
-const input = ref<HTMLInputElement | null>(null);
-
-const active = ref(props.modelValue !== null);
-const filterActive = ref(false);
-const filterBorder = ref(false);
-
-const mainElement = inject<Ref<Element | undefined>>('main-element');
-const filterElement = ref<HTMLElement>();
-const { width: mainElementWidth } = useElementSize(mainElement!);
-const { width: filterElementWidth } = useElementSize(filterElement);
+const containerRef = ref<HTMLElement | null>(null);
+const inputRef = ref<HTMLInputElement | null>(null);
+const isFilterOpen = ref(false);
+const isExpanded = ref(Boolean(props.modelValue));
 
 watch(
-  [mainElementWidth, filterElementWidth],
-  () => {
-    if (!filterElement.value) return;
-
-    const searchElement = filterElement.value.parentElement!;
-    const minWidth = searchElement.offsetWidth - 4;
-    const headerElement = mainElement?.value?.firstElementChild;
-
-    if (!headerElement) return;
-
-    const maxWidth =
-      searchElement.getBoundingClientRect().right -
-      (headerElement.getBoundingClientRect().left +
-        Number(window.getComputedStyle(headerElement).paddingLeft.replace('px', '')));
-
-    filterElement.value.style.maxWidth = maxWidth > minWidth ? `${String(maxWidth)}px` : '0px';
+  () => props.modelValue,
+  (val) => {
+    if (val) {
+      isExpanded.value = true;
+    }
   },
-  { immediate: true },
 );
 
-watch(active, (newActive: boolean) => {
-  if (newActive === true && input.value !== null) {
-    input.value.focus();
+function onInput(event: Event) {
+  const target = event.target as HTMLInputElement | null;
+  const val = target?.value ?? '';
+  emit('update:modelValue', val.length > 0 ? val : null);
+}
+
+function expandAndFocus() {
+  isExpanded.value = true;
+  nextTick(() => {
+    inputRef.value?.focus();
+  });
+}
+
+function clearSearch() {
+  emit('update:modelValue', null);
+  if (inputRef.value) {
+    inputRef.value.value = '';
+    inputRef.value.focus();
   }
-});
+}
 
-const activeFilterCount = computed(() => {
-  if (!props.filter) return 0;
-
-  const filterOperators: string[] = [];
-
-  parseLevel(props.filter);
-
-  return filterOperators.length;
-
-  function parseLevel(level: Record<string, unknown>) {
-    for (const [key, value] of Object.entries(level)) {
-      if ((key === '_and' || key === '_or') && Array.isArray(value)) {
-        value.forEach((v) => {
-          if (isObject(v)) {
-            parseLevel(v as Record<string, unknown>);
-          }
-        });
-      } else if (key.startsWith('_')) {
-        filterOperators.push(key);
-      } else {
-        if (isObject(value)) {
-          parseLevel(value as Record<string, unknown>);
-        }
-      }
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') {
+    if (props.modelValue) {
+      clearSearch();
+    } else {
+      isExpanded.value = false;
+      inputRef.value?.blur();
     }
   }
+}
+
+function onFilterChange(updatedFilter: Filter | null) {
+  emit('update:filter', updatedFilter);
+}
+
+function clearFilter() {
+  emit('update:filter', null);
+}
+
+function handleClickOutside(event: MouseEvent) {
+  if (isFilterOpen.value) return;
+
+  const target = event.target as HTMLElement | null;
+  if (target?.closest?.('.v-menu-content')) return;
+
+  const el = containerRef.value;
+  if (!el || (target && el.contains(target))) return;
+
+  if (!props.modelValue) {
+    isExpanded.value = false;
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('pointerdown', handleClickOutside);
 });
 
-function onClickOutside(e: { path?: HTMLElement[]; composedPath?: () => HTMLElement[] }) {
-  const path = e.path || e.composedPath!();
-  if (path.some((el) => el?.classList?.contains('v-menu-content'))) return false;
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', handleClickOutside);
+});
 
-  return true;
+/**
+ * Counts active rule expressions inside a Directus Filter structure.
+ */
+function countFilterRules(filterData: unknown): number {
+  if (!filterData || typeof filterData !== 'object') return 0;
+
+  let total = 0;
+  for (const [key, val] of Object.entries(filterData as Record<string, unknown>)) {
+    if ((key === '_and' || key === '_or') && Array.isArray(val)) {
+      for (const item of val) {
+        total += countFilterRules(item);
+      }
+    } else if (key.startsWith('_')) {
+      total += 1;
+    } else if (val && typeof val === 'object') {
+      total += countFilterRules(val);
+    }
+  }
+  return total;
 }
 
-function disable() {
-  active.value = false;
-  filterActive.value = false;
-}
-
-function emitValue() {
-  if (!input.value) return;
-  const value = input.value?.value;
-  emit('update:modelValue', value);
-}
+const activeFilterCount = computed(() => countFilterRules(cleanFilter(props.filter)));
 </script>
 
 <template>
-  <v-badge
-    bottom
-    right
-    class="search-badge"
-    :value="activeFilterCount"
-    :disabled="!activeFilterCount || filterActive"
+  <div
+    ref="containerRef"
+    class="custom-search-container"
+    :class="{
+      'is-expanded': isExpanded,
+      'has-value': Boolean(modelValue),
+      'has-active-filters': activeFilterCount > 0,
+      'is-filter-open': isFilterOpen,
+    }"
   >
-    <div
-      v-click-outside="{
-        handler: disable,
-        middleware: onClickOutside,
-      }"
-      class="search-input"
-      :class="{
-        active,
-        'filter-active': filterActive,
-        'has-content': !!modelValue,
-        'filter-border': filterBorder,
-      }"
-      @click="active = true"
-    >
-      <v-icon
-        v-tooltip.bottom="active ? null : t('search')"
-        name="search"
-        class="icon-search"
-        :clickable="!active"
-      />
+    <div class="search-input-shell" :class="{ 'is-expanded': isExpanded }" @click="expandAndFocus">
+      <button
+        type="button"
+        class="search-btn"
+        :title="isExpanded ? '' : 'Search'"
+        @click.stop="expandAndFocus"
+      >
+        <v-icon name="search" small class="btn-icon" />
+      </button>
+
       <input
-        ref="input"
-        :value="modelValue"
-        :placeholder="t('search_items')"
-        @input="emitValue"
-        @paste="emitValue"
-      />
-      <v-icon
-        v-if="modelValue"
-        clickable
-        class="icon-empty"
-        name="close"
-        @click.stop="$emit('update:modelValue', null)"
+        ref="inputRef"
+        type="text"
+        class="search-input-field"
+        :value="modelValue || ''"
+        :placeholder="placeholder"
+        @input="onInput"
+        @keydown="onKeydown"
       />
 
-      <v-icon
-        v-tooltip.bottom="t('filter')"
-        clickable
-        class="icon-filter"
-        name="filter_list"
-        @click="filterActive = !filterActive"
-      />
+      <button
+        v-if="modelValue && isExpanded"
+        type="button"
+        class="clear-btn"
+        title="Clear search"
+        @click.stop="clearSearch"
+      >
+        <v-icon name="close" small class="btn-icon" />
+      </button>
 
-      <transition-expand @before-enter="filterBorder = true" @after-leave="filterBorder = false">
-        <div v-show="filterActive" ref="filterElement" class="filter">
-          <interface-system-filter
-            class="filter-input"
-            inline
-            :value="filter"
-            :collection-name="collection"
-            @input="$emit('update:filter', $event)"
-          />
+      <span v-if="isExpanded" class="action-divider" />
+
+      <v-menu
+        v-model="isFilterOpen"
+        placement="bottom-end"
+        show-arrow
+        :close-on-content-click="false"
+      >
+        <template #activator="{ toggle }">
+          <button
+            type="button"
+            class="filter-btn"
+            :class="{ 'is-active': activeFilterCount > 0 || isFilterOpen }"
+            :title="activeFilterCount > 0 ? `${activeFilterCount} active filter(s)` : 'Filter'"
+            @click.stop="toggle"
+          >
+            <v-icon name="filter_list" small class="btn-icon" />
+            <span v-if="activeFilterCount > 0" class="filter-count-badge">
+              {{ activeFilterCount }}
+            </span>
+          </button>
+        </template>
+
+        <div class="filter-popover-panel">
+          <div class="filter-popover-header">
+            <div class="filter-popover-title">
+              <v-icon name="filter_list" small class="header-icon" />
+              <span>Filter Rules</span>
+              <span v-if="activeFilterCount > 0" class="active-count-chip">
+                {{ activeFilterCount }}
+              </span>
+            </div>
+
+            <v-button v-if="activeFilterCount > 0" x-small secondary @click="clearFilter">
+              Reset
+            </v-button>
+          </div>
+
+          <div class="filter-popover-content">
+            <interface-system-filter
+              :value="filter"
+              :collection-name="collection"
+              @input="onFilterChange"
+            />
+          </div>
         </div>
-      </transition-expand>
+      </v-menu>
     </div>
-  </v-badge>
+  </div>
 </template>
 
 <style lang="scss" scoped>
-.search-badge {
+.custom-search-container {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  box-sizing: border-box;
+}
+
+.search-input-shell {
+  display: inline-flex;
+  align-items: center;
+  height: 44px;
+  width: 76px;
+  min-width: 76px;
+  box-sizing: border-box;
+  padding: 0 4px;
+  background-color: var(
+    --theme--form--field--input--background,
+    var(--theme--background-subdued, #f8fafc)
+  );
+  border: var(--theme--border-width, 1px) solid
+    var(--theme--form--field--input--border-color, var(--theme--border-color, #e2e8f0));
+  border-radius: 22px;
+  cursor: pointer;
+  transition:
+    width var(--fast, 180ms) cubic-bezier(0.4, 0, 0.2, 1),
+    border-color var(--fast, 150ms) ease,
+    box-shadow var(--fast, 150ms) ease;
+
+  &:hover {
+    border-color: var(
+      --theme--form--field--input--border-color-hover,
+      var(--theme--primary, #6644ff)
+    );
+  }
+
+  &.is-expanded {
+    width: 240px;
+    padding-left: 6px;
+    padding-right: 4px;
+    cursor: default;
+    border-color: var(--theme--primary, #6644ff);
+    box-shadow: 0 0 0 2px var(--theme--primary-subdued, rgba(102, 68, 255, 0.12));
+
+    @media (min-width: 960px) {
+      width: 280px;
+    }
+  }
+}
+
+.search-btn,
+.filter-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  align-self: center;
-  --v-badge-background-color: var(--theme--primary);
-  --v-badge-offset-y: 8px;
-  --v-badge-offset-x: 8px;
-}
-
-.search-input {
-  display: flex;
-  align-items: center;
-  width: 68px;
-  height: 44px;
-  max-width: 100%;
-  box-sizing: border-box;
-  overflow: hidden;
-  border: var(--theme--border-width) solid var(--theme--form--field--input--border-color);
-  border-radius: 22px;
+  position: relative;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--theme--foreground-subdued, #64748b);
+  flex-shrink: 0;
   transition:
-    width var(--slow) var(--transition),
-    border-bottom-left-radius var(--fast) var(--transition),
-    border-bottom-right-radius var(--fast) var(--transition);
-
-  .icon-empty {
-    --v-icon-color: var(--theme--foreground-subdued);
-
-    display: none;
-    margin-left: 8px;
-
-    &:hover {
-      --v-icon-color: var(--theme--danger);
-    }
-  }
-
-  .icon-search,
-  .icon-filter {
-    --v-icon-color-hover: var(--theme--primary);
-  }
-
-  .icon-search {
-    margin: 0 8px;
-    margin-right: 4px;
-  }
-
-  .icon-filter {
-    margin: 0 8px;
-    margin-left: 0;
-  }
+    color var(--fast, 150ms) ease,
+    background-color var(--fast, 150ms) ease;
 
   &:hover {
-    border-color: var(--theme--form--field--input--border-color-hover);
+    color: var(--theme--primary, #6644ff);
+    background-color: var(--theme--primary-background, rgba(102, 68, 255, 0.08));
   }
 
-  &.has-content {
-    width: 200px;
-
-    .icon-empty {
-      display: block;
-    }
-
-    .icon-filter {
-      margin-left: 0;
-    }
+  &.is-active {
+    color: var(--theme--primary, #6644ff);
   }
 
-  input {
-    width: 0px;
-    height: 100%;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-    color: var(--theme--foreground);
-    text-overflow: ellipsis;
-    background-color: var(--theme--form--field--input--background);
-    border: none;
-    border-radius: 0;
-    flex-grow: 1;
-
-    &::placeholder {
-      color: var(--theme--foreground-subdued);
-    }
-  }
-
-  &.active {
-    width: 300px;
-    border-color: var(--theme--form--field--input--border-color);
-
-    .icon-empty {
-      display: block;
-    }
-  }
-
-  &.filter-active {
-    width: 200px;
-
-    .icon-filter {
-      --v-icon-color: var(--theme--primary);
-    }
-
-    @media (min-width: 600px) {
-      width: 250px;
-    }
-
-    @media (min-width: 960px) {
-      width: 300px;
-    }
-
-    @media (min-width: 1260px) {
-      width: 420px; /* blaze it */
-    }
-  }
-
-  &.filter-border {
-    padding-bottom: var(--theme--border-width);
-    border-bottom: none;
-    border-bottom-right-radius: 0;
-    border-bottom-left-radius: 0;
-    transition:
-      border-bottom-left-radius 0,
-      border-bottom-right-radius 0;
-
-    &::after {
-      position: absolute;
-      right: var(--theme--border-width);
-      bottom: calc(-1 * var(--theme--border-width));
-      left: var(--theme--border-width);
-      width: auto;
-      height: var(--theme--border-width);
-      background-color: var(--theme--border-color-subdued);
-      content: '';
-      pointer-events: none;
-    }
+  .btn-icon {
+    pointer-events: none;
   }
 }
 
-.value {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+.search-input-field {
+  display: none;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  margin: 0;
+  padding: 0 6px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--theme--foreground, #0f172a);
+  background: transparent;
+  border: none;
+  outline: none;
+
+  .is-expanded & {
+    display: block;
+  }
+
+  &::placeholder {
+    color: var(--theme--foreground-subdued, #94a3b8);
+  }
 }
 
-.filter {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  width: auto;
-  min-width: 100%;
+.clear-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
   padding: 0;
-  background-color: var(--theme--background-subdued);
-  border: var(--theme--border-width) solid var(--theme--form--field--input--border-color);
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 22px;
-  border-bottom-left-radius: 22px;
-  z-index: 999;
+  margin: 0 2px;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--theme--foreground-subdued, #64748b);
+  flex-shrink: 0;
+  transition: color var(--fast, 150ms) ease;
+
+  &:hover {
+    color: var(--theme--danger, #ef4444);
+  }
+
+  .btn-icon {
+    pointer-events: none;
+  }
 }
 
-.filter-input {
-  /* Use margin instead of padding to make sure transition expand takes it into account */
-  margin: 10px 8px;
+.action-divider {
+  display: block;
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background-color: var(--theme--border-color, #e2e8f0);
+  flex-shrink: 0;
+}
+
+.filter-count-badge {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  color: #ffffff;
+  background-color: var(--theme--primary, #6644ff);
+  border-radius: 7px;
+  box-shadow: 0 0 0 1.5px var(--theme--background, #ffffff);
+}
+
+.filter-popover-panel {
+  width: 360px;
+  max-width: calc(100vw - 32px);
+  max-height: 65vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--theme--background, #ffffff);
+  border: var(--theme--border-width, 1px) solid var(--theme--border-color, #e2e8f0);
+  border-radius: var(--theme--border-radius, 8px);
+  box-shadow:
+    0 10px 25px -5px rgba(0, 0, 0, 0.1),
+    0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.filter-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: var(--theme--border-width, 1px) solid var(--theme--border-color, #e2e8f0);
+  background-color: var(--theme--background-subdued, #f8fafc);
+}
+
+.filter-popover-title {
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--theme--foreground, #0f172a);
+
+  .header-icon {
+    margin-right: 6px;
+    color: var(--theme--primary, #6644ff);
+  }
+}
+
+.active-count-chip {
+  margin-left: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--theme--primary, #6644ff);
+  background-color: var(--theme--primary-background, rgba(102, 68, 255, 0.12));
+  border-radius: 10px;
+}
+
+.filter-popover-content {
+  padding: 8px 10px;
+  overflow-y: auto;
+  flex: 1;
 }
 </style>
