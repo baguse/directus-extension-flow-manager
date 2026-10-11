@@ -41,6 +41,19 @@ const isActive = computed(() => item.value.status === 'active');
 
 const isCategory = computed(() => item.value.type === 'category');
 
+const resolvedIcon = computed(() => {
+  const iconStr = item.value?.icon ? String(item.value.icon).trim() : '';
+  if (iconStr) return iconStr;
+  if (isCategory.value) return 'folder';
+  return 'bolt';
+});
+
+const resolvedColor = computed(() => {
+  const colorStr = item.value?.color ? String(item.value.color).trim() : '';
+  if (colorStr) return colorStr;
+  return 'var(--theme--foreground, var(--theme--background-inverted, var(--background-inverted, #000000)))';
+});
+
 const triggerType = computed(() => {
   return item.value.trigger?.toUpperCase();
 });
@@ -90,26 +103,29 @@ function selectItem() {
       </div>
       <v-icon
         v-if="isCategory"
-        :name="item.icon"
-        :color="item.color || 'var(--theme--background-inverted, var(--background-inverted))'"
+        :name="resolvedIcon"
+        :color="resolvedColor"
+        :style="{ color: resolvedColor }"
         :class="`mr-4`"
       />
       <v-icon
         v-else
         v-tooltip.bottom="item.status === 'active' ? 'Active' : 'Inactive'"
-        :name="item.icon || ''"
-        :color="item.color || 'var(--theme--background-inverted, var(--background-inverted)'"
+        :name="resolvedIcon"
+        :color="resolvedColor"
+        :style="{ color: resolvedColor }"
         :class="`mr-4`"
       />
       <div v-if="!isCategory && !isActive" class="item-detail">
         <v-badge
+          v-if="triggerType"
           :value="item.flow_manager_metadata_id?.flow_manager_run_counter || 0"
           :class="{
             'badge-success': !item.flow_manager_metadata_id?.flow_manager_last_run_message,
             'badge-error': !!item.flow_manager_metadata_id?.flow_manager_last_run_message,
           }"
         >
-          <v-chip x-small class="item-name text-gray mr-4 trigger-chip">{{ triggerType }}</v-chip>
+          <v-chip x-small active class="item-name mr-4 trigger-chip is-inactive">{{ triggerType }}</v-chip>
         </v-badge>
         <span ref="itemName" class="item-name text-gray">{{ item.name }}</span>
         <span v-if="item.description" class="item-note text-gray">{{ item.description }}</span>
@@ -123,7 +139,7 @@ function selectItem() {
             'badge-error': !!item.flow_manager_metadata_id?.flow_manager_last_run_message,
           }"
         >
-          <v-chip x-small active class="item-name mr-4 trigger-chip">{{ triggerType }} </v-chip>
+          <v-chip x-small active class="item-name mr-4 trigger-chip">{{ triggerType }}</v-chip>
         </v-badge>
         <span ref="itemName" class="item-name">{{ item.name }}</span>
         <span v-if="item.description" class="item-note">{{ item.description }}</span>
@@ -226,8 +242,21 @@ function selectItem() {
 }
 
 .trigger-chip {
-  --v-chip-color: var(--foreground-inverted, var(--theme--foreground));
+  --v-chip-color: var(--foreground-inverted, var(--theme--foreground-inverted, #ffffff));
   --v-chip-background-color: var(--theme--primary);
+  background-color: var(--theme--primary) !important;
+  color: var(--foreground-inverted, var(--theme--foreground-inverted, #ffffff)) !important;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+
+  :deep(*) {
+    color: var(--foreground-inverted, var(--theme--foreground-inverted, #ffffff)) !important;
+  }
+
+  &.is-inactive {
+    opacity: 0.7;
+  }
 }
 
 .badge-error {

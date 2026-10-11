@@ -121,7 +121,28 @@ function moveTo() {
 }
 
 function openDashboardDetail(flowId: string) {
-  router.push(`/flow-manager/dashboard/${flowId}`);
+  if (selectedCredential.value && selectedCredential.value !== 'local') {
+    router.push({
+      path: `/flow-manager/dashboard/${flowId}`,
+      query: { credential: selectedCredential.value },
+    });
+  } else {
+    router.push(`/flow-manager/dashboard/${flowId}`);
+  }
+}
+
+function onItemClick() {
+  if (flow.value.type === 'category') {
+    router.push(`/flow-manager/${currentPath.value}`);
+  } else {
+    flowManagerUtils?.selectItem?.(flow.value as IFlow);
+  }
+}
+
+function onActivatorClick() {
+  if (flow.value.type !== 'category') {
+    flowManagerUtils?.selectItem?.(flow.value as IFlow);
+  }
 }
 </script>
 
@@ -143,6 +164,8 @@ function openDashboardDetail(flowId: string) {
         :type="flow.type"
         :trigger-type="triggerType"
         :status="flow.status"
+        :child-count="childFlows.length"
+        @click="onActivatorClick"
       />
     </template>
     <navigation-item
@@ -154,7 +177,12 @@ function openDashboardDetail(flowId: string) {
     />
   </v-list-group>
 
-  <v-list-item v-else-if="matchesSearch" v-context-menu="'contextMenu'">
+  <v-list-item
+    v-else-if="matchesSearch"
+    v-context-menu="'contextMenu'"
+    clickable
+    @click="onItemClick"
+  >
     <navigation-item-content
       :search="search"
       :name="flow.name || 'Flow'"
@@ -163,6 +191,7 @@ function openDashboardDetail(flowId: string) {
       :type="flow.type"
       :trigger-type="triggerType"
       :status="flow.status"
+      :child-count="childFlows?.length || 0"
     />
   </v-list-item>
 
