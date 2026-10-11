@@ -86,18 +86,35 @@ watch(
 const existingTabularPreset: Ref<Partial<Preset>> = ref(
   presetsStore.getPresetForCollection(`flow-manager-${selectedCollectionToRun.value}`),
 );
-const updateExistingTabularPreset = debounce(() => {
-  presetsStore.update(existingTabularPreset.value.id, {
-    ...existingTabularPreset.value,
-  });
+const updateExistingTabularPreset = debounce(async () => {
+  if (!existingTabularPreset.value?.id) {
+    createNewTabularPreset();
+    return;
+  }
+  try {
+    await presetsStore.update(existingTabularPreset.value.id, {
+      ...existingTabularPreset.value,
+    });
+    await presetsStore.hydrate?.();
+  } catch (err) {
+    console.warn('[FLOW MANAGER] Failed to update tabular preset:', err);
+  }
 }, 500);
 
-const createNewTabularPreset = debounce(() => {
-  presetsStore.savePreset({
-    bookmark: null,
-    collection: `flow-manager-${selectedCollectionToRun.value}`,
-    ...existingTabularPreset.value,
-  });
+const createNewTabularPreset = debounce(async () => {
+  try {
+    const saved = (await presetsStore.savePreset({
+      bookmark: null,
+      collection: `flow-manager-${selectedCollectionToRun.value}`,
+      ...existingTabularPreset.value,
+    })) as Preset | undefined;
+    await presetsStore.hydrate?.();
+    if (saved?.id) {
+      existingTabularPreset.value = { ...existingTabularPreset.value, ...saved };
+    }
+  } catch (err) {
+    console.warn('[FLOW MANAGER] Failed to create tabular preset:', err);
+  }
 }, 500);
 
 const tabularPreset = computed({

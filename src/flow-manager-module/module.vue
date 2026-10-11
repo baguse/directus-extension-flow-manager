@@ -665,6 +665,7 @@ export default defineComponent({
       tableLimit,
       reloadTabularFlow,
       reloadExternalPreset,
+      reloadPreset,
       onTableSortChange,
       setStatusFilter,
       setTriggerFilter,
@@ -1091,7 +1092,7 @@ export default defineComponent({
           await getServerInfo();
           await ensureDatabase();
           router.push('/flow-manager');
-          await reloadExternalPreset();
+          await reloadPreset();
           await reloadFlow();
           await reloadTabularFlow();
           flowFields.value = (await reloadFields('directus_flows')) as Field[];
@@ -1169,7 +1170,7 @@ export default defineComponent({
         } else {
           router.push('/flow-manager');
         }
-        await reloadExternalPreset();
+        await reloadPreset();
         await reloadFlow();
         await reloadTabularFlow();
         flowFields.value = (await reloadFields('directus_flows')) as Field[];

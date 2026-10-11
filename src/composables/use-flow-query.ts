@@ -1,4 +1,4 @@
-import { ref, computed, type Ref } from 'vue';
+import { ref, computed, watch, type Ref } from 'vue';
 import debounce from 'lodash/debounce';
 import type { useApi } from '@directus/extensions-sdk';
 import type { Filter, Preset } from '@directus/types';
@@ -36,10 +36,17 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
     initialPreset,
   } = options;
 
-  const preset = ref<PresetState | undefined>(
+  const rawInitial =
     (initialPreset as PresetState | undefined) ||
-      (presetsStore.getPresetForCollection?.('flow-manager') as PresetState | undefined),
-  );
+    (presetsStore.getPresetForCollection?.('flow-manager') as PresetState | undefined);
+  if (rawInitial && typeof rawInitial.filter === 'string') {
+    try {
+      rawInitial.filter = JSON.parse(rawInitial.filter);
+    } catch {
+      rawInitial.filter = null;
+    }
+  }
+  const preset = ref<PresetState | undefined>(rawInitial ? { ...rawInitial } : undefined);
   const isTabularFlowLoading = ref(false);
   const tabularFlows = ref<IFlow[]>([]);
 
@@ -48,6 +55,67 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
     trigger: 'all',
     flow_manager_category: 'all',
   });
+
+  function syncShortcutFilters() {
+    let currentFilter = preset.value?.filter as DirectusFilter | string | null | undefined;
+    if (typeof currentFilter === 'string') {
+      try {
+        currentFilter = JSON.parse(currentFilter) as DirectusFilter;
+      } catch {
+        currentFilter = null;
+      }
+    }
+    if (!currentFilter || typeof currentFilter !== 'object') {
+      selectedShortcutFilter.value = {
+        status: 'all',
+        trigger: 'all',
+        flow_manager_category: 'all',
+      };
+      return;
+    }
+
+    const rules: Record<string, unknown>[] = [];
+    if (Array.isArray(currentFilter._and)) {
+      rules.push(...(currentFilter._and as Record<string, unknown>[]));
+    } else {
+      rules.push(currentFilter as Record<string, unknown>);
+    }
+
+    let status = 'all';
+    let trigger = 'all';
+    let category = 'all';
+
+    for (const r of rules) {
+      if (r && typeof r === 'object') {
+        const rec = r as Record<string, Record<string, unknown> | undefined>;
+        if (rec.status && typeof rec.status === 'object' && rec.status._eq !== undefined) {
+          status = String(rec.status._eq);
+        }
+        if (rec.trigger && typeof rec.trigger === 'object' && rec.trigger._eq !== undefined) {
+          trigger = String(rec.trigger._eq);
+        }
+        const metadata = rec.flow_manager_metadata_id;
+        if (metadata && typeof metadata === 'object') {
+          const categoryField = (metadata as Record<string, unknown>).flow_manager_category;
+          if (
+            categoryField &&
+            typeof categoryField === 'object' &&
+            (categoryField as Record<string, unknown>)._eq !== undefined
+          ) {
+            category = String((categoryField as Record<string, unknown>)._eq);
+          }
+        }
+      }
+    }
+
+    selectedShortcutFilter.value = {
+      status,
+      trigger,
+      flow_manager_category: category,
+    };
+  }
+
+  syncShortcutFilters();
 
   const selectedShortcutFilterCategoryName = computed(() => {
     if (
@@ -169,14 +237,45 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
 
   const tableFlowFilter = computed<Preset['filter']>({
     get: () => {
-      return preset.value?.filter ?? null;
+      const current = preset.value?.filter;
+      if (typeof current === 'string') {
+        try {
+          return JSON.parse(current);
+        } catch {
+          return null;
+        }
+      }
+      return current ?? null;
     },
     set(value: Preset['filter']) {
+      let normalizedValue = value;
+      if (typeof normalizedValue === 'string') {
+        try {
+          normalizedValue = JSON.parse(normalizedValue);
+        } catch {
+          normalizedValue = null;
+        }
+      }
+      if (
+        normalizedValue &&
+        typeof normalizedValue === 'object' &&
+        !Array.isArray(normalizedValue)
+      ) {
+        const obj = normalizedValue as Record<string, unknown>;
+        if (
+          Object.keys(obj).length === 0 ||
+          (Array.isArray(obj._and) && obj._and.length === 0 && Object.keys(obj).length === 1) ||
+          (Array.isArray(obj._or) && obj._or.length === 0 && Object.keys(obj).length === 1)
+        ) {
+          normalizedValue = null;
+        }
+      }
       preset.value = {
         ...(preset.value || {}),
-        filter: value,
+        filter: normalizedValue,
       };
       tablePage.value = 1;
+      syncShortcutFilters();
       updatePreset();
     },
   });
@@ -358,23 +457,28 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
 
       let response: { data: { data: IFlow[] } } = { data: { data: [] } };
       if (selectedCredential.value === 'local') {
+        const queryParams: Record<string, unknown> = {
+          fields: fields.join(','),
+          sort,
+        };
+        if (cleanedFilter) {
+          queryParams.filter = cleanedFilter;
+        }
+        if (tableFlowSearch.value) {
+          queryParams.search = tableFlowSearch.value;
+        }
         response = await api.get('/flows', {
-          params: {
-            fields: fields.join(','),
-            sort,
-            filter: cleanedFilter || undefined,
-            search: tableFlowSearch.value,
-          },
+          params: queryParams,
         });
       } else {
         const c = credentials.value.find((cred) => cred.id === selectedCredential.value);
         if (c) {
           const queries = [`fields=${fields.join(',')}`, `sort=${sort}`];
           if (cleanedFilter) {
-            queries.push(`filter=${JSON.stringify(cleanedFilter)}`);
+            queries.push(`filter=${encodeURIComponent(JSON.stringify(cleanedFilter))}`);
           }
           if (tableFlowSearch.value) {
-            queries.push(`search=${tableFlowSearch.value}`);
+            queries.push(`search=${encodeURIComponent(tableFlowSearch.value)}`);
           }
           response = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
             url: `${c.url}/flows?${queries.join('&')}`,
@@ -392,110 +496,222 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
 
   async function reloadExternalPreset() {
     const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
-    if (credential && currentUser.value) {
+    if (!credential) {
+      preset.value = undefined;
+      return;
+    }
+
+    try {
       const {
         data: { data },
-      } = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
-        url: `${credential.url}/presets?filter[user][_eq]=${currentUser.value?.id}&limit=-1`,
+      } = await api.post<{ data: Preset[] }>(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+        url: `${credential.url}/presets?filter[collection][_eq]=flow-manager&limit=-1`,
         staticToken: credential.staticToken,
         method: 'GET',
       });
-      const [selectedPreset] = data.filter(
-        (presetItem: { collection: string }) => presetItem.collection === 'flow-manager',
-      );
-      preset.value = selectedPreset;
+
+      if (Array.isArray(data) && data.length > 0) {
+        const currentUserId = currentUser.value?.id;
+        const matchingPreset =
+          (currentUserId ? data.find((p) => p.user === currentUserId) : undefined) ||
+          data.find((p) => !p.user) ||
+          data[0];
+
+        preset.value = matchingPreset ? { ...matchingPreset } : undefined;
+      } else {
+        preset.value = undefined;
+      }
+    } catch (err) {
+      console.warn('[FLOW MANAGER] Failed to load remote preset:', err);
+      preset.value = undefined;
     }
   }
 
-  const updateExistingPreset = debounce(async () => {
-    if (!preset.value?.id) return;
-    const cleanedFilter = cleanFilter(tableFlowFilter.value);
+  async function reloadPreset() {
     if (selectedCredential.value === 'local') {
-      await presetsStore.update(preset.value.id, {
-        layout_options: {
-          sort: tableSort.value,
-          headers: headers.value,
-          viewListMode: viewListMode.value,
-          limit: tableLimit.value,
-        },
-        layout_query: {
-          sort: tableSort.value,
-        },
-        filter: cleanedFilter,
-        search: tableFlowSearch.value,
-      });
-      presetsStore.hydrate();
-    } else {
-      const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
-      if (credential) {
-        await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
-          url: `${credential.url}/presets/${preset.value.id}`,
-          staticToken: credential.staticToken,
-          method: 'PATCH',
-          payload: {
-            layout_options: {
-              sort: tableSort.value,
-              headers: headers.value,
-              viewListMode: viewListMode.value,
-              limit: tableLimit.value,
-            },
-            layout_query: {
-              sort: tableSort.value,
-            },
-            filter: cleanedFilter,
-            search: tableFlowSearch.value,
-          },
-        });
+      try {
+        await presetsStore.hydrate?.();
+      } catch {
+        // Hydration might be in progress
       }
+      let localPreset = presetsStore.getPresetForCollection?.('flow-manager') as
+        PresetState | undefined;
+      if (
+        preset.value?.id &&
+        Array.isArray((presetsStore as Record<string, unknown>).collectionPresets)
+      ) {
+        const matching = (
+          (presetsStore as Record<string, unknown>).collectionPresets as Preset[]
+        ).find((p: Preset) => p.id === preset.value?.id);
+        if (matching) {
+          localPreset = matching as PresetState;
+        }
+      }
+      if (localPreset) {
+        if (typeof localPreset.filter === 'string') {
+          try {
+            localPreset.filter = JSON.parse(localPreset.filter);
+          } catch {
+            localPreset.filter = null;
+          }
+        }
+        preset.value = { ...localPreset };
+      } else {
+        preset.value = undefined;
+      }
+    } else {
+      await reloadExternalPreset();
+    }
+    syncShortcutFilters();
+  }
+
+  watch(
+    () => selectedCredential.value,
+    async (newVal, oldVal) => {
+      if (newVal !== oldVal) {
+        await reloadPreset();
+        tablePage.value = 1;
+      }
+    },
+  );
+
+  const updateExistingPreset = debounce(async () => {
+    if (!preset.value?.id) {
+      await createNewPreset();
+      return;
+    }
+    const layoutOptions = {
+      sort: tableSort.value,
+      headers: headers.value,
+      viewListMode: viewListMode.value,
+      limit: tableLimit.value,
+    };
+    const layoutQuery = {
+      sort: tableSort.value,
+    };
+    const rawFilter = tableFlowFilter.value;
+    const filterToSave = cleanFilter(rawFilter) ?? rawFilter ?? null;
+
+    try {
+      if (selectedCredential.value === 'local') {
+        const existing = presetsStore.getPresetForCollection?.('flow-manager');
+        if (!existing?.id && !preset.value.id) {
+          await createNewPreset();
+          return;
+        }
+
+        const updated = (await presetsStore.update(preset.value.id, {
+          layout_options: layoutOptions,
+          layout_query: layoutQuery,
+          filter: filterToSave,
+          search: tableFlowSearch.value,
+        })) as PresetState | undefined;
+
+        if (updated?.id) {
+          preset.value = {
+            ...preset.value,
+            ...updated,
+            filter: rawFilter ?? null,
+          };
+        }
+      } else {
+        const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
+        if (credential) {
+          const res = await api.post<{ data: Preset }>(
+            `/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`,
+            {
+              url: `${credential.url}/presets/${preset.value.id}`,
+              staticToken: credential.staticToken,
+              method: 'PATCH',
+              payload: {
+                layout_options: layoutOptions,
+                layout_query: layoutQuery,
+                filter: filterToSave,
+                search: tableFlowSearch.value,
+              },
+            },
+          );
+          if (res.data?.data) {
+            preset.value = {
+              ...preset.value,
+              ...res.data.data,
+              filter: rawFilter ?? null,
+            };
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[FLOW MANAGER] Failed to update preset, falling back to create new:', err);
+      if (preset.value) {
+        delete preset.value.id;
+      }
+      await createNewPreset();
     }
     reloadTabularFlow();
   }, 500);
 
   const createNewPreset = debounce(async () => {
-    const cleanedFilter = cleanFilter(tableFlowFilter.value);
-    if (selectedCredential.value === 'local') {
-      await presetsStore.savePreset({
-        bookmark: null,
-        collection: 'flow-manager',
-        layout_options: {
-          sort: tableSort.value,
-          headers: headers.value,
-          viewListMode: viewListMode.value,
-          limit: tableLimit.value,
-        },
-        layout_query: {
-          sort: tableSort.value,
-        },
-        filter: cleanedFilter,
-        search: tableFlowSearch.value,
-      });
-      presetsStore.hydrate();
-    } else {
-      const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
-      if (credential) {
-        await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
-          url: `${credential.url}/presets`,
-          staticToken: credential.staticToken,
-          method: 'POST',
-          payload: {
-            bookmark: null,
-            collection: 'flow-manager',
-            layout_options: {
-              sort: tableSort.value,
-              headers: headers.value,
-              viewListMode: viewListMode.value,
-              limit: tableLimit.value,
+    const layoutOptions = {
+      sort: tableSort.value,
+      headers: headers.value,
+      viewListMode: viewListMode.value,
+      limit: tableLimit.value,
+    };
+    const layoutQuery = {
+      sort: tableSort.value,
+    };
+    const rawFilter = tableFlowFilter.value;
+    const filterToSave = cleanFilter(rawFilter) ?? rawFilter ?? null;
+
+    try {
+      if (selectedCredential.value === 'local') {
+        const saved = (await presetsStore.savePreset({
+          bookmark: null,
+          collection: 'flow-manager',
+          layout_options: layoutOptions,
+          layout_query: layoutQuery,
+          filter: filterToSave,
+          search: tableFlowSearch.value,
+        })) as PresetState | undefined;
+
+        if (saved?.id) {
+          preset.value = {
+            ...preset.value,
+            ...saved,
+            filter: rawFilter ?? null,
+          };
+        }
+      } else {
+        const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
+        if (credential) {
+          const res = await api.post<{ data: Preset }>(
+            `/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`,
+            {
+              url: `${credential.url}/presets`,
+              staticToken: credential.staticToken,
+              method: 'POST',
+              payload: {
+                bookmark: null,
+                collection: 'flow-manager',
+                layout_options: layoutOptions,
+                layout_query: layoutQuery,
+                filter: filterToSave,
+                search: tableFlowSearch.value,
+                ...(currentUser.value?.id ? { user: currentUser.value.id } : {}),
+              },
             },
-            layout_query: {
-              sort: tableSort.value,
-            },
-            filter: cleanedFilter,
-            search: tableFlowSearch.value,
-            user: currentUser.value?.id,
-          },
-        });
-        reloadExternalPreset();
+          );
+          if (res.data?.data) {
+            preset.value = {
+              ...preset.value,
+              ...res.data.data,
+              filter: rawFilter ?? null,
+            };
+          }
+        }
       }
+    } catch (err) {
+      console.warn('[FLOW MANAGER] Failed to create preset:', err);
     }
     reloadTabularFlow();
   }, 500);
@@ -511,15 +727,19 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
 
   function onTableSortChange(sort: { by: string; desc: boolean }) {
     tableSort.value = sort;
-    updatePreset();
   }
 
   function setStatusFilter(status: string) {
-    const currentFilter = tableFlowFilter.value as DirectusFilter | null;
+    const currentFilter =
+      tableFlowFilter.value && typeof tableFlowFilter.value === 'object'
+        ? (tableFlowFilter.value as DirectusFilter)
+        : {};
     const filteredAnd =
-      currentFilter?._and?.filter(
+      currentFilter._and?.filter(
         (filter: Record<string, unknown>) => Object.keys(filter)[0] !== 'status',
       ) || [];
+    const { status: _s, ...restFilter } = currentFilter;
+
     if (status !== 'all') {
       filteredAnd.push({
         status: {
@@ -527,20 +747,35 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
         },
       });
     }
-    tableFlowFilter.value = {
-      ...(currentFilter || {}),
-      _and: filteredAnd,
-    } as unknown as Filter;
+
+    if (filteredAnd.length > 0) {
+      tableFlowFilter.value = {
+        ...restFilter,
+        _and: filteredAnd,
+      } as unknown as Filter;
+    } else if (
+      Object.keys(restFilter).length > 0 &&
+      Object.keys(restFilter).some((k) => k !== '_and')
+    ) {
+      const { _and: _empty, ...rem } = restFilter;
+      tableFlowFilter.value = Object.keys(rem).length > 0 ? (rem as unknown as Filter) : null;
+    } else {
+      tableFlowFilter.value = null;
+    }
     selectedShortcutFilter.value.status = status;
-    updatePreset();
   }
 
   function setTriggerFilter(trigger: string) {
-    const currentFilter = tableFlowFilter.value as DirectusFilter | null;
+    const currentFilter =
+      tableFlowFilter.value && typeof tableFlowFilter.value === 'object'
+        ? (tableFlowFilter.value as DirectusFilter)
+        : {};
     const filteredAnd =
-      currentFilter?._and?.filter(
+      currentFilter._and?.filter(
         (filter: Record<string, unknown>) => Object.keys(filter)[0] !== 'trigger',
       ) || [];
+    const { trigger: _t, ...restFilter } = currentFilter;
+
     if (trigger !== 'all') {
       filteredAnd.push({
         trigger: {
@@ -548,29 +783,42 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
         },
       });
     }
-    tableFlowFilter.value = {
-      ...(currentFilter || {}),
-      _and: filteredAnd,
-    } as unknown as Filter;
+
+    if (filteredAnd.length > 0) {
+      tableFlowFilter.value = {
+        ...restFilter,
+        _and: filteredAnd,
+      } as unknown as Filter;
+    } else if (
+      Object.keys(restFilter).length > 0 &&
+      Object.keys(restFilter).some((k) => k !== '_and')
+    ) {
+      const { _and: _empty, ...rem } = restFilter;
+      tableFlowFilter.value = Object.keys(rem).length > 0 ? (rem as unknown as Filter) : null;
+    } else {
+      tableFlowFilter.value = null;
+    }
     selectedShortcutFilter.value.trigger = trigger;
-    updatePreset();
   }
 
   function setCategoryFilter(category: string) {
-    const currentFilter = tableFlowFilter.value as DirectusFilter | null;
+    const currentFilter =
+      tableFlowFilter.value && typeof tableFlowFilter.value === 'object'
+        ? (tableFlowFilter.value as DirectusFilter)
+        : {};
     const filteredAnd =
-      currentFilter?._and?.filter(
-        (filter: Record<string, unknown>) => Object.keys(filter)[0] !== 'flow_manager_metadata_id',
-      ) || [];
-    const metadataFilters =
-      currentFilter?._and?.filter(
-        (filter: Record<string, unknown>) => Object.keys(filter)[0] === 'flow_manager_metadata_id',
-      ) || [];
-    const otherMetadataFilters = metadataFilters.filter(
-      (filter: Record<string, unknown>) =>
-        !(filter.flow_manager_metadata_id as Record<string, unknown> | undefined)
-          ?.flow_manager_category,
-    );
+      currentFilter._and?.filter((item: Record<string, unknown>) => {
+        if (!item || typeof item !== 'object') return false;
+        const key = Object.keys(item)[0];
+        if (key !== 'flow_manager_metadata_id') return true;
+        const meta = item.flow_manager_metadata_id;
+        return !(
+          meta &&
+          typeof meta === 'object' &&
+          (meta as Record<string, unknown>).flow_manager_category !== undefined
+        );
+      }) || [];
+    const { flow_manager_metadata_id: _meta, ...restFilter } = currentFilter;
 
     if (category !== 'all') {
       filteredAnd.push({
@@ -581,12 +829,22 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
         },
       });
     }
-    tableFlowFilter.value = {
-      ...(currentFilter || {}),
-      _and: [...filteredAnd, ...otherMetadataFilters],
-    } as unknown as Filter;
+
+    if (filteredAnd.length > 0) {
+      tableFlowFilter.value = {
+        ...restFilter,
+        _and: filteredAnd,
+      } as unknown as Filter;
+    } else if (
+      Object.keys(restFilter).length > 0 &&
+      Object.keys(restFilter).some((k) => k !== '_and')
+    ) {
+      const { _and: _empty, ...rem } = restFilter;
+      tableFlowFilter.value = Object.keys(rem).length > 0 ? (rem as unknown as Filter) : null;
+    } else {
+      tableFlowFilter.value = null;
+    }
     selectedShortcutFilter.value.flow_manager_category = category;
-    updatePreset();
   }
 
   function getCategoryName(categoryId: string) {
@@ -643,6 +901,7 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
     tableLimit,
     reloadTabularFlow,
     reloadExternalPreset,
+    reloadPreset,
     updatePreset,
     onTableSortChange,
     setStatusFilter,

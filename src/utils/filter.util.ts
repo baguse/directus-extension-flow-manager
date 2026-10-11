@@ -6,6 +6,14 @@
  * Returns `null` if no valid filter conditions remain.
  */
 export function cleanFilter<T = Record<string, unknown>>(filter: unknown): T | null {
+  if (typeof filter === 'string') {
+    try {
+      filter = JSON.parse(filter);
+    } catch {
+      return null;
+    }
+  }
+
   if (!filter || typeof filter !== 'object' || Array.isArray(filter)) {
     return null;
   }
