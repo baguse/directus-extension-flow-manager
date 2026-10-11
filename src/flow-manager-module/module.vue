@@ -344,9 +344,10 @@ import {
   provide,
   ref,
   toRefs,
+  watch,
 } from 'vue';
 import { useStores, useApi, useLayout } from '@directus/extensions-sdk';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import type { AppCollection, Field } from '@directus/types';
 
 import type { FlowsStore, IFlow, IFolder, ProcessingItem } from '../types';
@@ -424,6 +425,7 @@ export default defineComponent({
     const relationsStore = useRelationsStore();
     const flowsStore: FlowsStore = useFlowsStore();
     const api = useApi();
+    const route = useRoute();
     const router = useRouter();
     const settingsStore = useSettingsStore();
     const fieldsStore = useFieldsStore();
@@ -1151,7 +1153,11 @@ export default defineComponent({
 
       try {
         processingDialogTitle.value = `Loading flows from ${targetCred.name}...`;
-        router.push('/flow-manager');
+        if (credential !== 'local') {
+          router.push({ path: '/flow-manager', query: { credential } });
+        } else {
+          router.push('/flow-manager');
+        }
         await reloadExternalPreset();
         await reloadFlow();
         await reloadTabularFlow();
@@ -1194,7 +1200,14 @@ export default defineComponent({
     }
 
     function openDashboardDetail(flowId: string) {
-      router.push(`/flow-manager/dashboard/${flowId}`);
+      if (selectedCredential.value && selectedCredential.value !== 'local') {
+        router.push({
+          path: `/flow-manager/dashboard/${flowId}`,
+          query: { credential: selectedCredential.value },
+        });
+      } else {
+        router.push(`/flow-manager/dashboard/${flowId}`);
+      }
     }
 
     const versionDialog = ref(false);
@@ -1292,6 +1305,26 @@ export default defineComponent({
         isReloading.value = false;
       }
     }
+
+    watch(
+      () => route.query.credential,
+      (queryCred) => {
+        const credId = (queryCred as string) || 'local';
+        if (credId !== selectedCredential.value) {
+          setCredential(credId);
+        }
+      },
+    );
+
+    watch([credentials, vaultStatus], () => {
+      const queryCred = route.query.credential as string | undefined;
+      if (queryCred && queryCred !== 'local' && selectedCredential.value !== queryCred) {
+        const match = credentials.value.find((c) => c.id === queryCred);
+        if (match) {
+          setCredential(queryCred);
+        }
+      }
+    });
 
     // call this method on loaded
     reloadFlow();

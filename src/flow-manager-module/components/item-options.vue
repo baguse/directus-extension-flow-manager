@@ -162,7 +162,14 @@ export default defineComponent({
     }
 
     function openDashboardDetail(itemId: string) {
-      router.push(`/flow-manager/dashboard/${itemId}`);
+      if (selectedCredential.value && selectedCredential.value !== 'local') {
+        router.push({
+          path: `/flow-manager/dashboard/${itemId}`,
+          query: { credential: selectedCredential.value },
+        });
+      } else {
+        router.push(`/flow-manager/dashboard/${itemId}`);
+      }
     }
 
     function openVersionDialog(item: IFlow) {

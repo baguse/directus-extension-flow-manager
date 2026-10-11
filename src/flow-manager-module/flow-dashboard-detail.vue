@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { useApi } from '@directus/extensions-sdk';
+import { useApi, useStores } from '@directus/extensions-sdk';
 import { ENDPOINT_EXTENSION_NAME } from '../constants';
 import type { ActivityHistory, IFlow, IOperation } from '../types';
 import { parseDirectusDate } from '../utils/date.util';
+import { useFlowCredentials } from '../composables/use-flow-credentials';
 
 interface ApiErrorResponse {
   response?: {
@@ -24,6 +25,29 @@ function isApiError(e: unknown): e is ApiErrorResponse {
 const api = useApi();
 const route = useRoute();
 const router = useRouter();
+const { useSettingsStore, useFieldsStore } = useStores();
+const settingsStore = useSettingsStore();
+const fieldsStore = useFieldsStore();
+
+const { credentials, selectedCredential, vaultStatus } = useFlowCredentials({
+  api,
+  settingsStore,
+  fieldsStore,
+});
+
+if (route.query.credential && typeof route.query.credential === 'string') {
+  selectedCredential.value = route.query.credential;
+}
+
+const isLocalInstance = computed(
+  () => !selectedCredential.value || selectedCredential.value === 'local',
+);
+const activeCredential = computed(() =>
+  credentials.value.find((c) => c.id === selectedCredential.value),
+);
+const activeCredentialName = computed(() =>
+  isLocalInstance.value ? 'Local Directus' : activeCredential.value?.name || 'Remote Directus',
+);
 
 const flowId = computed(() => route.params.flowId as string);
 const flow = ref<IFlow | null>(null);
@@ -235,16 +259,37 @@ async function copyFlowId(id: string) {
 }
 
 function navigateToSettings() {
-  router.push(`/settings/flows/${flowId.value}`);
+  if (!isLocalInstance.value && activeCredential.value) {
+    window.open(`${activeCredential.value.url}/admin/settings/flows/${flowId.value}`, '_blank');
+  } else {
+    router.push(`/settings/flows/${flowId.value}`);
+  }
 }
 
 async function loadFlow() {
   try {
-    const { data } = await api.get<{ data: IFlow }>(`/flows/${flowId.value}`, {
-      params: { fields: '*,operations.*,flow_manager_metadata_id.*' },
-    });
-    flowName.value = data?.data?.name ?? '';
-    flow.value = data?.data ?? null;
+    if (isLocalInstance.value) {
+      const { data } = await api.get<{ data: IFlow }>(`/flows/${flowId.value}`, {
+        params: { fields: '*,operations.*,flow_manager_metadata_id.*' },
+      });
+      flowName.value = data?.data?.name ?? '';
+      flow.value = data?.data ?? null;
+    } else {
+      const cred = activeCredential.value;
+      if (!cred) {
+        flowName.value = '';
+        flow.value = null;
+        return;
+      }
+      const { data } = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+        url: `${cred.url}/flows/${flowId.value}?fields=*,operations.*,flow_manager_metadata_id.*`,
+        staticToken: cred.staticToken,
+        method: 'GET',
+      });
+      const flowData = (data?.data ?? data) as IFlow;
+      flowName.value = flowData?.name ?? '';
+      flow.value = flowData ?? null;
+    }
   } catch {
     flowName.value = '';
     flow.value = null;
@@ -256,18 +301,50 @@ async function loadActivityHistories() {
   error.value = null;
   try {
     await loadFlow();
-    const queries = [`page=${page.value}`, `limit=${LIMIT}`];
-    const { data } = await api.get<{
+    let resData: {
       activityHistories: ActivityHistory[];
       successCount: number;
       errorCount: number;
-    }>(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/dashboard/${flowId.value}?${queries.join('&')}`);
-    activityHistories.value = data?.activityHistories ?? [];
+    };
+    if (isLocalInstance.value) {
+      const queries = [`page=${page.value}`, `limit=${LIMIT}`];
+      const { data } = await api.get<{
+        activityHistories: ActivityHistory[];
+        successCount: number;
+        errorCount: number;
+      }>(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/dashboard/${flowId.value}?${queries.join('&')}`);
+      resData = data;
+    } else {
+      const cred = activeCredential.value;
+      if (!cred) {
+        if (vaultStatus.value === 'locked') {
+          throw new Error('Flow Manager Vault is locked. Please unlock the vault first.');
+        }
+        throw new Error('Remote credential not found.');
+      }
+      const { data } = await api.post<{
+        activityHistories: ActivityHistory[];
+        successCount: number;
+        errorCount: number;
+      }>(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/dashboard/${flowId.value}`, {
+        url: cred.url,
+        staticToken: cred.staticToken,
+        page: page.value,
+        limit: LIMIT,
+      });
+      resData = data;
+    }
+    activityHistories.value = resData?.activityHistories ?? [];
     const successVal =
-      data?.successCount ?? flow.value?.flow_manager_metadata_id?.flow_manager_success_counter ?? 0;
+      resData?.successCount ??
+      flow.value?.flow_manager_metadata_id?.flow_manager_success_counter ??
+      0;
     const errorVal =
-      data?.errorCount ?? flow.value?.flow_manager_metadata_id?.flow_manager_error_counter ?? 0;
-    const count = successVal + errorVal;
+      resData?.errorCount ?? flow.value?.flow_manager_metadata_id?.flow_manager_error_counter ?? 0;
+    let count = successVal + errorVal;
+    if (count === 0 && activityHistories.value.length > 0) {
+      count = activityHistories.value.length;
+    }
     totalCount.value = count;
     successCount.value = successVal;
     errorCount.value = errorVal;
@@ -318,6 +395,24 @@ watch(
   },
 );
 
+watch(
+  () => route.query.credential,
+  (newCred) => {
+    const credId = (newCred as string) || 'local';
+    if (selectedCredential.value !== credId) {
+      selectedCredential.value = credId;
+      page.value = 1;
+      loadActivityHistories();
+    }
+  },
+);
+
+watch([credentials, vaultStatus], () => {
+  if (selectedCredential.value !== 'local' && !flow.value && !loading.value) {
+    loadActivityHistories();
+  }
+});
+
 onMounted(() => {
   loadActivityHistories();
 });
@@ -328,7 +423,11 @@ onMounted(() => {
     <template #title-outer:prepend>
       <v-button
         v-tooltip.bottom="'Back to Dashboard'"
-        to="/flow-manager/dashboard"
+        :to="
+          isLocalInstance
+            ? '/flow-manager/dashboard'
+            : { path: '/flow-manager/dashboard', query: { credential: selectedCredential } }
+        "
         class="mr-3"
         icon
         rounded
@@ -352,7 +451,15 @@ onMounted(() => {
         <v-icon name="open_in_new" class="mr-1" />
         Open in Editor
       </v-button>
-      <v-button secondary to="/flow-manager" class="action-nav-btn">
+      <v-button
+        secondary
+        :to="
+          isLocalInstance
+            ? '/flow-manager'
+            : { path: '/flow-manager', query: { credential: selectedCredential } }
+        "
+        class="action-nav-btn"
+      >
         <v-icon name="list" class="mr-1" />
         All Flows
       </v-button>
@@ -368,7 +475,16 @@ onMounted(() => {
         <v-notice type="danger" :title="error">
           Could not retrieve activity history for this flow.
         </v-notice>
-        <v-button class="mt-4" to="/flow-manager/dashboard"> Back to Dashboard </v-button>
+        <v-button
+          class="mt-4"
+          :to="
+            isLocalInstance
+              ? '/flow-manager/dashboard'
+              : { path: '/flow-manager/dashboard', query: { credential: selectedCredential } }
+          "
+        >
+          Back to Dashboard
+        </v-button>
       </div>
 
       <div v-else class="detail-body">
@@ -393,6 +509,14 @@ onMounted(() => {
                 </span>
                 <span class="banner-badge trigger">
                   {{ formatTriggerType(flow.trigger || 'manual') }}
+                </span>
+                <span class="banner-badge instance">
+                  <v-icon
+                    :name="isLocalInstance ? 'storage' : 'cloud_queue'"
+                    x-small
+                    class="mr-1"
+                  />
+                  {{ activeCredentialName }}
                 </span>
               </div>
               <div class="flow-sub-row">
@@ -887,6 +1011,14 @@ onMounted(() => {
   &.trigger {
     background: var(--theme--background-subdued, #f1f5f9);
     color: var(--theme--foreground-subdued, #64748b);
+  }
+
+  &.instance {
+    background: rgba(59, 130, 246, 0.1);
+    color: #2563eb;
+    text-transform: none;
+    font-size: 11px;
+    font-weight: 500;
   }
 
   .dot {

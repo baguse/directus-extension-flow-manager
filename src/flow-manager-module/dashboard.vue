@@ -1,8 +1,12 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
-import { useRouter } from 'vue-router';
-import { useApi } from '@directus/extensions-sdk';
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick, provide } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { useApi, useStores } from '@directus/extensions-sdk';
 import { Chart, type ChartConfiguration } from 'chart.js/auto';
+import { ENDPOINT_EXTENSION_NAME } from '../constants';
+import { useFlowCredentials } from '../composables/use-flow-credentials';
+import { formatConnectionError } from '../utils/error.util';
+import ContentNavigation from './components/navigation.vue';
 
 interface FlowStatItem {
   id: string;
@@ -20,7 +24,69 @@ interface FlowStatItem {
 }
 
 const api = useApi();
+const route = useRoute();
 const router = useRouter();
+const { useSettingsStore, useFieldsStore, useNotificationsStore } = useStores();
+const settingsStore = useSettingsStore();
+const fieldsStore = useFieldsStore();
+const notificationsStore = useNotificationsStore();
+
+const { credentials, selectedCredential, vaultStatus, serverInfo, getServerInfo } =
+  useFlowCredentials({
+    api,
+    settingsStore,
+    fieldsStore,
+  });
+
+provide('flowManagerUtils', {
+  credentials,
+  selectedCredential,
+  setCredential: (cred: string) => {
+    selectedCredential.value = cred;
+  },
+});
+
+if (route.query.credential && typeof route.query.credential === 'string') {
+  selectedCredential.value = route.query.credential;
+}
+
+const isLocalInstance = computed(
+  () => !selectedCredential.value || selectedCredential.value === 'local',
+);
+const activeCredential = computed(() =>
+  credentials.value.find((c) => c.id === selectedCredential.value),
+);
+const activeCredentialName = computed(() =>
+  isLocalInstance.value ? 'Local Directus' : activeCredential.value?.name || 'Remote Directus',
+);
+
+watch(
+  () => route.query.credential,
+  (newCred) => {
+    const credId = (newCred as string) || 'local';
+    if (selectedCredential.value !== credId) {
+      selectedCredential.value = credId;
+    }
+  },
+);
+
+watch(selectedCredential, async (newVal) => {
+  const query = { ...route.query };
+  if (newVal && newVal !== 'local') {
+    query.credential = newVal;
+  } else {
+    delete query.credential;
+  }
+  router.replace({ query });
+  await getServerInfo();
+  await loadFlows();
+});
+
+watch([credentials, vaultStatus], () => {
+  if (selectedCredential.value !== 'local' && flows.value.length === 0 && !loading.value) {
+    loadFlows();
+  }
+});
 
 const flows = ref<FlowStatItem[]>([]);
 const loading = ref(true);
@@ -126,11 +192,22 @@ async function copyId(id: string) {
 }
 
 function navigateToFlowDashboard(flowId: string) {
-  router.push(`/flow-manager/dashboard/${flowId}`);
+  if (!isLocalInstance.value && selectedCredential.value) {
+    router.push({
+      path: `/flow-manager/dashboard/${flowId}`,
+      query: { credential: selectedCredential.value },
+    });
+  } else {
+    router.push(`/flow-manager/dashboard/${flowId}`);
+  }
 }
 
 function navigateToSettings(flowId: string) {
-  router.push(`/settings/flows/${flowId}`);
+  if (!isLocalInstance.value && activeCredential.value) {
+    window.open(`${activeCredential.value.url}/admin/settings/flows/${flowId}`, '_blank');
+  } else {
+    router.push(`/settings/flows/${flowId}`);
+  }
 }
 
 function getChartColors() {
@@ -250,47 +327,114 @@ watch(
   { deep: true },
 );
 
+function mapRawFlows(rawList: Record<string, unknown>[]): FlowStatItem[] {
+  return rawList.map((f) => {
+    const meta = (f.flow_manager_metadata_id as Record<string, unknown>) || {};
+    return {
+      id: String(f.id),
+      name: String(f.name || 'Untitled Flow'),
+      icon: f.icon ? String(f.icon) : 'bolt',
+      color: f.color ? String(f.color) : 'var(--theme--primary)',
+      status: String(f.status || 'inactive'),
+      trigger: f.trigger ? String(f.trigger) : 'manual',
+      flow_manager_run_counter: Number(meta.flow_manager_run_counter || 0),
+      flow_manager_success_counter: Number(meta.flow_manager_success_counter || 0),
+      flow_manager_error_counter: Number(meta.flow_manager_error_counter || 0),
+      flow_manager_last_run_at: meta.flow_manager_last_run_at
+        ? String(meta.flow_manager_last_run_at)
+        : null,
+      flow_manager_last_run_message: meta.flow_manager_last_run_message
+        ? String(meta.flow_manager_last_run_message)
+        : null,
+      flow_manager_last_run_operation: meta.flow_manager_last_run_operation
+        ? String(meta.flow_manager_last_run_operation)
+        : null,
+    };
+  });
+}
+
 async function loadFlows() {
   loading.value = true;
   try {
-    const { data } = await api.get<{ data: Record<string, unknown>[] }>('/flows', {
-      params: {
-        fields:
-          'id,name,icon,color,status,trigger,flow_manager_metadata_id.flow_manager_run_counter,flow_manager_metadata_id.flow_manager_success_counter,flow_manager_metadata_id.flow_manager_error_counter,flow_manager_metadata_id.flow_manager_last_run_at,flow_manager_metadata_id.flow_manager_last_run_message,flow_manager_metadata_id.flow_manager_last_run_operation',
-        limit: -1,
-      },
-    });
-    flows.value = (data.data ?? []).map((f) => {
-      const meta = (f.flow_manager_metadata_id as Record<string, unknown>) || {};
-      return {
-        id: String(f.id),
-        name: String(f.name || 'Untitled Flow'),
-        icon: f.icon ? String(f.icon) : 'bolt',
-        color: f.color ? String(f.color) : 'var(--theme--primary)',
-        status: String(f.status || 'inactive'),
-        trigger: f.trigger ? String(f.trigger) : 'manual',
-        flow_manager_run_counter: Number(meta.flow_manager_run_counter || 0),
-        flow_manager_success_counter: Number(meta.flow_manager_success_counter || 0),
-        flow_manager_error_counter: Number(meta.flow_manager_error_counter || 0),
-        flow_manager_last_run_at: meta.flow_manager_last_run_at
-          ? String(meta.flow_manager_last_run_at)
-          : null,
-        flow_manager_last_run_message: meta.flow_manager_last_run_message
-          ? String(meta.flow_manager_last_run_message)
-          : null,
-        flow_manager_last_run_operation: meta.flow_manager_last_run_operation
-          ? String(meta.flow_manager_last_run_operation)
-          : null,
-      };
-    });
-  } catch {
+    if (isLocalInstance.value) {
+      const { data } = await api.get<{ data: Record<string, unknown>[] }>('/flows', {
+        params: {
+          fields:
+            'id,name,icon,color,status,trigger,flow_manager_metadata_id.flow_manager_run_counter,flow_manager_metadata_id.flow_manager_success_counter,flow_manager_metadata_id.flow_manager_error_counter,flow_manager_metadata_id.flow_manager_last_run_at,flow_manager_metadata_id.flow_manager_last_run_message,flow_manager_metadata_id.flow_manager_last_run_operation',
+          limit: -1,
+        },
+      });
+      flows.value = mapRawFlows(data.data ?? []);
+    } else {
+      const cred = activeCredential.value;
+      if (!cred) {
+        flows.value = [];
+        return;
+      }
+      const { data } = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+        url: `${cred.url}/flows?fields=id,name,icon,color,status,trigger,flow_manager_metadata_id.flow_manager_run_counter,flow_manager_metadata_id.flow_manager_success_counter,flow_manager_metadata_id.flow_manager_error_counter,flow_manager_metadata_id.flow_manager_last_run_at,flow_manager_metadata_id.flow_manager_last_run_message,flow_manager_metadata_id.flow_manager_last_run_operation&limit=-1`,
+        staticToken: cred.staticToken,
+        method: 'GET',
+      });
+      const rawData = (data?.data ?? data) as Record<string, unknown>[];
+      flows.value = mapRawFlows(Array.isArray(rawData) ? rawData : []);
+    }
+  } catch (err: unknown) {
     flows.value = [];
+    const errorMsg = formatConnectionError(err, 'Failed to load flow analytics.');
+    notificationsStore.add({
+      type: 'error',
+      title: 'Analytics Load Failed',
+      text: errorMsg,
+      closeable: true,
+    });
   } finally {
     loading.value = false;
   }
 }
 
+const isSyncingCounters = ref(false);
+
+async function syncCounters() {
+  if (isSyncingCounters.value) return;
+  isSyncingCounters.value = true;
+  try {
+    if (isLocalInstance.value) {
+      await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/sync-counters`, {
+        type: 'local',
+      });
+    } else {
+      const cred = activeCredential.value;
+      if (!cred) {
+        throw new Error('Credential not found');
+      }
+      await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/sync-counters`, {
+        type: 'remote',
+        url: cred.url,
+        staticToken: cred.staticToken,
+      });
+    }
+    notificationsStore.add({
+      type: 'success',
+      title: 'Counters Synchronized',
+      text: `Execution counters successfully recalculated for ${activeCredentialName.value}.`,
+    });
+    await loadFlows();
+  } catch (err: unknown) {
+    const errorMsg = formatConnectionError(err, 'Failed to synchronize flow counters.');
+    notificationsStore.add({
+      type: 'error',
+      title: 'Sync Failed',
+      text: errorMsg,
+      closeable: true,
+    });
+  } finally {
+    isSyncingCounters.value = false;
+  }
+}
+
 onMounted(() => {
+  getServerInfo();
   loadFlows();
   themeObserver = new MutationObserver(() => {
     scheduleRenderChart();
@@ -311,12 +455,32 @@ onBeforeUnmount(() => {
 <template>
   <private-view title="Flow Analytics & Monitoring">
     <template #title-outer:prepend>
-      <v-button v-tooltip.bottom="'Back to Flows'" to="/flow-manager" class="mr-3" icon rounded>
-        <v-icon name="arrow_back" />
+      <v-button class="header-icon" rounded disabled icon secondary>
+        <v-icon name="insights" />
       </v-button>
     </template>
 
+    <template #navigation>
+      <content-navigation
+        :server-info="serverInfo"
+        :all-flows="flows"
+        :is-database-updated="true"
+        hide-flows
+      />
+    </template>
+
     <template #actions>
+      <v-button
+        v-tooltip.bottom="'Recalculate Run & Error Counters from Activity Logs'"
+        icon
+        rounded
+        secondary
+        :loading="isSyncingCounters"
+        @click="syncCounters"
+      >
+        <v-icon name="sync" />
+      </v-button>
+
       <v-button
         v-tooltip.bottom="'Refresh Analytics'"
         icon
@@ -327,13 +491,28 @@ onBeforeUnmount(() => {
       >
         <v-icon name="refresh" />
       </v-button>
-      <v-button secondary to="/flow-manager">
-        <v-icon name="list" class="mr-1" />
-        Flows Directory
-      </v-button>
     </template>
 
     <div class="dashboard-container">
+      <div v-if="!isLocalInstance && activeCredential" class="remote-banner">
+        <div class="remote-banner-content">
+          <v-icon name="cloud_queue" small class="remote-icon" />
+          <span class="remote-label">Connected Remote Instance:</span>
+          <strong class="remote-name">{{ activeCredential.name }}</strong>
+          <code class="remote-url">{{ activeCredential.url }}</code>
+        </div>
+      </div>
+
+      <div v-if="!isLocalInstance && vaultStatus === 'locked'" class="vault-locked-notice">
+        <v-notice type="warning" icon="lock">
+          The Flow Manager Vault is locked. Please unlock the vault in
+          <router-link :to="{ path: '/flow-manager', query: { credential: selectedCredential } }">
+            Flows Directory
+          </router-link>
+          to view analytics for remote instances.
+        </v-notice>
+      </div>
+
       <div v-if="loading" class="dashboard-loading">
         <v-progress-circular indeterminate />
         <span>Loading flow analytics...</span>
@@ -654,6 +833,53 @@ onBeforeUnmount(() => {
   padding: 24px;
   max-width: 1360px;
   margin: 0 auto;
+}
+
+.header-icon {
+  --v-button-color-disabled: var(--theme--foreground);
+}
+
+.remote-banner {
+  margin-bottom: 20px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background-color: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  .remote-banner-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--theme--foreground, #1e293b);
+  }
+
+  .remote-icon {
+    color: var(--theme--primary, #3b82f6);
+  }
+
+  .remote-label {
+    color: var(--theme--foreground-subdued, #64748b);
+  }
+
+  .remote-name {
+    font-weight: 600;
+  }
+
+  .remote-url {
+    font-size: 11px;
+    background: rgba(0, 0, 0, 0.05);
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: var(--theme--foreground-subdued, #64748b);
+  }
+}
+
+.vault-locked-notice {
+  margin-bottom: 20px;
 }
 
 .dashboard-loading {

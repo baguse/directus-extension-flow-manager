@@ -68,7 +68,7 @@
       </div>
 
       <!-- Explorer Controls: Header & Search (shown when flows exist) -->
-      <div v-if="allFlowsCount > 0 && isDatabaseUpdated" class="explorer-toolbar">
+      <div v-if="!hideFlows && allFlowsCount > 0 && isDatabaseUpdated" class="explorer-toolbar">
         <div class="explorer-title-row">
           <div class="explorer-heading">
             <span>EXPLORER</span>
@@ -107,7 +107,7 @@
     </div>
 
     <!-- Tree Navigation List -->
-    <div class="tree-scroll-container">
+    <div v-if="!hideFlows" class="tree-scroll-container">
       <v-list
         v-if="isDatabaseUpdated && filteredRootFlows.length"
         v-model="activeGroups"
@@ -139,7 +139,7 @@
     </div>
 
     <!-- Footer Summary Strip -->
-    <div v-if="allFlowsCount > 0" class="sidebar-footer">
+    <div v-if="!hideFlows && allFlowsCount > 0" class="sidebar-footer">
       <span class="footer-count">
         {{ allFlowsCount }} {{ allFlowsCount === 1 ? 'flow' : 'flows' }}
       </span>
@@ -157,17 +157,30 @@ import NavigationItem from './navigation-item.vue';
 import type { ICredential, IFlow, IFolder, IServerInfo } from '../../types';
 import { useLocalStorage } from '../../composables/use-local-storage';
 
-const props = defineProps<{
-  currentCollection?: string;
-  rootFlows: Partial<IFlow & IFolder>[];
-  flowChildMap: Record<string, (IFlow | IFolder)[]>;
-  allFlows: IFolder[] | IFlow[];
-  viewMode: string;
-  serverInfo?: IServerInfo;
-  isDatabaseUpdated: boolean;
-}>();
+const props = withDefaults(
+  defineProps<{
+    currentCollection?: string;
+    rootFlows?: Partial<IFlow & IFolder>[];
+    flowChildMap?: Record<string, (IFlow | IFolder)[]>;
+    allFlows?: (IFolder | IFlow)[];
+    viewMode?: string;
+    serverInfo?: IServerInfo;
+    isDatabaseUpdated?: boolean;
+    hideFlows?: boolean;
+  }>(),
+  {
+    currentCollection: undefined,
+    rootFlows: () => [],
+    flowChildMap: () => ({}),
+    allFlows: () => [],
+    viewMode: 'LIST',
+    serverInfo: undefined,
+    isDatabaseUpdated: true,
+    hideFlows: false,
+  },
+);
 
-const { rootFlows, flowChildMap, allFlows, isDatabaseUpdated } = toRefs(props);
+const { rootFlows, flowChildMap, allFlows, isDatabaseUpdated, hideFlows } = toRefs(props);
 const search = ref<string>('');
 const tmpSearch = ref<string>('');
 const timeOutId = ref<NodeJS.Timeout | null>(null);
@@ -215,7 +228,14 @@ const isDashboardRoute = computed(() => {
 });
 
 function navigateToHome() {
-  router.push('/flow-manager');
+  if (selectedCredential.value && selectedCredential.value !== 'local') {
+    router.push({
+      path: '/flow-manager',
+      query: { credential: selectedCredential.value },
+    });
+  } else {
+    router.push('/flow-manager');
+  }
 }
 
 function navigateToDashboard() {
@@ -251,7 +271,7 @@ const credentialOptions = computed(() => {
 });
 
 const filteredItemFlag = computed(() => {
-  if (!allFlows.value) return {};
+  if (hideFlows.value || !allFlows.value) return {};
   const cache: Record<string, boolean> = {};
 
   for (let i = 0; i < allFlows.value.length; i++) {
@@ -264,6 +284,7 @@ const filteredItemFlag = computed(() => {
 });
 
 const filteredRootFlows = computed(() => {
+  if (hideFlows.value) return [];
   if (!search.value) return rootFlows.value;
   return rootFlows.value.filter((flow) => {
     if (!flow.id) return false;

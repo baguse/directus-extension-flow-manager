@@ -351,7 +351,11 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
     }
   });
 
-  router.get('/flow-manager/dashboard/:flowId', async (_req, res) => {
+  type EndpointHandler = Parameters<typeof router.post>[1];
+  type EndpointReq = Parameters<EndpointHandler>[0];
+  type EndpointRes = Parameters<EndpointHandler>[1];
+
+  const handleDashboardDetail = async (_req: EndpointReq, res: EndpointRes) => {
     // @ts-expect-error this is the internal directus accountability data
     if (!_req.accountability?.admin) {
       res.status(401).send({
@@ -360,8 +364,129 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
       return;
     }
     try {
-      const page = _req.query.page ? parseInt(String(_req.query.page), 10) : 1;
-      const limit = _req.query.limit ? parseInt(String(_req.query.limit), 10) : 10;
+      const page = _req.query.page
+        ? parseInt(String(_req.query.page), 10)
+        : _req.body?.page
+          ? parseInt(String(_req.body.page), 10)
+          : 1;
+      const limit = _req.query.limit
+        ? parseInt(String(_req.query.limit), 10)
+        : _req.body?.limit
+          ? parseInt(String(_req.body.limit), 10)
+          : 10;
+      const url = (_req.query.url || _req.body?.url) as string | undefined;
+      const staticToken = (_req.query.staticToken || _req.body?.staticToken) as string | undefined;
+
+      if (url && staticToken) {
+        const { data: flowRes } = await axios.get(
+          `${url}/flows/${_req.params.flowId}?fields[]=id&fields[]=name&fields[]=operations.id&fields[]=operations.name&fields[]=flow_manager_metadata_id.flow_manager_success_counter&fields[]=flow_manager_metadata_id.flow_manager_error_counter`,
+          {
+            headers: { Authorization: `Bearer ${staticToken}` },
+          },
+        );
+        const flow = flowRes?.data ?? flowRes;
+        if (!flow) {
+          res.status(404).send({ error: 'Flow not found' });
+          return;
+        }
+
+        const operationMap = (flow.operations || []).reduce(
+          (acc: Record<string, string>, op: { id: string; name: string }) => {
+            acc[op.id] = op.name;
+            return acc;
+          },
+          {},
+        );
+
+        const { data: actRes } = await axios.get(
+          `${url}/activity?filter[_and][0][item][_eq]=${_req.params.flowId}&filter[_and][1][action][_eq]=run&filter[_and][2][collection][_eq]=directus_flows&fields[]=id&fields[]=timestamp&sort=-timestamp&limit=${limit}&page=${page}`,
+          {
+            headers: { Authorization: `Bearer ${staticToken}` },
+          },
+        );
+
+        const activities = actRes?.data ?? actRes ?? [];
+        const activityHistories: {
+          id: number;
+          type: 'success' | 'error';
+          date: Date;
+          operation: string;
+          message: string;
+          data: unknown;
+        }[] = [];
+
+        for (let j = 0; j < activities.length; j++) {
+          const activity = activities[j];
+          if (activity) {
+            const { data: revRes } = await axios.get(
+              `${url}/revisions?fields[]=data&filter[activity][_eq]=${activity.id}&limit=-1&sort=-id`,
+              {
+                headers: { Authorization: `Bearer ${staticToken}` },
+              },
+            );
+            const revisions = revRes?.data ?? revRes ?? [];
+            for (let k = 0; k < revisions.length; k++) {
+              const revision = revisions[k];
+
+              let lastExecutionData = revision.data;
+              if (typeof lastExecutionData === 'string') {
+                try {
+                  lastExecutionData = JSON.parse(lastExecutionData);
+                } catch {}
+              }
+
+              let lastStepStatus = '';
+              let lastStepErrorMessage = '';
+              let lastStepOperationName = '';
+
+              if (lastExecutionData) {
+                const lastStep = lastExecutionData.steps?.[lastExecutionData.steps?.length - 1];
+                lastStepStatus = lastStep?.status;
+                const lastData = lastExecutionData.data?.$last;
+                if (lastStepStatus === 'reject' && lastData != null) {
+                  lastStepOperationName = lastStep?.operation
+                    ? (operationMap[lastStep.operation] ?? '')
+                    : '';
+                  lastStepErrorMessage = Array.isArray(lastData)
+                    ? (lastData[0]?.message ?? '')
+                    : (lastData?.message ?? '');
+                }
+              }
+
+              if (lastStepStatus === 'reject') {
+                activityHistories.push({
+                  id: activity.id,
+                  type: 'error',
+                  date: new Date(activity.timestamp),
+                  operation: lastStepOperationName,
+                  message: lastStepErrorMessage,
+                  data: lastExecutionData,
+                });
+              } else {
+                activityHistories.push({
+                  id: activity.id,
+                  type: 'success',
+                  date: new Date(activity.timestamp),
+                  operation: lastStepOperationName,
+                  message: lastStepErrorMessage,
+                  data: lastExecutionData,
+                });
+              }
+            }
+          }
+        }
+
+        const successCount = flow.flow_manager_metadata_id?.flow_manager_success_counter ?? 0;
+        const errorCount = flow.flow_manager_metadata_id?.flow_manager_error_counter ?? 0;
+
+        res.status(200).send({
+          successCount,
+          errorCount,
+          activityHistories,
+        });
+        return;
+      }
+
       const { ActivityService, FlowsService } = services;
       const schema = await getSchema({ database });
       const flowsService = new FlowsService({
@@ -383,7 +508,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
       const [flow] = (await flowsService.readByQuery({
         filter: {
           id: {
-            _eq: _req.params.flowId,
+            _eq: String(_req.params.flowId),
           },
         },
         fields: [
@@ -514,6 +639,13 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
         });
       }
     }
+  };
+
+  router.get('/flow-manager/dashboard/:flowId', (_req, res) => {
+    handleDashboardDetail(_req, res);
+  });
+  router.post('/flow-manager/dashboard/:flowId', (_req, res) => {
+    handleDashboardDetail(_req, res);
   });
 
   router.post('/flow-manager/push-to-cloud', async (_req, res) => {
