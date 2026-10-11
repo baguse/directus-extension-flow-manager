@@ -25,7 +25,10 @@ const { item, items, selectedItems, showSelect } = toRefs(props);
 const flowManagerUtils = inject<FlowManagerUtilsContext>('flowManagerUtils');
 const nestedFlows = computed(() =>
   items.value
-    .filter((flow) => flow.flow_manager_metadata_id?.flow_manager_category === props.item.id)
+    .filter((flow) => {
+      const cat = flow.flow_manager_metadata_id?.flow_manager_category;
+      return cat === props.item.id;
+    })
     .sort(
       (a, b) =>
         (a.flow_manager_metadata_id?.flow_manager_order || 0) -
@@ -125,7 +128,9 @@ function selectItem() {
             'badge-error': !!item.flow_manager_metadata_id?.flow_manager_last_run_message,
           }"
         >
-          <v-chip x-small active class="item-name mr-4 trigger-chip is-inactive">{{ triggerType }}</v-chip>
+          <v-chip x-small active class="item-name mr-4 trigger-chip is-inactive">{{
+            triggerType
+          }}</v-chip>
         </v-badge>
         <span ref="itemName" class="item-name text-gray">{{ item.name }}</span>
         <span v-if="item.description" class="item-note text-gray">{{ item.description }}</span>

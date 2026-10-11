@@ -38,6 +38,7 @@ export interface UseFlowDatabaseOptions {
   flows: Ref<IFlow[]>;
   flowFields: Ref<Field[]>;
   settingFields: Ref<Field[]>;
+  metadataFields?: Ref<Field[]>;
   flowCategories: Ref<IFolder[]>;
   settingDialog: Ref<boolean>;
   reloadFlow: () => Promise<void>;
@@ -59,6 +60,7 @@ export function useFlowDatabase(options: UseFlowDatabaseOptions) {
     flows,
     flowFields,
     settingFields,
+    metadataFields,
     flowCategories,
     settingDialog,
     reloadFlow,
@@ -188,6 +190,11 @@ export function useFlowDatabase(options: UseFlowDatabaseOptions) {
       await relationsStore.hydrate();
       flowFields.value = fieldsStore.getFieldsForCollection('directus_flows') as Field[];
       settingFields.value = fieldsStore.getFieldsForCollection('directus_settings') as Field[];
+      if (metadataFields) {
+        metadataFields.value = fieldsStore.getFieldsForCollection(
+          'flow_manager_metadata',
+        ) as Field[];
+      }
       if (notCreatedCollections.value.includes('flow_manager_metadata')) {
         await syncMetadata();
       }
@@ -286,6 +293,9 @@ export function useFlowDatabase(options: UseFlowDatabaseOptions) {
 
         flowFields.value = await reloadFields('directus_flows');
         settingFields.value = await reloadFields('directus_settings');
+        if (metadataFields) {
+          metadataFields.value = await reloadFields('flow_manager_metadata');
+        }
         if (notCreatedCollections.value.includes('flow_manager_metadata')) {
           await syncMetadata();
         }
@@ -304,8 +314,12 @@ export function useFlowDatabase(options: UseFlowDatabaseOptions) {
         return {
           ...c,
           flow_manager_metadata_id: {
-            flow_manager_order: c.flow_manager_order,
-            flow_manager_category: c.flow_manager_category,
+            flow_manager_order:
+              c.flow_manager_order ?? c.flow_manager_metadata_id?.flow_manager_order ?? 0,
+            flow_manager_category:
+              c.flow_manager_category ??
+              c.flow_manager_metadata_id?.flow_manager_category ??
+              undefined,
           },
         };
       });
@@ -322,21 +336,54 @@ export function useFlowDatabase(options: UseFlowDatabaseOptions) {
             flow_manager_error_counter,
           } = flow;
           const payload = {
-            flow_manager_category,
-            flow_manager_order,
-            flow_manager_last_run_at,
-            flow_manager_run_counter,
-            flow_manager_last_run_message,
-            flow_manager_last_run_operation,
-            flow_manager_success_counter,
-            flow_manager_error_counter,
+            flow_manager_category:
+              flow_manager_category ?? flow.flow_manager_metadata_id?.flow_manager_category ?? null,
+            flow_manager_order:
+              flow_manager_order ?? flow.flow_manager_metadata_id?.flow_manager_order ?? 0,
+            flow_manager_last_run_at:
+              flow_manager_last_run_at ??
+              flow.flow_manager_metadata_id?.flow_manager_last_run_at ??
+              null,
+            flow_manager_run_counter:
+              flow_manager_run_counter ??
+              flow.flow_manager_metadata_id?.flow_manager_run_counter ??
+              0,
+            flow_manager_last_run_message:
+              flow_manager_last_run_message ??
+              flow.flow_manager_metadata_id?.flow_manager_last_run_message ??
+              '',
+            flow_manager_last_run_operation:
+              flow_manager_last_run_operation ??
+              flow.flow_manager_metadata_id?.flow_manager_last_run_operation ??
+              '',
+            flow_manager_success_counter:
+              flow_manager_success_counter ??
+              flow.flow_manager_metadata_id?.flow_manager_success_counter ??
+              0,
+            flow_manager_error_counter:
+              flow_manager_error_counter ??
+              flow.flow_manager_metadata_id?.flow_manager_error_counter ??
+              0,
           };
-          const {
-            data: { data: metadataResult },
-          } = (await api.post('/items/flow_manager_metadata', payload)) as {
-            data: { data: { id: string } };
-          };
-          await api.patch(`/flows/${flow.id}`, { flow_manager_metadata_id: metadataResult.id });
+
+          const metadataId =
+            typeof flow.flow_manager_metadata_id === 'object' &&
+            flow.flow_manager_metadata_id !== null
+              ? (flow.flow_manager_metadata_id as { id?: string }).id
+              : typeof flow.flow_manager_metadata_id === 'string'
+                ? flow.flow_manager_metadata_id
+                : undefined;
+
+          if (metadataId) {
+            await api.patch(`/items/flow_manager_metadata/${metadataId}`, payload);
+          } else {
+            const {
+              data: { data: metadataResult },
+            } = (await api.post('/items/flow_manager_metadata', payload)) as {
+              data: { data: { id: string } };
+            };
+            await api.patch(`/flows/${flow.id}`, { flow_manager_metadata_id: metadataResult.id });
+          }
         }
         settingsStore.updateSettings(
           {
@@ -345,6 +392,7 @@ export function useFlowDatabase(options: UseFlowDatabaseOptions) {
           false,
         );
       } else {
+        const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
         for (const flow of flows.value) {
           const {
             flow_manager_category,
@@ -357,39 +405,76 @@ export function useFlowDatabase(options: UseFlowDatabaseOptions) {
             flow_manager_error_counter,
           } = flow;
           const payload = {
-            flow_manager_category,
-            flow_manager_order,
-            flow_manager_last_run_at,
-            flow_manager_run_counter,
-            flow_manager_last_run_message,
-            flow_manager_last_run_operation,
-            flow_manager_success_counter,
-            flow_manager_error_counter,
+            flow_manager_category:
+              flow_manager_category ?? flow.flow_manager_metadata_id?.flow_manager_category ?? null,
+            flow_manager_order:
+              flow_manager_order ?? flow.flow_manager_metadata_id?.flow_manager_order ?? 0,
+            flow_manager_last_run_at:
+              flow_manager_last_run_at ??
+              flow.flow_manager_metadata_id?.flow_manager_last_run_at ??
+              null,
+            flow_manager_run_counter:
+              flow_manager_run_counter ??
+              flow.flow_manager_metadata_id?.flow_manager_run_counter ??
+              0,
+            flow_manager_last_run_message:
+              flow_manager_last_run_message ??
+              flow.flow_manager_metadata_id?.flow_manager_last_run_message ??
+              '',
+            flow_manager_last_run_operation:
+              flow_manager_last_run_operation ??
+              flow.flow_manager_metadata_id?.flow_manager_last_run_operation ??
+              '',
+            flow_manager_success_counter:
+              flow_manager_success_counter ??
+              flow.flow_manager_metadata_id?.flow_manager_success_counter ??
+              0,
+            flow_manager_error_counter:
+              flow_manager_error_counter ??
+              flow.flow_manager_metadata_id?.flow_manager_error_counter ??
+              0,
           };
-          const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
-          const {
-            data: { data: metadataResult },
-          } = (await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
-            url: `${credential?.url}/items/flow_manager_metadata`,
-            staticToken: credential?.staticToken,
-            method: 'POST',
-            payload,
-          })) as { data: { data: { id: string } } };
-          await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
-            url: `${credential?.url}/flows/${flow.id}`,
-            staticToken: credential?.staticToken,
-            method: 'PATCH',
-            payload: { flow_manager_metadata_id: metadataResult.id },
-          });
-          await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
-            url: `${credential?.url}/settings`,
-            staticToken: credential?.staticToken,
-            method: 'PATCH',
-            payload: {
-              flow_manager_categories: categories,
-            },
-          });
+
+          const metadataId =
+            typeof flow.flow_manager_metadata_id === 'object' &&
+            flow.flow_manager_metadata_id !== null
+              ? (flow.flow_manager_metadata_id as { id?: string }).id
+              : typeof flow.flow_manager_metadata_id === 'string'
+                ? flow.flow_manager_metadata_id
+                : undefined;
+
+          if (metadataId) {
+            await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+              url: `${credential?.url}/items/flow_manager_metadata/${metadataId}`,
+              staticToken: credential?.staticToken,
+              method: 'PATCH',
+              payload,
+            });
+          } else {
+            const {
+              data: { data: metadataResult },
+            } = (await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+              url: `${credential?.url}/items/flow_manager_metadata`,
+              staticToken: credential?.staticToken,
+              method: 'POST',
+              payload,
+            })) as { data: { data: { id: string } } };
+            await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+              url: `${credential?.url}/flows/${flow.id}`,
+              staticToken: credential?.staticToken,
+              method: 'PATCH',
+              payload: { flow_manager_metadata_id: metadataResult.id },
+            });
+          }
         }
+        await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+          url: `${credential?.url}/settings`,
+          staticToken: credential?.staticToken,
+          method: 'PATCH',
+          payload: {
+            flow_manager_categories: categories,
+          },
+        });
       }
       flowCategories.value = categories;
     } catch {

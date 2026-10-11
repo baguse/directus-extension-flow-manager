@@ -202,7 +202,7 @@ async function copySelectedTextToClipboard() {
           />
           <div
             v-context-menu="'contextMenuTable'"
-            @contextmenu="onContextMenuTable(item.flow_manager_category)"
+            @contextmenu="onContextMenuTable(item.flow_manager_metadata_id?.flow_manager_category)"
           >
             {{ getCategoryName(item.flow_manager_metadata_id?.flow_manager_category) }}
           </div>

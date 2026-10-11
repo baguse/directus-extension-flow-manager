@@ -100,20 +100,14 @@ const showRunWebhookDialog = (item: IFlow) => {
 function moveTo() {
   const destinationCategory = unref(parentId) || '';
   const destinationFlows = flowChildMap.value[destinationCategory] || [];
-  destinationFlows.push({
-    ...(flow.value as IFlow | IFolder),
-    flow_manager_order: 9999,
-  });
+  destinationFlows.push(flow.value as IFlow | IFolder);
 
-  const sourceCategory = flow.value.flow_manager_category || '';
+  const sourceCategory = flow.value.flow_manager_metadata_id?.flow_manager_category || '';
   const sourceFlows = flowChildMap.value[sourceCategory] || [];
   const reorderSourceFlows: (IFlow | IFolder)[] = [];
   sourceFlows.forEach((sourceFlow) => {
     if (sourceFlow.id !== flow.value.id) {
-      reorderSourceFlows.push({
-        ...(sourceFlow as IFlow | IFolder),
-        flow_manager_order: reorderSourceFlows.length + 1,
-      });
+      reorderSourceFlows.push(sourceFlow as IFlow | IFolder);
     }
   });
   flowManagerUtils?.onSort?.(destinationFlows, destinationCategory);

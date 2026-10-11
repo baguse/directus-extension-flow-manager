@@ -264,9 +264,7 @@ async function loadActivityHistories() {
     }>(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/dashboard/${flowId.value}?${queries.join('&')}`);
     activityHistories.value = data?.activityHistories ?? [];
     const successVal =
-      data?.successCount ??
-      flow.value?.flow_manager_metadata_id?.flow_manager_success_counter ??
-      0;
+      data?.successCount ?? flow.value?.flow_manager_metadata_id?.flow_manager_success_counter ?? 0;
     const errorVal =
       data?.errorCount ?? flow.value?.flow_manager_metadata_id?.flow_manager_error_counter ?? 0;
     const count = successVal + errorVal;
@@ -668,7 +666,9 @@ onMounted(() => {
                         x-small
                       />
                     </button>
-                    <pre class="code-content"><code>{{ formatJSON(logDetail.trigger.payload) }}</code></pre>
+                    <pre
+                      class="code-content"
+                    ><code>{{ formatJSON(logDetail.trigger.payload) }}</code></pre>
                   </div>
                 </div>
 
@@ -701,7 +701,9 @@ onMounted(() => {
                         x-small
                       />
                     </button>
-                    <pre class="code-content"><code>{{ formatJSON(logDetail.trigger.accountability) }}</code></pre>
+                    <pre
+                      class="code-content"
+                    ><code>{{ formatJSON(logDetail.trigger.accountability) }}</code></pre>
                   </div>
                 </div>
               </div>
@@ -733,12 +735,11 @@ onMounted(() => {
               <!-- Step Collapsible Details -->
               <div class="collapsible-group">
                 <div class="collapsible-box">
-                  <div
-                    class="collapsible-bar"
-                    @click="toggleStepSection(sIdx, 'options')"
-                  >
+                  <div class="collapsible-bar" @click="toggleStepSection(sIdx, 'options')">
                     <v-icon
-                      :name="isStepSectionExpanded(sIdx, 'options') ? 'expand_more' : 'chevron_right'"
+                      :name="
+                        isStepSectionExpanded(sIdx, 'options') ? 'expand_more' : 'chevron_right'
+                      "
                     />
                     <span>Operation Options</span>
                   </div>
@@ -759,12 +760,11 @@ onMounted(() => {
                 </div>
 
                 <div class="collapsible-box">
-                  <div
-                    class="collapsible-bar"
-                    @click="toggleStepSection(sIdx, 'payload')"
-                  >
+                  <div class="collapsible-bar" @click="toggleStepSection(sIdx, 'payload')">
                     <v-icon
-                      :name="isStepSectionExpanded(sIdx, 'payload') ? 'expand_more' : 'chevron_right'"
+                      :name="
+                        isStepSectionExpanded(sIdx, 'payload') ? 'expand_more' : 'chevron_right'
+                      "
                     />
                     <span>Step Output / Payload</span>
                   </div>

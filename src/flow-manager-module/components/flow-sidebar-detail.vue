@@ -240,8 +240,11 @@ const failedOperationName = computed(() => {
           <div class="flow-name">{{ selectedCategory.name }}</div>
           <div class="flow-badges">
             <span class="trigger-chip">Category</span>
-            <span v-if="selectedCategory.flow_manager_order" class="trigger-chip">
-              Order #{{ selectedCategory.flow_manager_order }}
+            <span
+              v-if="selectedCategory.flow_manager_metadata_id?.flow_manager_order"
+              class="trigger-chip"
+            >
+              Order #{{ selectedCategory.flow_manager_metadata_id?.flow_manager_order }}
             </span>
           </div>
         </div>

@@ -437,6 +437,9 @@ export default defineComponent({
     const settingFields: Ref<Field[]> = ref(
       fieldsStore.getFieldsForCollection('directus_settings'),
     );
+    const metadataFields: Ref<Field[]> = ref(
+      fieldsStore.getFieldsForCollection('flow_manager_metadata'),
+    );
     const folderHeaders = ref([
       {
         text: 'Name',
@@ -581,7 +584,7 @@ export default defineComponent({
       let isLastRunFieldConfigured = false;
       let isRunCounterFieldConfigured = false;
 
-      for (const field of flowFields.value) {
+      for (const field of metadataFields.value) {
         if (field.field === 'flow_manager_order') {
           isOrderFieldConfigured = true;
         } else if (field.field === 'flow_manager_category') {
@@ -593,11 +596,17 @@ export default defineComponent({
         }
       }
 
+      const hasMetadataRelation = flowFields.value.some(
+        (field) => field.field === 'flow_manager_metadata_id',
+      );
+
       const isConfigured =
-        isOrderFieldConfigured &&
-        isCategoryFieldConfigured &&
-        isLastRunFieldConfigured &&
-        isRunCounterFieldConfigured;
+        isDatabaseUpdated.value ||
+        (hasMetadataRelation &&
+          isOrderFieldConfigured &&
+          isCategoryFieldConfigured &&
+          isLastRunFieldConfigured &&
+          isRunCounterFieldConfigured);
 
       return {
         isConfigured,
@@ -768,18 +777,14 @@ export default defineComponent({
       }
 
       return [
-        ...flowCategories.value.filter(
-          (category: IFolder) =>
-            !category.flow_manager_metadata_id?.flow_manager_category ||
-            (!folderMap.value[category.flow_manager_metadata_id?.flow_manager_category] &&
-              !flowIdMap.value[category.flow_manager_metadata_id?.flow_manager_category]),
-        ),
-        ...flows.value.filter(
-          (flow: IFlow) =>
-            !flow.flow_manager_metadata_id?.flow_manager_category ||
-            (!folderMap.value[flow.flow_manager_metadata_id?.flow_manager_category] &&
-              !flowIdMap.value[flow.flow_manager_metadata_id?.flow_manager_category]),
-        ),
+        ...flowCategories.value.filter((category: IFolder) => {
+          const cat = category.flow_manager_metadata_id?.flow_manager_category;
+          return !cat || (!folderMap.value[cat] && !flowIdMap.value[cat]);
+        }),
+        ...flows.value.filter((flow: IFlow) => {
+          const cat = flow.flow_manager_metadata_id?.flow_manager_category;
+          return !cat || (!folderMap.value[cat] && !flowIdMap.value[cat]);
+        }),
       ].sort(
         (a, b) =>
           (a.flow_manager_metadata_id?.flow_manager_order || 0) -
@@ -790,10 +795,10 @@ export default defineComponent({
     const currentFlows = computed<Partial<IFlow & IFolder>[]>(() => {
       if (parentId.value) {
         const childFlows = flowChildMap.value[parentId.value] || [];
-        return childFlows.sort(
+        return [...childFlows].sort(
           (a, b) =>
-            (a.flow_manager_metadata_id?.flow_manager_order as number) -
-            (b.flow_manager_metadata_id?.flow_manager_order as number),
+            (a.flow_manager_metadata_id?.flow_manager_order || 0) -
+            (b.flow_manager_metadata_id?.flow_manager_order || 0),
         );
       }
 
@@ -830,6 +835,7 @@ export default defineComponent({
       flows,
       flowFields,
       settingFields,
+      metadataFields,
       flowCategories,
       settingDialog,
       reloadFlow,
@@ -863,19 +869,56 @@ export default defineComponent({
         };
       }[] = [];
 
-      const destination = group || parentId.value;
+      const destination = group || parentId.value ? String(group || parentId.value) : null;
 
       for (let i = 0; i < updates.length; i++) {
-        const item = updates[i];
-        if (item?.type !== 'category') {
-          flowPayload.push({
+        const item = updates[i]!;
+        if (item.type !== 'category') {
+          const metadataId =
+            typeof item?.flow_manager_metadata_id === 'object' &&
+            item?.flow_manager_metadata_id !== null
+              ? (item.flow_manager_metadata_id as { id?: string }).id
+              : typeof item?.flow_manager_metadata_id === 'string'
+                ? item.flow_manager_metadata_id
+                : undefined;
+
+          const metaPayload: {
+            id?: string;
+            flow_manager_category: string | null;
+            flow_manager_order: number;
+          } = {
+            flow_manager_category: destination,
+            flow_manager_order: i + 1,
+          };
+
+          if (metadataId) {
+            metaPayload.id = metadataId;
+          }
+
+          const flowObj = {
             id: item?.id as string,
-            flow_manager_metadata_id: {
-              id: item?.flow_manager_metadata_id?.id,
-              flow_manager_category: destination,
-              flow_manager_order: i + 1,
-            },
-          });
+            flow_manager_metadata_id: metaPayload,
+          };
+
+          flowPayload.push(flowObj);
+
+          // Optimistically update existing flow in local state
+          const targetFlow = flows.value.find((f) => f.id === item.id);
+          if (targetFlow) {
+            if (
+              !targetFlow.flow_manager_metadata_id ||
+              typeof targetFlow.flow_manager_metadata_id !== 'object'
+            ) {
+              targetFlow.flow_manager_metadata_id = {
+                id: metadataId,
+                flow_manager_category: destination || undefined,
+                flow_manager_order: i + 1,
+              };
+            } else {
+              targetFlow.flow_manager_metadata_id.flow_manager_category = destination || undefined;
+              targetFlow.flow_manager_metadata_id.flow_manager_order = i + 1;
+            }
+          }
         } else {
           patchCategory({
             id: item?.id as string,
@@ -891,20 +934,34 @@ export default defineComponent({
         }
       }
 
-      saveCategories();
+      try {
+        await saveCategories();
 
-      if (flowPayload.length) {
-        if (selectedCredential.value === 'local') {
-          await api.patch(`/flows`, flowPayload);
-        } else {
-          const credential = credentials.value.find((cred) => cred.id === selectedCredential.value);
-          await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
-            url: `${credential?.url}/flows`,
-            staticToken: credential?.staticToken,
-            method: 'PATCH',
-            payload: flowPayload,
-          });
+        if (flowPayload.length) {
+          if (selectedCredential.value === 'local') {
+            await api.patch(`/flows`, flowPayload);
+          } else {
+            const credential = credentials.value.find(
+              (cred) => cred.id === selectedCredential.value,
+            );
+            await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+              url: `${credential?.url}/flows`,
+              staticToken: credential?.staticToken,
+              method: 'PATCH',
+              payload: flowPayload,
+            });
+          }
+          await reloadFlow();
         }
+      } catch (err: unknown) {
+        console.error('[FLOW MANAGER] Failed to update flow order:', err);
+        const errorMsg = formatConnectionError(err, 'Failed to update flow order.');
+        notificationsStore.add({
+          type: 'error',
+          title: 'Sort Failed',
+          text: errorMsg,
+          closeable: true,
+        });
         await reloadFlow();
       }
     }
@@ -914,7 +971,6 @@ export default defineComponent({
     }
 
     async function reloadFlow() {
-      flows.value = [];
       const fields = ['*', 'operations.*', 'flow_manager_metadata_id.*'];
       const queries = [`fields=${fields.join(',')}`, 'limit=-1'];
       if (selectedCredential.value === 'local') {
@@ -1027,6 +1083,7 @@ export default defineComponent({
           await reloadTabularFlow();
           flowFields.value = (await reloadFields('directus_flows')) as Field[];
           settingFields.value = (await reloadFields('directus_settings')) as Field[];
+          metadataFields.value = (await reloadFields('flow_manager_metadata')) as Field[];
           const folders = await reloadFolders();
           flowCategories.value = folders;
         } catch (err: unknown) {
@@ -1100,6 +1157,7 @@ export default defineComponent({
         await reloadTabularFlow();
         flowFields.value = (await reloadFields('directus_flows')) as Field[];
         settingFields.value = (await reloadFields('directus_settings')) as Field[];
+        metadataFields.value = (await reloadFields('flow_manager_metadata')) as Field[];
         const folders = await reloadFolders();
         flowCategories.value = folders;
         await ensureDatabase();
@@ -1267,12 +1325,12 @@ export default defineComponent({
       reload,
     });
 
-    onMounted(() => {
+    onMounted(async () => {
+      getServerInfo();
+      await ensureDatabase();
       if (!flowFieldConfiguration.value.isConfigured || !isSettingFieldConfigured.value) {
         settingDialog.value = true;
       }
-      getServerInfo();
-      ensureDatabase();
     });
 
     return {

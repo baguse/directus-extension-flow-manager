@@ -5,10 +5,20 @@
       <div class="instance-card">
         <div class="instance-label-row">
           <div class="instance-badge">
-            <v-icon :name="isLocalInstance ? 'storage' : 'cloud_queue'" x-small class="instance-icon" />
-            <span class="instance-type-label">{{ isLocalInstance ? 'Local Directus' : 'Remote Directus' }}</span>
+            <v-icon
+              :name="isLocalInstance ? 'storage' : 'cloud_queue'"
+              x-small
+              class="instance-icon"
+            />
+            <span class="instance-type-label">{{
+              isLocalInstance ? 'Local Directus' : 'Remote Directus'
+            }}</span>
           </div>
-          <span v-if="serverInfo?.version" class="version-chip" :title="`Directus Version ${serverInfo.version}`">
+          <span
+            v-if="serverInfo?.version"
+            class="version-chip"
+            :title="`Directus Version ${serverInfo.version}`"
+          >
             v{{ serverInfo.version }}
           </span>
         </div>
@@ -89,13 +99,7 @@
               <v-icon name="search" small class="search-lead-icon" />
             </template>
             <template #append>
-              <v-icon
-                v-if="tmpSearch"
-                name="close"
-                x-small
-                clickable
-                @click="clearSearch"
-              />
+              <v-icon v-if="tmpSearch" name="close" x-small clickable @click="clearSearch" />
             </template>
           </v-input>
         </div>
@@ -202,8 +206,7 @@ const allFlowsCount = computed(() => allFlows.value?.length || 0);
 
 const isAllFlowsRoute = computed(() => {
   return (
-    (route.path === '/flow-manager' || route.path === '/flow-manager/') &&
-    !route.params.parentId
+    (route.path === '/flow-manager' || route.path === '/flow-manager/') && !route.params.parentId
   );
 });
 
