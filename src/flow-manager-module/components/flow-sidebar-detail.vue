@@ -23,6 +23,7 @@ const emit = defineEmits<{
   (e: 'openVersionDialog', flow: IFlow): void;
   (e: 'openGitExportDialog', flow: IFlow): void;
   (e: 'viewInGraph', flow: IFlow): void;
+  (e: 'viewInTimeline', flow: IFlow): void;
 }>();
 
 const flowManagerUtils = inject<FlowManagerUtilsContext>('flowManagerUtils');
@@ -312,6 +313,16 @@ const flowImpact = computed<FlowImpactSummary | null>(() => {
 
       <!-- Actions -->
       <div class="action-buttons">
+        <v-button
+          v-if="selectedFlow.trigger === 'schedule'"
+          small
+          secondary
+          class="sidebar-btn"
+          @click="emit('viewInTimeline', selectedFlow)"
+        >
+          <v-icon name="schedule" class="mr-1" />
+          View in Cron Timeline
+        </v-button>
         <v-button small secondary class="sidebar-btn" @click="emit('viewInGraph', selectedFlow)">
           <v-icon name="account_tree" class="mr-1" />
           View in Dependency Graph

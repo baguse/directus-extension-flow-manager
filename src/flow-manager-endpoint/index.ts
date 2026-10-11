@@ -869,4 +869,146 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
       message: 'Processing the sync process',
     });
   });
+
+  const handleServerTime = async (
+    _req: unknown,
+    res: {
+      json: (body: unknown) => void;
+      status: (code: number) => { json: (body: unknown) => void };
+    },
+  ) => {
+    try {
+      const req = _req as {
+        body?: { url?: string; staticToken?: string; timezone?: string };
+        query?: { url?: string; staticToken?: string; timezone?: string };
+      };
+      const rawUrl = req.body?.url || req.query?.url;
+      const remoteToken = req.body?.staticToken || req.query?.staticToken;
+      const configuredTimezone = req.body?.timezone || req.query?.timezone;
+
+      if (rawUrl && typeof rawUrl === 'string') {
+        const remoteUrl = rawUrl.trim().replace(/\/+$/, '');
+
+        // 1. Try remote flow-manager extension endpoint first
+        try {
+          const extRes = await axios.request({
+            url: `${remoteUrl}/flow-manager/server-time`,
+            method: 'GET',
+            timeout: 5000,
+            headers: {
+              ...(remoteToken ? { Authorization: `Bearer ${remoteToken}` } : {}),
+            },
+          });
+
+          if (extRes.data && typeof extRes.data.serverTimestamp === 'number') {
+            const data = extRes.data;
+            if (configuredTimezone) {
+              data.timezone = configuredTimezone;
+            }
+            res.json({
+              ...data,
+              isRemote: true,
+              hasExtension: true,
+              source: 'extension',
+            });
+            return;
+          }
+        } catch {
+          // Flow-manager extension may not be installed on remote instance; fallback below
+        }
+
+        // 2. Fallback to standard Directus endpoint (/server/ping or /server/info)
+        try {
+          const pingRes = await axios.request({
+            url: `${remoteUrl}/server/ping`,
+            method: 'GET',
+            timeout: 5000,
+            headers: {
+              ...(remoteToken ? { Authorization: `Bearer ${remoteToken}` } : {}),
+            },
+          });
+
+          const httpDate = pingRes.headers['date'];
+          const remoteNow = httpDate ? new Date(httpDate) : new Date();
+          const targetTz = configuredTimezone || 'UTC';
+
+          let offsetMinutes = 0;
+          let offsetString = 'UTC+00:00';
+          try {
+            const tzFormatter = new Intl.DateTimeFormat('en-US', {
+              timeZone: targetTz,
+              timeZoneName: 'longOffset',
+            });
+            const parts = tzFormatter.formatToParts(remoteNow);
+            const tzPart = parts.find((p) => p.type === 'timeZoneName')?.value;
+            if (tzPart && tzPart.startsWith('GMT')) {
+              offsetString = tzPart.replace('GMT', 'UTC');
+              const match = offsetString.match(/UTC([+-])(\d{2}):(\d{2})/);
+              if (match && match[2] && match[3]) {
+                const sign = match[1] === '+' ? 1 : -1;
+                offsetMinutes = sign * (parseInt(match[2], 10) * 60 + parseInt(match[3], 10));
+              }
+            } else if (targetTz === 'UTC') {
+              offsetString = 'UTC+00:00';
+              offsetMinutes = 0;
+            }
+          } catch {
+            // fallback
+          }
+
+          res.json({
+            serverTime: remoteNow.toISOString(),
+            serverTimestamp: remoteNow.getTime(),
+            timezone: targetTz,
+            offsetMinutes,
+            offsetString,
+            envTz: null,
+            isRemote: true,
+            hasExtension: false,
+            source: 'http-date',
+          });
+          return;
+        } catch (pingErr) {
+          logger.warn(
+            `[FLOW MANAGER] Remote server time probe failed for ${remoteUrl}: ${pingErr}`,
+          );
+          res.status(502).json({
+            error: 'Failed to reach remote Directus server to synchronize time.',
+            url: remoteUrl,
+          });
+          return;
+        }
+      }
+
+      // Default: Local Directus server time
+      const now = new Date();
+      const timezone = process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+      const offsetMinutes = -now.getTimezoneOffset();
+      const offsetHours = offsetMinutes / 60;
+      const sign = offsetMinutes >= 0 ? '+' : '-';
+      const absHours = String(Math.abs(Math.trunc(offsetHours))).padStart(2, '0');
+      const absMins = String(Math.abs(offsetMinutes % 60)).padStart(2, '0');
+      const offsetString = `UTC${sign}${absHours}:${absMins}`;
+
+      res.json({
+        serverTime: now.toISOString(),
+        serverTimestamp: now.getTime(),
+        timezone,
+        offsetMinutes,
+        offsetString,
+        envTz: process.env.TZ || null,
+        isRemote: false,
+        hasExtension: true,
+        source: 'local',
+      });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ message });
+    }
+  };
+
+  router.get('/flow-manager/server-time', handleServerTime);
+  router.post('/flow-manager/server-time', handleServerTime);
+  router.get('/server-time', handleServerTime);
+  router.post('/server-time', handleServerTime);
 });

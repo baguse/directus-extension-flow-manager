@@ -85,6 +85,18 @@
         @select-flow="selectItem"
         @go-to-flow="goToFlow"
       />
+      <FlowCronTimeline
+        v-else-if="viewMode === 'TIMELINE'"
+        :flows="flows"
+        :flow-categories="flowCategories"
+        :selected-flow-id="selectedItem?.id"
+        :selected-credential="selectedCredential"
+        :credentials="credentials"
+        @select-flow="selectItem"
+        @go-to-flow="goToFlow"
+        @run-flow="showRunDialog"
+        @edit-flow="showEditFlowDialog"
+      />
     </template>
     <div v-else class="flex justify-center h-full items-center">
       <div class="not-configured-notes">
@@ -168,6 +180,16 @@
         >
           <v-icon name="account_tree" />
         </v-button>
+
+        <v-button
+          v-tooltip.bottom="'Cron Schedule Timeline'"
+          rounded
+          icon
+          :secondary="viewMode !== 'TIMELINE'"
+          @click="viewMode = 'TIMELINE'"
+        >
+          <v-icon name="schedule" />
+        </v-button>
       </div>
 
       <v-menu placement="bottom-end" show-arrow :close-on-content-click="true">
@@ -232,6 +254,7 @@
         @open-version-dialog="openVersionDialog"
         @open-git-export-dialog="openGitExportDialog"
         @view-in-graph="onViewInGraph"
+        @view-in-timeline="onViewInTimeline"
       />
     </template>
 
@@ -417,6 +440,7 @@ import FlowVersionDialog from './components/flow-version-dialog.vue';
 import FlowGitExportModal from './components/flow-git-export-modal.vue';
 import FlowEditDialog from './components/flow-edit-dialog.vue';
 import FlowDependencyGraph from './components/dependency-graph/flow-dependency-graph.vue';
+import FlowCronTimeline from './components/cron-timeline/flow-cron-timeline.vue';
 import { useFlowRestore } from '../composables/use-flow-restore';
 import { useFlowCategories } from '../composables/use-flow-categories';
 import { useFlowDatabase } from '../composables/use-flow-database';
@@ -446,6 +470,7 @@ export default defineComponent({
     FlowGitExportModal,
     FlowEditDialog,
     FlowDependencyGraph,
+    FlowCronTimeline,
   },
 
   props: {
@@ -1499,6 +1524,11 @@ export default defineComponent({
       viewMode.value = 'GRAPH';
     }
 
+    function onViewInTimeline(flow: IFlow) {
+      selectedItem.value = flow;
+      viewMode.value = 'TIMELINE';
+    }
+
     onMounted(async () => {
       getServerInfo();
       await ensureDatabase();
@@ -1571,6 +1601,7 @@ export default defineComponent({
       viewMode,
       viewListMode,
       onViewInGraph,
+      onViewInTimeline,
       showDeleteItemDialog,
       showPushToCloud,
       runFlowDialog,

@@ -135,6 +135,7 @@ async function handleChangePin() {
 const credentialName = ref('');
 const credentialUrl = ref('');
 const credentialStaticToken = ref('');
+const credentialTimezone = ref('');
 const flows = ref<IFlow[]>([]);
 const selectedFlows = ref<IFlow[]>([]);
 const flowDuplicatedName = ref('');
@@ -154,17 +155,23 @@ const selectedCredential = ref<ICredential>({
   name: '',
   url: '',
   staticToken: '',
+  timezone: '',
 });
 const credentialHeaders = ref([
   {
     text: 'Name',
     value: 'name',
-    width: 180,
+    width: 150,
   },
   {
     text: 'URL',
     value: 'url',
     width: 180,
+  },
+  {
+    text: 'Timezone',
+    value: 'timezone',
+    width: 120,
   },
 ]);
 
@@ -339,18 +346,38 @@ async function runTest(url: string, token: string): Promise<TestResult> {
       // server info is optional
     }
 
+    let tzLabel = '';
+    try {
+      const { data: tzRes } = await api.post<{ timezone?: string; offsetString?: string }>(
+        `/${ENDPOINT_EXTENSION_NAME}/flow-manager/server-time`,
+        {
+          url: parsedUrl,
+          staticToken: token,
+          timezone: credentialTimezone.value || undefined,
+        },
+      );
+      if (tzRes?.timezone) {
+        tzLabel = ` · Timezone: ${tzRes.timezone} (${tzRes.offsetString})`;
+        if (!credentialTimezone.value && tzRes.timezone) {
+          credentialTimezone.value = tzRes.timezone;
+        }
+      }
+    } catch {
+      // server time probe is optional
+    }
+
     if (!isAdmin) {
       return {
         success: false,
         status: 'warning',
-        message: `Connected to ${displayName}${roleLabel}${versionLabel}, but this user does not have admin permissions required by Flow Manager.`,
+        message: `Connected to ${displayName}${roleLabel}${versionLabel}${tzLabel}, but this user does not have admin permissions required by Flow Manager.`,
       };
     }
 
     return {
       success: true,
       status: 'success',
-      message: `Connection successful! Connected as ${displayName}${roleLabel} [Admin]${versionLabel}.`,
+      message: `Connection successful! Connected as ${displayName}${roleLabel} [Admin]${versionLabel}${tzLabel}.`,
     };
   } catch (err: unknown) {
     const errorMsg = formatConnectionError(
@@ -442,6 +469,9 @@ function saveCredential() {
         (newCredentials[credentialIndex] as ICredential).staticToken =
           selectedCredential.value.staticToken;
       }
+      (newCredentials[credentialIndex] as ICredential).timezone = credentialTimezone.value
+        ? credentialTimezone.value.trim()
+        : undefined;
 
       credentials.value = newCredentials;
     }
@@ -449,12 +479,14 @@ function saveCredential() {
     credentialName.value = '';
     credentialUrl.value = '';
     credentialStaticToken.value = '';
+    credentialTimezone.value = '';
     isEdit.value = false;
     selectedCredential.value = {
       id: '',
       name: '',
       url: '',
       staticToken: '',
+      timezone: '',
     };
   } else {
     const newCredentials = [
@@ -464,6 +496,7 @@ function saveCredential() {
         name: credentialName.value,
         url: credentialUrlParsed,
         staticToken: credentialStaticToken.value,
+        timezone: credentialTimezone.value ? credentialTimezone.value.trim() : undefined,
       },
     ];
 
@@ -472,6 +505,7 @@ function saveCredential() {
     credentialName.value = '';
     credentialUrl.value = '';
     credentialStaticToken.value = '';
+    credentialTimezone.value = '';
   }
 }
 
@@ -489,10 +523,12 @@ function deleteCredential(item: ICredential) {
         name: '',
         url: '',
         staticToken: '',
+        timezone: '',
       };
       credentialName.value = '';
       credentialUrl.value = '';
       credentialStaticToken.value = '';
+      credentialTimezone.value = '';
     }
     newCredentials.splice(credentialIndex, 1);
   }
@@ -506,6 +542,7 @@ function selectCredential(item: ICredential) {
   credentialName.value = item.name;
   credentialUrl.value = item.url;
   credentialStaticToken.value = '';
+  credentialTimezone.value = item.timezone || '';
   testResult.value = null;
 }
 
@@ -520,10 +557,12 @@ function cancelEditCredential() {
     name: '',
     url: '',
     staticToken: '',
+    timezone: '',
   };
   credentialName.value = '';
   credentialUrl.value = '';
   credentialStaticToken.value = '';
+  credentialTimezone.value = '';
   testResult.value = null;
 }
 
@@ -775,6 +814,9 @@ function parseUrl(url: string) {
           :active="isEdit ? [selectedCredential.id] : []"
           @click:row="onRowClick"
         >
+          <template #[`item.timezone`]="{ item }">
+            <span class="tz-cell">{{ item.timezone || 'Auto' }}</span>
+          </template>
           <template #item-append="{ item }">
             <v-progress-circular
               v-if="testingRowId === item.id"
@@ -822,6 +864,14 @@ function parseUrl(url: string) {
           v-model="credentialStaticToken"
           v-tooltip.bottom="'Credential Static Token'"
           :placeholder="isEdit ? '(Unchanged)' : 'Static Token'"
+          class="input-form"
+        ></v-input>
+        <v-input
+          v-model="credentialTimezone"
+          v-tooltip.bottom="
+            'Server Timezone (e.g. UTC, Asia/Jakarta, America/New_York). Leave blank for Auto-detect.'
+          "
+          placeholder="Server Timezone (Optional, e.g. UTC, Asia/Jakarta)"
           class="input-form"
         ></v-input>
         <v-notice
@@ -1062,5 +1112,13 @@ function parseUrl(url: string) {
 
 .change-pin-card {
   --v-card-min-width: 420px;
+}
+
+.tz-cell {
+  font-size: 11px;
+  color: var(--theme--foreground-subdued, #64748b);
+  background: var(--theme--background-subdued, #f1f5f9);
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 </style>

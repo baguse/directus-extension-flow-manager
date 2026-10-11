@@ -1,7 +1,7 @@
 import type { Ref } from 'vue';
 import type { AppCollection, Field, Policy, Role, User } from '@directus/types';
 
-export type FlowViewMode = 'LIST' | 'TABLE' | 'GRAPH';
+export type FlowViewMode = 'LIST' | 'TABLE' | 'GRAPH' | 'TIMELINE';
 
 /* ==========================================================================
    1. Flow & Operation Domain Models
@@ -211,6 +211,7 @@ export type ExtendedUser = User & {
   role?: (Role & { policies?: ExtendedPolicy[]; admin_access?: boolean }) | null;
   policies?: ExtendedPolicy[];
   admin_access?: boolean;
+  app_access?: boolean;
 };
 
 export type ExtendedField = Field & {
@@ -263,6 +264,7 @@ export interface ICredential {
   name: string;
   staticToken: string;
   url: string;
+  timezone?: string;
 }
 
 export interface IVaultRecord {

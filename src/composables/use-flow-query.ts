@@ -306,7 +306,12 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
   const viewMode = computed<FlowViewMode>({
     get() {
       const rawMode = preset.value?.layout_options?.viewMode;
-      if (rawMode === 'LIST' || rawMode === 'TABLE' || rawMode === 'GRAPH') {
+      if (
+        rawMode === 'LIST' ||
+        rawMode === 'TABLE' ||
+        rawMode === 'GRAPH' ||
+        rawMode === 'TIMELINE'
+      ) {
         return rawMode;
       }
       if (typeof preset.value?.layout_options?.viewListMode !== 'undefined') {
