@@ -20,6 +20,7 @@
 
     <template v-if="isDatabaseUpdated">
       <FlowBatchActions
+        v-if="viewMode !== 'GRAPH'"
         v-model:show-select="showSelect"
         v-model:is-select-all="isSelectAll"
         :view-list-mode="viewListMode"
@@ -37,7 +38,7 @@
         @export-git-selected="exportGitSelected"
       />
       <FlowListView
-        v-if="viewListMode"
+        v-if="viewMode === 'LIST'"
         :items="parentId ? currentFlows : rootFlows"
         :all-flows="allFlows"
         :show-select="showSelect"
@@ -45,7 +46,7 @@
         @sort="onSort"
       />
       <FlowTableView
-        v-else
+        v-else-if="viewMode === 'TABLE'"
         v-model="selectedItems"
         v-model:headers="headers"
         v-model:page="tablePage"
@@ -75,6 +76,14 @@
         @set-status-filter="setStatusFilter"
         @set-trigger-filter="setTriggerFilter"
         @set-category-filter="setCategoryFilter"
+      />
+      <FlowDependencyGraph
+        v-else-if="viewMode === 'GRAPH'"
+        :flows="flows"
+        :flow-categories="flowCategories"
+        :selected-flow-id="selectedItem?.id"
+        @select-flow="selectItem"
+        @go-to-flow="goToFlow"
       />
     </template>
     <div v-else class="flex justify-center h-full items-center">
@@ -113,7 +122,7 @@
 
     <template #navigation>
       <content-navigation
-        :view-mode="viewListMode ? 'LIST' : 'TABLE'"
+        :view-mode="viewMode"
         :root-flows="rootFlows"
         :flow-child-map="flowChildMap"
         :all-flows="allFlows"
@@ -123,22 +132,43 @@
     </template>
     <template #actions>
       <search-input
-        v-if="isDatabaseUpdated && !viewListMode"
+        v-if="isDatabaseUpdated && viewMode === 'TABLE'"
         v-model="tableFlowSearch"
         v-model:filter="tableFlowFilter"
         :collection="'directus_flows'"
       />
 
-      <v-button
-        v-if="isDatabaseUpdated"
-        v-tooltip.bottom="viewListMode ? 'Switch to Table View' : 'Switch to List View'"
-        rounded
-        icon
-        secondary
-        @click="viewListMode = !viewListMode"
-      >
-        <v-icon :name="viewListMode ? 'table_rows' : 'view_list'" />
-      </v-button>
+      <div v-if="isDatabaseUpdated" class="view-mode-buttons">
+        <v-button
+          v-tooltip.bottom="'List View'"
+          rounded
+          icon
+          :secondary="viewMode !== 'LIST'"
+          @click="viewMode = 'LIST'"
+        >
+          <v-icon name="view_list" />
+        </v-button>
+
+        <v-button
+          v-tooltip.bottom="'Table View'"
+          rounded
+          icon
+          :secondary="viewMode !== 'TABLE'"
+          @click="viewMode = 'TABLE'"
+        >
+          <v-icon name="table_rows" />
+        </v-button>
+
+        <v-button
+          v-tooltip.bottom="'Dependency Graph'"
+          rounded
+          icon
+          :secondary="viewMode !== 'GRAPH'"
+          @click="viewMode = 'GRAPH'"
+        >
+          <v-icon name="account_tree" />
+        </v-button>
+      </div>
 
       <v-menu placement="bottom-end" show-arrow :close-on-content-click="true">
         <template #activator="{ toggle, active }">
@@ -196,10 +226,12 @@
     <template #sidebar>
       <FlowSidebarDetail
         :selected-item="selectedItem"
+        :all-flows="flows"
         :format-date-long="formatDateLong"
         :get-operation-name-by-id="getOperationNameById"
         @open-version-dialog="openVersionDialog"
         @open-git-export-dialog="openGitExportDialog"
+        @view-in-graph="onViewInGraph"
       />
     </template>
 
@@ -359,7 +391,7 @@ import { useStores, useApi, useLayout } from '@directus/extensions-sdk';
 import { useRoute, useRouter } from 'vue-router';
 import type { AppCollection, Field } from '@directus/types';
 
-import type { FlowsStore, IFlow, IFolder, ProcessingItem } from '../types';
+import type { FlowViewMode, FlowsStore, IFlow, IFolder, ProcessingItem } from '../types';
 import { ENDPOINT_EXTENSION_NAME, TRIGGER_TYPES } from '../constants';
 
 import { formatDate, formatDateLong } from '../utils/date.util';
@@ -384,6 +416,7 @@ import UndoToast from './components/undo-toast.vue';
 import FlowVersionDialog from './components/flow-version-dialog.vue';
 import FlowGitExportModal from './components/flow-git-export-modal.vue';
 import FlowEditDialog from './components/flow-edit-dialog.vue';
+import FlowDependencyGraph from './components/dependency-graph/flow-dependency-graph.vue';
 import { useFlowRestore } from '../composables/use-flow-restore';
 import { useFlowCategories } from '../composables/use-flow-categories';
 import { useFlowDatabase } from '../composables/use-flow-database';
@@ -412,6 +445,7 @@ export default defineComponent({
     FlowVersionDialog,
     FlowGitExportModal,
     FlowEditDialog,
+    FlowDependencyGraph,
   },
 
   props: {
@@ -658,6 +692,7 @@ export default defineComponent({
       tableSort,
       tableFlowFilter,
       tableFlowSearch,
+      viewMode,
       viewListMode,
       processedFlows,
       headers,
@@ -1453,7 +1488,16 @@ export default defineComponent({
       goToFlow,
       hydrateLocalFlow,
       reload,
+      viewMode,
+      setViewMode: (mode: FlowViewMode) => {
+        viewMode.value = mode;
+      },
     });
+
+    function onViewInGraph(flow: IFlow) {
+      selectedItem.value = flow;
+      viewMode.value = 'GRAPH';
+    }
 
     onMounted(async () => {
       getServerInfo();
@@ -1510,6 +1554,7 @@ export default defineComponent({
       allFlows,
       deleteItemDialog,
       selectedItem,
+      selectItem,
       loadingDeleteItem,
       deleteItem,
       selectCategoryForEdit,
@@ -1523,7 +1568,9 @@ export default defineComponent({
       tableSort,
       processedFlows,
       getCategoryName,
+      viewMode,
       viewListMode,
+      onViewInGraph,
       showDeleteItemDialog,
       showPushToCloud,
       runFlowDialog,
@@ -1711,6 +1758,12 @@ export default defineComponent({
 <style lang="scss" scoped>
 :deep(.actions) {
   align-items: center;
+}
+
+.view-mode-buttons {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .main-table > .v-table > table > .table-header > tr > .select.cell[scope='col'] > button {

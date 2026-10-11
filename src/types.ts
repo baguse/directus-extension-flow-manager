@@ -1,6 +1,8 @@
 import type { Ref } from 'vue';
 import type { AppCollection, Field, Policy, Role, User } from '@directus/types';
 
+export type FlowViewMode = 'LIST' | 'TABLE' | 'GRAPH';
+
 /* ==========================================================================
    1. Flow & Operation Domain Models
    ========================================================================== */
@@ -342,6 +344,8 @@ export interface FlowManagerUtilsContext {
   goToFlow({ item }: { item: IFlow }): Promise<void>;
   hydrateLocalFlow: () => Promise<void>;
   reload?: () => Promise<void>;
+  viewMode?: Ref<FlowViewMode>;
+  setViewMode?: (mode: FlowViewMode) => void;
 }
 
 /* ==========================================================================

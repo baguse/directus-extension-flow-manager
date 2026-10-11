@@ -2,7 +2,15 @@ import { ref, computed, watch, type Ref } from 'vue';
 import debounce from 'lodash/debounce';
 import type { useApi } from '@directus/extensions-sdk';
 import type { Filter, Preset } from '@directus/types';
-import type { DirectusFilter, ExtendedUser, Header, ICredential, IFlow, IFolder } from '../types';
+import type {
+  DirectusFilter,
+  ExtendedUser,
+  FlowViewMode,
+  Header,
+  ICredential,
+  IFlow,
+  IFolder,
+} from '../types';
 import { ENDPOINT_EXTENSION_NAME } from '../constants';
 import { cleanFilter } from '../utils/filter.util';
 
@@ -294,23 +302,38 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
     },
   });
 
-  // true for list view, false for table view
-  const viewListMode = computed<boolean>({
+  // Current view mode: 'LIST' | 'TABLE' | 'GRAPH'
+  const viewMode = computed<FlowViewMode>({
     get() {
-      if (typeof preset.value?.layout_options?.viewListMode === 'undefined') {
-        return true;
+      const rawMode = preset.value?.layout_options?.viewMode;
+      if (rawMode === 'LIST' || rawMode === 'TABLE' || rawMode === 'GRAPH') {
+        return rawMode;
       }
-      return preset.value?.layout_options?.viewListMode;
+      if (typeof preset.value?.layout_options?.viewListMode !== 'undefined') {
+        return preset.value.layout_options.viewListMode ? 'LIST' : 'TABLE';
+      }
+      return 'LIST';
     },
-    set(value: boolean) {
+    set(value: FlowViewMode) {
       preset.value = {
         ...(preset.value || {}),
         layout_options: {
           ...(preset.value?.layout_options || {}),
-          viewListMode: value,
+          viewMode: value,
+          viewListMode: value === 'LIST',
         },
       };
       updatePreset();
+    },
+  });
+
+  // Backwards compatibility for boolean viewListMode
+  const viewListMode = computed<boolean>({
+    get() {
+      return viewMode.value === 'LIST';
+    },
+    set(value: boolean) {
+      viewMode.value = value ? 'LIST' : 'TABLE';
     },
   });
 
@@ -584,6 +607,7 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
       sort: tableSort.value,
       headers: headers.value,
       viewListMode: viewListMode.value,
+      viewMode: viewMode.value,
       limit: tableLimit.value,
     };
     const layoutQuery = {
@@ -655,6 +679,7 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
       sort: tableSort.value,
       headers: headers.value,
       viewListMode: viewListMode.value,
+      viewMode: viewMode.value,
       limit: tableLimit.value,
     };
     const layoutQuery = {
@@ -894,6 +919,7 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
     tableSort,
     tableFlowFilter,
     tableFlowSearch,
+    viewMode,
     viewListMode,
     processedFlows,
     headers,

@@ -83,6 +83,7 @@
     "typecheck": "vue-tsc --noEmit"
   },
   "devDependencies": {
+    "@dagrejs/dagre": "^3.1.1",
     "@directus/composables": "^11.6.2",
     "@directus/extensions-sdk": "^18.0.4",
     "@directus/format-title": "^13.0.0",
@@ -90,6 +91,9 @@
     "@types/jszip": "^3.4.0",
     "@types/lodash": "^4.17.25",
     "@types/node": "^20.12.8",
+    "@vue-flow/background": "^1.3.2",
+    "@vue-flow/controls": "^1.1.3",
+    "@vue-flow/core": "^1.48.2",
     "chart.js": "^4.5.1",
     "eslint": "^9.39.5",
     "eslint-config-prettier": "^10.1.8",

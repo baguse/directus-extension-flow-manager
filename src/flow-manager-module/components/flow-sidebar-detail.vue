@@ -1,16 +1,28 @@
 <script setup lang="ts">
 import { ref, computed, inject } from 'vue';
 import type { FlowManagerUtilsContext, IFlow, IFolder, IOperation } from '../../types';
+import {
+  buildFlowDependencyGraph,
+  getFlowImpact,
+  type FlowImpactSummary,
+} from '../../utils/flow-dependency.util';
 
-const props = defineProps<{
-  selectedItem?: IFlow | IFolder | null;
-  formatDateLong: (date?: string | null) => string;
-  getOperationNameById: (operationId: string) => IOperation | undefined;
-}>();
+const props = withDefaults(
+  defineProps<{
+    selectedItem?: IFlow | IFolder | null;
+    allFlows?: IFlow[];
+    formatDateLong: (date?: string | null) => string;
+    getOperationNameById: (operationId: string) => IOperation | undefined;
+  }>(),
+  {
+    allFlows: () => [],
+  },
+);
 
 const emit = defineEmits<{
   (e: 'openVersionDialog', flow: IFlow): void;
   (e: 'openGitExportDialog', flow: IFlow): void;
+  (e: 'viewInGraph', flow: IFlow): void;
 }>();
 
 const flowManagerUtils = inject<FlowManagerUtilsContext>('flowManagerUtils');
@@ -82,6 +94,14 @@ const failedOperationName = computed(() => {
   const opId = selectedFlow.value?.flow_manager_metadata_id?.flow_manager_last_run_operation;
   if (!opId) return null;
   return props.getOperationNameById(opId)?.name || opId;
+});
+
+const flowImpact = computed<FlowImpactSummary | null>(() => {
+  if (!selectedFlow.value || !props.allFlows || props.allFlows.length === 0) {
+    return null;
+  }
+  const graph = buildFlowDependencyGraph(props.allFlows, { includeCollections: true });
+  return getFlowImpact(selectedFlow.value.id, graph, props.allFlows);
 });
 </script>
 
@@ -190,8 +210,112 @@ const failedOperationName = computed(() => {
         </div>
       </div>
 
+      <!-- Dependencies & Domino Impact Section -->
+      <div v-if="flowImpact" class="dependency-impact-section">
+        <div class="impact-header">
+          <div class="impact-title-group">
+            <v-icon name="account_tree" small class="impact-icon" />
+            <span class="impact-title">Dependencies & Impact</span>
+          </div>
+          <span
+            v-if="flowImpact.isCycleParticipant"
+            v-tooltip.bottom="'Warning: This flow is part of a circular loop!'"
+            class="cycle-warning-badge"
+          >
+            <v-icon name="warning" x-small />
+            Loop
+          </span>
+        </div>
+
+        <div v-if="flowImpact.isCycleParticipant" class="cycle-warning-box">
+          <v-icon name="warning" small class="cycle-box-icon" />
+          <span
+            >Circular loop detected. Modifying this flow can cause infinite cascading
+            executions.</span
+          >
+        </div>
+
+        <!-- Upstream Triggers -->
+        <div class="impact-group">
+          <div class="group-label">
+            <span>TRIGGERED BY</span>
+            <span class="group-count">{{
+              flowImpact.upstreamFlows.length + flowImpact.upstreamCollections.length
+            }}</span>
+          </div>
+          <div
+            v-if="flowImpact.upstreamFlows.length || flowImpact.upstreamCollections.length"
+            class="relation-tags"
+          >
+            <div
+              v-for="uFlow in flowImpact.upstreamFlows"
+              :key="uFlow.id"
+              class="relation-pill flow-pill"
+              :title="`${uFlow.name}: ${uFlow.via}`"
+            >
+              <v-icon name="bolt" x-small />
+              <span class="pill-text">{{ uFlow.name }}</span>
+            </div>
+            <div
+              v-for="uColl in flowImpact.upstreamCollections"
+              :key="uColl"
+              class="relation-pill coll-pill"
+              :title="`Events on collection: ${uColl}`"
+            >
+              <v-icon name="storage" x-small />
+              <span class="pill-text">{{ uColl }}</span>
+            </div>
+          </div>
+          <div v-else class="empty-relation-text">Root trigger (direct/manual/webhook)</div>
+        </div>
+
+        <!-- Downstream Impact (Blast Radius) -->
+        <div class="impact-group">
+          <div class="group-label">
+            <span>BLAST RADIUS (TRIGGERS)</span>
+            <span class="group-count">{{
+              flowImpact.downstreamFlows.length + flowImpact.downstreamCollections.length
+            }}</span>
+          </div>
+          <div
+            v-if="flowImpact.downstreamFlows.length || flowImpact.downstreamCollections.length"
+            class="relation-tags"
+          >
+            <div
+              v-for="dFlow in flowImpact.downstreamFlows"
+              :key="dFlow.id"
+              class="relation-pill flow-pill downstream"
+              :title="`${dFlow.name}: ${dFlow.via}`"
+            >
+              <v-icon name="bolt" x-small />
+              <span class="pill-text">{{ dFlow.name }}</span>
+            </div>
+            <div
+              v-for="dColl in flowImpact.downstreamCollections"
+              :key="dColl"
+              class="relation-pill coll-pill"
+              :title="`Writes to collection: ${dColl}`"
+            >
+              <v-icon name="storage" x-small />
+              <span class="pill-text">{{ dColl }}</span>
+            </div>
+          </div>
+          <div v-else class="empty-relation-text">No downstream cascades</div>
+        </div>
+
+        <!-- Quick View in Graph Button -->
+        <button type="button" class="view-graph-cta-btn" @click="emit('viewInGraph', selectedFlow)">
+          <v-icon name="account_tree" small />
+          <span>View in Dependency Graph</span>
+        </button>
+      </div>
+
       <!-- Actions -->
       <div class="action-buttons">
+        <v-button small secondary class="sidebar-btn" @click="emit('viewInGraph', selectedFlow)">
+          <v-icon name="account_tree" class="mr-1" />
+          View in Dependency Graph
+        </v-button>
         <v-button
           small
           secondary
@@ -617,6 +741,162 @@ const failedOperationName = computed(() => {
     font-size: 11px;
     margin-top: 4px;
     line-height: 1.4;
+  }
+}
+
+.dependency-impact-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  background: var(--theme--background-subdued, #f8fafc);
+  border-radius: 8px;
+  border: 1px solid var(--theme--border-color-subdued, #e2e8f0);
+
+  .impact-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .impact-title-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--theme--foreground, #334155);
+
+    .impact-icon {
+      color: var(--theme--primary, #6366f1);
+    }
+  }
+
+  .cycle-warning-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #b91c1c;
+    background: #fee2e2;
+    padding: 2px 6px;
+    border-radius: 9999px;
+  }
+
+  .cycle-warning-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 8px 10px;
+    background: #fef2f2;
+    border-left: 3px solid #ef4444;
+    border-radius: 4px;
+    font-size: 11px;
+    line-height: 1.4;
+    color: #991b1b;
+
+    .cycle-box-icon {
+      color: #ef4444;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+  }
+
+  .impact-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+
+    .group-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--theme--foreground-subdued, #64748b);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+
+      .group-count {
+        background: rgba(0, 0, 0, 0.06);
+        padding: 0 4px;
+        border-radius: 10px;
+      }
+    }
+
+    .relation-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .relation-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 500;
+      max-width: 100%;
+      background: var(--theme--background, #ffffff);
+      border: 1px solid var(--theme--border-color-subdued, #e2e8f0);
+      color: var(--theme--foreground, #1e293b);
+
+      .pill-text {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      &.flow-pill {
+        color: #4f46e5;
+        border-color: #c7d2fe;
+        background: #eef2ff;
+
+        &.downstream {
+          color: #d97706;
+          border-color: #fde68a;
+          background: #fffbeb;
+        }
+      }
+
+      &.coll-pill {
+        color: #059669;
+        border-color: #a7f3d0;
+        background: #ecfdf5;
+      }
+    }
+
+    .empty-relation-text {
+      font-size: 11px;
+      color: var(--theme--foreground-subdued, #94a3b8);
+      font-style: italic;
+    }
+  }
+
+  .view-graph-cta-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    margin-top: 4px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: var(--theme--primary, #6366f1);
+    color: white;
+    font-size: 11px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+
+    &:hover {
+      opacity: 0.9;
+    }
   }
 }
 
