@@ -45,6 +45,7 @@ const emit = defineEmits<{
   (e: 'goToFlow', payload: { item: IFlow }): void;
   (e: 'runFlow', flow: IFlow): void;
   (e: 'editFlow', flow: IFlow): void;
+  (e: 'simulateFlow', flow: IFlow): void;
 }>();
 
 const api = useApi();
@@ -348,6 +349,10 @@ function handleGoToFlow(flowItem: ScheduledFlowItem) {
 
 function handleRunFlow(flowItem: ScheduledFlowItem) {
   emit('runFlow', flowItem.flow);
+}
+
+function handleSimulateFlow(flowItem: ScheduledFlowItem) {
+  emit('simulateFlow', flowItem.flow);
 }
 </script>
 
@@ -727,6 +732,17 @@ function handleRunFlow(flowItem: ScheduledFlowItem) {
 
           <!-- Right: Actions -->
           <div class="flow-actions-col" @click.stop>
+            <v-button
+              v-tooltip.bottom="'Sandbox Simulation (Dry Run)'"
+              rounded
+              icon
+              secondary
+              x-small
+              @click="handleSimulateFlow(flowItem)"
+            >
+              <v-icon name="science" x-small />
+            </v-button>
+
             <v-button
               v-tooltip.bottom="'Run Flow Now'"
               rounded

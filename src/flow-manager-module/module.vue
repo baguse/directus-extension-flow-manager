@@ -76,6 +76,7 @@
         @set-status-filter="setStatusFilter"
         @set-trigger-filter="setTriggerFilter"
         @set-category-filter="setCategoryFilter"
+        @simulate-flow="openSimulationDialog"
       />
       <FlowDependencyGraph
         v-else-if="viewMode === 'GRAPH'"
@@ -84,6 +85,7 @@
         :selected-flow-id="selectedItem?.id"
         @select-flow="selectItem"
         @go-to-flow="goToFlow"
+        @simulate-flow="openSimulationDialog"
       />
       <FlowCronTimeline
         v-else-if="viewMode === 'TIMELINE'"
@@ -96,6 +98,7 @@
         @go-to-flow="goToFlow"
         @run-flow="showRunDialog"
         @edit-flow="showEditFlowDialog"
+        @simulate-flow="openSimulationDialog"
       />
     </template>
     <div v-else class="flex justify-center h-full items-center">
@@ -255,6 +258,7 @@
         @open-git-export-dialog="openGitExportDialog"
         @view-in-graph="onViewInGraph"
         @view-in-timeline="onViewInTimeline"
+        @simulate-flow="openSimulationDialog"
       />
     </template>
 
@@ -394,6 +398,14 @@
       @save="onSaveFlow"
     />
 
+    <FlowSimulationDialog
+      :model-value="simulationDialog"
+      :flow="selectedFlowForSimulation"
+      :selected-credential="selectedCredential"
+      :credentials="credentials"
+      @update:model-value="simulationDialog = $event"
+    />
+
     <v-overlay :value="true" />
   </private-view>
 </template>
@@ -441,6 +453,7 @@ import FlowGitExportModal from './components/flow-git-export-modal.vue';
 import FlowEditDialog from './components/flow-edit-dialog.vue';
 import FlowDependencyGraph from './components/dependency-graph/flow-dependency-graph.vue';
 import FlowCronTimeline from './components/cron-timeline/flow-cron-timeline.vue';
+import FlowSimulationDialog from './components/simulation/flow-simulation-dialog.vue';
 import { useFlowRestore } from '../composables/use-flow-restore';
 import { useFlowCategories } from '../composables/use-flow-categories';
 import { useFlowDatabase } from '../composables/use-flow-database';
@@ -471,6 +484,7 @@ export default defineComponent({
     FlowEditDialog,
     FlowDependencyGraph,
     FlowCronTimeline,
+    FlowSimulationDialog,
   },
 
   props: {
@@ -1320,6 +1334,14 @@ export default defineComponent({
       gitExportDialog.value = true;
     }
 
+    const simulationDialog = ref(false);
+    const selectedFlowForSimulation = ref<IFlow | null>(null);
+
+    function openSimulationDialog(flow: IFlow) {
+      selectedFlowForSimulation.value = flow;
+      simulationDialog.value = true;
+    }
+
     async function onFlowRestoredFromSnapshot(flowId?: string) {
       await reloadFlow();
       await reloadTabularFlow();
@@ -1510,6 +1532,7 @@ export default defineComponent({
       selectedCredential,
       openVersionDialog,
       openGitExportDialog,
+      openSimulationDialog,
       goToFlow,
       hydrateLocalFlow,
       reload,
@@ -1676,6 +1699,9 @@ export default defineComponent({
       isSavingFlow,
       showEditFlowDialog,
       onSaveFlow,
+      simulationDialog,
+      selectedFlowForSimulation,
+      openSimulationDialog,
     };
   },
 });

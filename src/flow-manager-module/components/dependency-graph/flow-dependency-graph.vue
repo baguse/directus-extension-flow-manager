@@ -33,6 +33,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: 'selectFlow', flow: IFlow): void;
   (e: 'goToFlow', payload: { item: IFlow }): void;
+  (e: 'simulateFlow', flow: IFlow): void;
 }>();
 
 const { fitView } = useVueFlow();
@@ -220,6 +221,13 @@ function handleNavigate(flowId: string) {
   const flow = props.flows.find((f) => f.id === flowId);
   if (flow) {
     emit('goToFlow', { item: flow });
+  }
+}
+
+function handleSimulate(flowId: string) {
+  const flow = props.flows.find((f) => f.id === flowId);
+  if (flow) {
+    emit('simulateFlow', flow);
   }
 }
 
@@ -437,6 +445,15 @@ function resetView() {
             </div>
 
             <div class="radar-actions">
+              <button
+                type="button"
+                class="simulate-flow-btn"
+                title="Sandbox Simulation (Dry Run)"
+                @click="handleSimulate(selectedImpact.flowId)"
+              >
+                <v-icon name="science" x-small />
+                <span>Simulate</span>
+              </button>
               <button
                 type="button"
                 class="open-flow-btn"
@@ -875,6 +892,25 @@ function resetView() {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.simulate-flow-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--theme--primary, #6366f1);
+  background-color: var(--theme--primary-background, rgba(99, 102, 241, 0.1));
+  color: var(--theme--primary, #6366f1);
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--theme--primary, #6366f1);
+    color: #ffffff;
+  }
 }
 
 .open-flow-btn {

@@ -343,6 +343,7 @@ export interface FlowManagerUtilsContext {
   reloadTabularFlow: () => Promise<void> | void;
   openVersionDialog?: (item: IFlow) => void;
   openGitExportDialog?: (item?: IFlow) => void;
+  openSimulationDialog?: (item: IFlow) => void;
   goToFlow({ item }: { item: IFlow }): Promise<void>;
   hydrateLocalFlow: () => Promise<void>;
   reload?: () => Promise<void>;

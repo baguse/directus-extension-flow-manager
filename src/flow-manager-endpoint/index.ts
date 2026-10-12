@@ -5,6 +5,7 @@ import type { IFlow, IOperation, ISyncFlowCounter } from '../types';
 import isEqual from 'lodash/isEqual';
 import { generateUUID } from '../utils/common.util';
 import { extendedFormatDate } from '../utils/date.util';
+import { simulateFlow, type SimulationReaderService } from '../utils/flow-simulator.util';
 
 export default defineEndpoint((router, { database, services, getSchema, logger }) => {
   router.post('/flow-manager/process', async (_req, res) => {
@@ -1011,4 +1012,127 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
   router.post('/flow-manager/server-time', handleServerTime);
   router.get('/server-time', handleServerTime);
   router.post('/server-time', handleServerTime);
+
+  router.post('/flow-manager/simulate', async (_req, res) => {
+    // @ts-expect-error accountability check
+    if (!_req.accountability?.admin) {
+      res.status(401).send({ error: 'Unauthorized' });
+      return;
+    }
+
+    try {
+      const { flow, triggerPayload, url, staticToken, mockResponses } = _req.body || {};
+
+      if (!flow) {
+        res.status(400).json({ error: 'Flow object is required for simulation.' });
+        return;
+      }
+
+      let readerService: SimulationReaderService | undefined;
+
+      if (url && typeof url === 'string') {
+        const remoteUrl = url.trim().replace(/\/+$/, '');
+        readerService = {
+          async readItem(
+            collection: string,
+            key: string | number,
+            query?: Record<string, unknown>,
+          ) {
+            try {
+              const { data } = await axios.get(`${remoteUrl}/items/${collection}/${key}`, {
+                params: query,
+                headers: staticToken ? { Authorization: `Bearer ${staticToken}` } : {},
+                timeout: 5000,
+              });
+              return data?.data || null;
+            } catch {
+              return null;
+            }
+          },
+          async readItems(
+            collection: string,
+            query?: Record<string, unknown>,
+            keys?: Array<string | number>,
+          ) {
+            try {
+              const params: Record<string, unknown> = { ...(query || {}) };
+              if (keys && keys.length > 0) {
+                params.filter = {
+                  ...((params.filter as Record<string, unknown>) || {}),
+                  id: { _in: keys },
+                };
+              }
+              const { data } = await axios.get(`${remoteUrl}/items/${collection}`, {
+                params,
+                headers: staticToken ? { Authorization: `Bearer ${staticToken}` } : {},
+                timeout: 5000,
+              });
+              return Array.isArray(data?.data) ? data.data : [];
+            } catch {
+              return [];
+            }
+          },
+        };
+      } else {
+        const schema = await getSchema({ database });
+        readerService = {
+          async readItem(
+            collection: string,
+            key: string | number,
+            query?: Record<string, unknown>,
+          ) {
+            try {
+              const itemsService = new services.ItemsService(collection, {
+                knex: database,
+                schema,
+              });
+              return await itemsService.readOne(key, query || {});
+            } catch {
+              return null;
+            }
+          },
+          async readItems(
+            collection: string,
+            query?: Record<string, unknown>,
+            keys?: Array<string | number>,
+          ) {
+            try {
+              const itemsService = new services.ItemsService(collection, {
+                knex: database,
+                schema,
+              });
+              if (keys && keys.length > 0) {
+                if (keys.length === 1) {
+                  const item = await itemsService.readOne(keys[0]!, query || {});
+                  return item ? [item] : [];
+                }
+                const items = await itemsService.readMany(keys, query || {});
+                return Array.isArray(items) ? items : [];
+              }
+              const items = await itemsService.readByQuery(query || {});
+              return Array.isArray(items) ? items : [];
+            } catch {
+              return [];
+            }
+          },
+        };
+      }
+
+      // @ts-expect-error internal directus accountability
+      const reqAccountability = _req.accountability as Record<string, unknown> | undefined;
+
+      const result = await simulateFlow(flow, {
+        triggerPayload,
+        readerService,
+        mockResponses,
+        accountability: reqAccountability,
+      });
+
+      res.json(result);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      logger.error(`[FLOW MANAGER] Simulation error: ${message}`);
+      res.status(500).json({ error: message });
+    }
+  });
 });

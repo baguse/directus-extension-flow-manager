@@ -34,6 +34,12 @@
         </v-list-item-icon>
         <v-list-item-content> Open Dashboard </v-list-item-content>
       </v-list-item>
+      <v-list-item clickable @click="openSimulationDialog(flowItem)">
+        <v-list-item-icon>
+          <v-icon name="science" />
+        </v-list-item-icon>
+        <v-list-item-content> Sandbox Simulation </v-list-item-content>
+      </v-list-item>
       <v-list-item clickable @click="openVersionDialog(flowItem)">
         <v-list-item-icon>
           <v-icon name="history" />
@@ -136,6 +142,7 @@ export default defineComponent({
       showRunWebhookDialog,
       selectedCredential,
       openDashboardDetail,
+      openSimulationDialog,
       openVersionDialog,
       openGitExportDialog,
     };
@@ -189,6 +196,10 @@ export default defineComponent({
 
     function openVersionDialog(item: IFlow) {
       flowManagerUtils?.openVersionDialog?.(item);
+    }
+
+    function openSimulationDialog(item: IFlow) {
+      flowManagerUtils?.openSimulationDialog?.(item);
     }
 
     function openGitExportDialog(item: IFlow) {

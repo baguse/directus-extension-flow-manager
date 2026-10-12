@@ -24,6 +24,7 @@ const emit = defineEmits<{
   (e: 'openGitExportDialog', flow: IFlow): void;
   (e: 'viewInGraph', flow: IFlow): void;
   (e: 'viewInTimeline', flow: IFlow): void;
+  (e: 'simulateFlow', flow: IFlow): void;
 }>();
 
 const flowManagerUtils = inject<FlowManagerUtilsContext>('flowManagerUtils');
@@ -313,6 +314,15 @@ const flowImpact = computed<FlowImpactSummary | null>(() => {
 
       <!-- Actions -->
       <div class="action-buttons">
+        <v-button
+          small
+          secondary
+          class="sidebar-btn simulation-btn"
+          @click="emit('simulateFlow', selectedFlow)"
+        >
+          <v-icon name="shield" class="mr-1 text-green" />
+          Sandbox Simulation (Dry Run)
+        </v-button>
         <v-button
           v-if="selectedFlow.trigger === 'schedule'"
           small
