@@ -3,6 +3,7 @@ import type { useApi } from '@directus/extensions-sdk';
 import type {
   ICredential,
   IFlow,
+  IFlowPushMergePlan,
   IFolder,
   IOperation,
   PendingDelete,
@@ -189,7 +190,22 @@ export function useFlowActions(options: UseFlowActionsOptions) {
     }
   }
 
-  async function pushToCloud(credential: ICredential | null) {
+  async function pushToCloud(
+    credentialOrPayload:
+      | ICredential
+      | { credential: ICredential; mergePlan?: IFlowPushMergePlan; flowId?: string }
+      | null,
+  ) {
+    let credential: ICredential | null = null;
+    let mergePlan: IFlowPushMergePlan | undefined = undefined;
+
+    if (credentialOrPayload && 'credential' in credentialOrPayload) {
+      credential = credentialOrPayload.credential;
+      mergePlan = credentialOrPayload.mergePlan;
+    } else {
+      credential = credentialOrPayload as ICredential | null;
+    }
+
     if (selectedItems.value.length) {
       pushToCloudDialog.value = false;
       processingDialogState.indeterminate.value = false;
@@ -242,24 +258,33 @@ export function useFlowActions(options: UseFlowActionsOptions) {
     const item = selectedItem.value as IFlow;
     loadingPushToCloud.value = true;
     try {
-      await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/push-to-cloud`, {
+      const res = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/push-to-cloud`, {
         config: {
           url: credential?.url,
           staticToken: credential?.staticToken,
         },
         flowId: item.id,
+        mergePlan,
       });
+
+      const message =
+        res.data?.message ||
+        `The flow has been pushed to "${credential?.name}" successfully`;
 
       notificationsStore.add({
         type: 'success',
-        title: `The flow has been sent to the "${credential?.name}" successfully`,
+        title: message,
         closeable: true,
         persist: true,
       });
-    } catch {
+    } catch (e: unknown) {
+      const errObj = e as { response?: { data?: { error?: string; message?: string } } } | undefined;
+      const errRes = errObj?.response?.data?.error || errObj?.response?.data?.message;
+      const errorMsg =
+        errRes || 'Push to cloud failed. Please check credentials and remote permissions.';
       notificationsStore.add({
         type: 'error',
-        title: 'Send to cloud failed',
+        title: errorMsg,
         closeable: true,
         persist: true,
       });

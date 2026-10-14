@@ -127,6 +127,14 @@ export interface IFlowDiffResult {
   rawTargetJson: string;
 }
 
+export interface IFlowPushMergePlan {
+  metadataFields?: string[];
+  createOperationIds?: string[];
+  updateOperationIds?: string[];
+  deleteOperationIds?: string[];
+  remoteStatus?: 'active' | 'inactive' | 'keep';
+}
+
 export interface IFlow {
   id: string;
   type?: string;

@@ -649,7 +649,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
     handleDashboardDetail(_req, res);
   });
 
-  router.post('/flow-manager/push-to-cloud', async (_req, res) => {
+  router.post('/flow-manager/push-to-cloud/preflight', async (_req, res) => {
     // @ts-expect-error this is the internal directus accountability data
     if (!_req.accountability?.admin) {
       res.status(401).send({
@@ -680,6 +680,86 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
         flowId,
       } = _req.body;
 
+      const [localFlow] = await flowsService.readByQuery({
+        filter: {
+          id: {
+            _eq: flowId,
+          },
+        },
+        fields: ['*', ...operationFields],
+      });
+      if (!localFlow) {
+        res.status(404).send({ error: 'Local flow not found' });
+        return;
+      }
+
+      const axiosInstance = axios.create({
+        baseURL: url,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(staticToken ? { Authorization: `Bearer ${staticToken}` } : {}),
+        },
+        timeout: 15000,
+      });
+
+      const fields = [`fields[]=*`, ...operationFields.map((f) => `fields[]=${f}`)];
+      const {
+        data: { data: remoteFlows },
+      } = await axiosInstance.request({
+        url: `/flows?filter[id][_eq]=${flowId}&${fields.join('&')}`,
+        method: 'GET',
+      });
+
+      const remoteFlow = remoteFlows?.[0] || null;
+
+      res.json({
+        exists: !!remoteFlow,
+        localFlow,
+        remoteFlow,
+      });
+    } catch (e: unknown) {
+      let message = 'Failed to inspect remote instance';
+      if (axios.isAxiosError(e)) {
+        message = e.response?.data?.errors?.[0]?.message || e.message;
+      } else if (e instanceof Error) {
+        message = e.message;
+      }
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.post('/flow-manager/push-to-cloud', async (_req, res) => {
+    // @ts-expect-error this is the internal directus accountability data
+    if (!_req.accountability?.admin) {
+      res.status(401).send({
+        error: 'Unauthorized',
+      });
+      return;
+    }
+    try {
+      const { FlowsService } = services;
+      const flowsService = new FlowsService({
+        knex: database,
+        schema: await getSchema({ database }),
+      });
+      const operationFields = [
+        'operations.id',
+        'operations.name',
+        'operations.key',
+        'operations.type',
+        'operations.position_x',
+        'operations.position_y',
+        'operations.options',
+        'operations.resolve',
+        'operations.reject',
+        'operations.flow',
+      ];
+      const {
+        config: { url, staticToken },
+        flowId,
+        mergePlan,
+      } = _req.body;
+
       const [flow] = await flowsService.readByQuery({
         filter: {
           id: {
@@ -703,14 +783,13 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
         'options',
       ];
 
-      const data = transformData(flow.operations, flow.id, flow.operation || '', true);
-
       const axiosInstance = axios.create({
         baseURL: url,
         headers: {
           'Content-Type': 'application/json',
           ...(staticToken ? { Authorization: `Bearer ${staticToken}` } : {}),
         },
+        timeout: 25000,
       });
       const fields = [`fields[]=*`, ...operationFields.map((f) => `fields[]=${f}`)];
       const {
@@ -721,7 +800,12 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
       });
 
       if (!flowResponse[0]) {
-        // flow is not exist
+        // flow does not exist on remote -> CREATE NEW FLOW WITH SAME ID
+        const initialStatus =
+          mergePlan?.remoteStatus && mergePlan.remoteStatus !== 'keep'
+            ? mergePlan.remoteStatus
+            : flow.status || 'inactive';
+
         const {
           data: { data: flowCreationResponse },
         } = await axiosInstance.request({
@@ -730,7 +814,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
           data: {
             id: flow.id,
             name: flow.name,
-            status: 'inactive',
+            status: initialStatus,
             icon: flow.icon,
             accountability: flow.accountability,
             description: flow.description,
@@ -739,6 +823,8 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
             color: flow.color,
           },
         });
+
+        const data = transformData(flow.operations, flow.id, flow.operation || '', true);
         await axiosInstance.request({
           url: `/flows/${flowCreationResponse.id}`,
           method: 'PATCH',
@@ -749,126 +835,255 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
             },
           },
         });
-      } else {
-        const newFlow: Partial<IFlow> = {};
-        const oldFlow: Partial<IFlow> = {};
 
-        for (let i = 0; i < flowFields.length; i += 1) {
-          const field = flowFields[i] as keyof IFlow;
-          newFlow[field] = (flow as unknown as Partial<IFlow>)[field] as undefined;
-          oldFlow[field] = flowResponse[0][field];
+        res.json({
+          success: true,
+          isNew: true,
+          message: `Flow "${flow.name}" successfully created on remote instance`,
+        });
+        return;
+      }
+
+      // Flow exists on remote with the same ID!
+      if (mergePlan) {
+        // SELECTIVE GIT-STYLE MERGE
+        const patchData: Record<string, unknown> = {};
+        const selectedMeta = mergePlan.metadataFields || [];
+        const flowRecord = flow as unknown as Record<string, unknown>;
+        for (const f of selectedMeta) {
+          if (flowRecord[f] !== undefined) {
+            patchData[f] = flowRecord[f];
+          }
+        }
+        if (mergePlan.remoteStatus && mergePlan.remoteStatus !== 'keep') {
+          patchData.status = mergePlan.remoteStatus;
         }
 
-        if (!isEqual(newFlow, oldFlow)) {
+        if (Object.keys(patchData).length > 0) {
           await axiosInstance.request({
             url: `/flows/${flowId}`,
             method: 'PATCH',
-            data: newFlow,
+            data: patchData,
           });
-
-          logger.info(`[FLOW MANAGER] Flow ${flowId} Updated`);
+          logger.info(`[FLOW MANAGER] Flow ${flowId} metadata updated via merge plan`);
         }
 
-        const newOperations = flow.operations.reduce(
-          (acc: Record<string, IOperation>, o: IOperation) => {
-            acc[o.id] = o;
-            return acc;
-          },
-          {},
-        );
-        const oldOperations = flowResponse[0].operations.reduce(
-          (acc: Record<string, IOperation>, o: IOperation) => {
-            acc[o.id] = o;
-            return acc;
-          },
-          {},
-        );
+        const localOps = flow.operations || [];
+        const createIds: string[] = mergePlan.createOperationIds || [];
+        const updateIds: string[] = mergePlan.updateOperationIds || [];
+        const deleteIds: string[] = mergePlan.deleteOperationIds || [];
 
-        const newOperationIds = Object.keys(newOperations);
-        const oldOperationIds = Object.keys(oldOperations);
-
-        const removedOperationIds = oldOperationIds.filter((id) => !newOperationIds.includes(id));
-        const needUpdateIds: string[] = [];
-        const needCreatedIds: string[] = [];
-
-        for (let i = 0; i < newOperationIds.length; i += 1) {
-          const newOperationId = String(newOperationIds[i]);
-          const newOperation = newOperations[newOperationId];
-
-          const oldOperation = oldOperations[newOperationId];
-
-          if (!oldOperation) {
-            // the operation doesn't exist
-            needCreatedIds.push(newOperationId);
-          } else {
-            if (isEqual(newOperation, oldOperation)) {
-              logger.info(`[FLOW MANAGER] Skipped operation ${newOperationId}. Already same!`);
-            } else {
-              needUpdateIds.push(newOperationId);
-            }
-          }
-        }
-
-        for (let i = 0; i < needCreatedIds.length; i += 1) {
-          const id = String(needCreatedIds[i]);
-          const data = newOperations[id];
+        // 1. Create selected operations (first without resolve/reject to avoid FK errors)
+        for (const id of createIds) {
+          const op = localOps.find((o) => o.id === id);
+          if (!op) continue;
           try {
             await axiosInstance.request({
               url: `/operations`,
               method: 'POST',
-              data,
+              data: {
+                id: op.id,
+                name: op.name,
+                key: op.key,
+                type: op.type,
+                position_x: op.position_x,
+                position_y: op.position_y,
+                options: op.options,
+                flow: flowId,
+                resolve: null,
+                reject: null,
+              },
             });
-
-            logger.info(`[FLOW MANAGER] Operation ${id} Created`);
+            logger.info(`[FLOW MANAGER] Operation ${id} created on remote`);
           } catch (e) {
-            logger.error(`[FLOW MANAGER] Failed to create Operation with id ${id}`);
+            logger.error(`[FLOW MANAGER] Failed to create Operation ${id} on remote:`, e);
             throw e;
           }
         }
 
-        for (let i = 0; i < needUpdateIds.length; i += 1) {
-          const id = String(needUpdateIds[i]);
-          const data = newOperations[id];
+        // 2. Update selected operations
+        for (const id of updateIds) {
+          const op = localOps.find((o) => o.id === id);
+          if (!op) continue;
           try {
             await axiosInstance.request({
               url: `/operations/${id}`,
               method: 'PATCH',
-              data,
+              data: {
+                name: op.name,
+                key: op.key,
+                type: op.type,
+                position_x: op.position_x,
+                position_y: op.position_y,
+                options: op.options,
+                resolve: op.resolve,
+                reject: op.reject,
+              },
             });
-
-            logger.info(`[FLOW MANAGER] Operation ${id} updated`);
+            logger.info(`[FLOW MANAGER] Operation ${id} updated on remote`);
           } catch (e) {
-            logger.error(`[FLOW MANAGER] Failed to update Operation with id ${id}`);
+            logger.error(`[FLOW MANAGER] Failed to update Operation ${id} on remote:`, e);
             throw e;
           }
         }
 
-        for (let i = 0; i < removedOperationIds.length; i += 1) {
-          const id = String(removedOperationIds[i]);
+        // 3. Patch resolve/reject for newly created operations
+        for (const id of createIds) {
+          const op = localOps.find((o) => o.id === id);
+          if (!op || (!op.resolve && !op.reject)) continue;
+          try {
+            await axiosInstance.request({
+              url: `/operations/${id}`,
+              method: 'PATCH',
+              data: {
+                resolve: op.resolve,
+                reject: op.reject,
+              },
+            });
+          } catch (e) {
+            logger.error(`[FLOW MANAGER] Failed to patch links for Operation ${id}:`, e);
+          }
+        }
+
+        // 4. Delete selected remote operations
+        for (const id of deleteIds) {
           try {
             await axiosInstance.request({
               url: `/operations/${id}`,
               method: 'DELETE',
             });
-
-            logger.info(`[FLOW MANAGER] Operation ${id} removed`);
+            logger.info(`[FLOW MANAGER] Operation ${id} deleted on remote`);
           } catch (e) {
-            logger.error(`[FLOW MANAGER] Failed to remove Operation with id ${id}`);
+            logger.error(`[FLOW MANAGER] Failed to delete Operation ${id} on remote:`, e);
             throw e;
           }
         }
+
+        // 5. Ensure root operation on flow is updated if needed
+        if (flow.operation) {
+          try {
+            await axiosInstance.request({
+              url: `/flows/${flowId}`,
+              method: 'PATCH',
+              data: {
+                operation: flow.operation,
+              },
+            });
+          } catch {
+            // Ignore if root operation pointer already set
+          }
+        }
+
+        res.json({
+          success: true,
+          isNew: false,
+          message: `Flow "${flow.name}" successfully merged to remote instance`,
+          createdCount: createIds.length,
+          updatedCount: updateIds.length,
+          deletedCount: deleteIds.length,
+        });
+        return;
       }
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : String(e);
-      res.status(500).json({
-        message,
+
+      // Legacy overwrite fallback if mergePlan is omitted
+      const newFlow: Partial<IFlow> = {};
+      const oldFlow: Partial<IFlow> = {};
+
+      for (let i = 0; i < flowFields.length; i += 1) {
+        const field = flowFields[i] as keyof IFlow;
+        newFlow[field] = (flow as unknown as Partial<IFlow>)[field] as undefined;
+        oldFlow[field] = flowResponse[0][field];
+      }
+
+      if (!isEqual(newFlow, oldFlow)) {
+        await axiosInstance.request({
+          url: `/flows/${flowId}`,
+          method: 'PATCH',
+          data: newFlow,
+        });
+
+        logger.info(`[FLOW MANAGER] Flow ${flowId} Updated`);
+      }
+
+      const newOperations = flow.operations.reduce(
+        (acc: Record<string, IOperation>, o: IOperation) => {
+          acc[o.id] = o;
+          return acc;
+        },
+        {},
+      );
+      const oldOperations = flowResponse[0].operations.reduce(
+        (acc: Record<string, IOperation>, o: IOperation) => {
+          acc[o.id] = o;
+          return acc;
+        },
+        {},
+      );
+
+      const newOperationIds = Object.keys(newOperations);
+      const oldOperationIds = Object.keys(oldOperations);
+
+      const removedOperationIds = oldOperationIds.filter((id) => !newOperationIds.includes(id));
+      const needUpdateIds: string[] = [];
+      const needCreatedIds: string[] = [];
+
+      for (let i = 0; i < newOperationIds.length; i += 1) {
+        const newOperationId = String(newOperationIds[i]);
+        const newOperation = newOperations[newOperationId];
+        const oldOperation = oldOperations[newOperationId];
+
+        if (!oldOperation) {
+          needCreatedIds.push(newOperationId);
+        } else {
+          if (!isEqual(newOperation, oldOperation)) {
+            needUpdateIds.push(newOperationId);
+          }
+        }
+      }
+
+      for (let i = 0; i < needCreatedIds.length; i += 1) {
+        const id = String(needCreatedIds[i]);
+        const data = newOperations[id];
+        await axiosInstance.request({
+          url: `/operations`,
+          method: 'POST',
+          data,
+        });
+      }
+
+      for (let i = 0; i < needUpdateIds.length; i += 1) {
+        const id = String(needUpdateIds[i]);
+        const data = newOperations[id];
+        await axiosInstance.request({
+          url: `/operations/${id}`,
+          method: 'PATCH',
+          data,
+        });
+      }
+
+      for (let i = 0; i < removedOperationIds.length; i += 1) {
+        const id = String(removedOperationIds[i]);
+        await axiosInstance.request({
+          url: `/operations/${id}`,
+          method: 'DELETE',
+        });
+      }
+
+      res.json({
+        success: true,
+        isNew: false,
+        message: `Flow "${flow.name}" successfully updated on remote instance`,
       });
-      logger.error(message);
-      return;
+    } catch (e: unknown) {
+      let message = 'Push to cloud failed';
+      if (axios.isAxiosError(e)) {
+        message = e.response?.data?.errors?.[0]?.message || e.message;
+      } else if (e instanceof Error) {
+        message = e.message;
+      }
+      logger.error(`[FLOW MANAGER] Push to cloud error: ${message}`);
+      res.status(500).json({ error: message, message });
     }
-    res.json({
-      message: 'Processing the sync process',
-    });
   });
 
   const handleServerTime = async (

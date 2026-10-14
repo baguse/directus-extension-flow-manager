@@ -321,6 +321,8 @@
       :value="pushToCloudDialog"
       :credentials="credentials"
       :loading="loadingPushToCloud"
+      :flow="selectedItem"
+      :selected-flows="selectedFlows"
       @update:model-value="pushToCloudDialog = $event"
       @proceed="pushToCloud"
     />
