@@ -165,7 +165,11 @@ export function useFlowDatabase(options: UseFlowDatabaseOptions) {
         if (!field.collection || !field.field) continue;
         const fieldPayload = { ...field };
         delete (fieldPayload as Record<string, unknown>).scope;
-        await fieldsStore.createField(field.collection, fieldPayload);
+        await fieldsStore.createField(field.collection, {
+          ...fieldPayload,
+          schema: undefined,
+          collection: undefined
+        });
         if (field.meta?.special?.includes('m2o')) {
           await relationsStore.upsertRelation(field.collection, field.field, {
             collection: field.collection,

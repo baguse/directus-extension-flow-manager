@@ -3,6 +3,12 @@ import { ExtendedField } from './types';
 export const TRIGGER_TYPES = ['event', 'manual', 'operation', 'schedule', 'webhook'];
 export const NPM_LINK = 'https://registry.npmjs.org/directus-extension-flow-manager';
 export const ENDPOINT_EXTENSION_NAME = 'flow-manager-endpoint';
+export const SWAP_THRESHOLD = 0.65;
+export const ANIMATION_DURATION = 150;
+export const EMPTY_INSERT_THRESHOLD = 30;
+export const INVERT_SWAP = true;
+export const FORCE_FALLBACK = true;
+export const FALLBACK_ON_BODY = true;
 
 export const REQUIRED_FIELDS = [
   {
@@ -75,7 +81,7 @@ export const REQUIRED_FIELDS = [
   {
     field: 'flow_manager_metadata_id',
     type: 'uuid',
-    meta: { special: ['m2o', 'uuid'], interface: 'select-dropdown-m2o' },
+    meta: { special: ['m2o'], interface: 'select-dropdown-m2o' },
     schema: { related_collection: 'flow_manager_metadata' },
     collection: 'directus_flows',
   },
