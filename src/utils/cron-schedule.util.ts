@@ -92,94 +92,229 @@ export function isValidCron(cron?: string | null): boolean {
   }
 }
 
+function getOrdinal(n: number): string {
+  const v = n % 100;
+  if (v >= 11 && v <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1:
+      return `${n}st`;
+    case 2:
+      return `${n}nd`;
+    case 3:
+      return `${n}rd`;
+    default:
+      return `${n}th`;
+  }
+}
+
+function formatTime12h(h: number, m: number): string {
+  const period = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  const mStr = String(m).padStart(2, '0');
+  return `${h12}:${mStr} ${period}`;
+}
+
 /**
  * Translates a standard 5 or 6 field cron expression into a human-readable English description.
  */
 export function formatCronToHuman(cronStr?: string | null): string {
   if (!cronStr || typeof cronStr !== 'string') return 'No schedule configured';
   const clean = cronStr.trim();
+  if (!clean) return 'No schedule configured';
 
-  // Common quick shortcuts
-  if (clean === '* * * * *') return 'Every minute';
-  if (clean === '*/2 * * * *') return 'Every 2 minutes';
-  if (clean === '*/5 * * * *') return 'Every 5 minutes';
-  if (clean === '*/10 * * * *') return 'Every 10 minutes';
-  if (clean === '*/15 * * * *') return 'Every 15 minutes';
-  if (clean === '*/20 * * * *') return 'Every 20 minutes';
-  if (clean === '*/30 * * * *') return 'Every 30 minutes';
-  if (clean === '0 * * * *') return 'Hourly, on the hour (:00)';
-  if (clean === '30 * * * *') return 'Hourly, at minute 30 (:30)';
-  if (clean === '0 */2 * * *') return 'Every 2 hours';
-  if (clean === '0 */3 * * *') return 'Every 3 hours';
-  if (clean === '0 */4 * * *') return 'Every 4 hours';
-  if (clean === '0 */6 * * *') return 'Every 6 hours';
-  if (clean === '0 */12 * * *') return 'Every 12 hours';
-  if (clean === '0 0 * * *') return 'Daily at midnight (00:00)';
-  if (clean === '0 12 * * *') return 'Daily at noon (12:00)';
-  if (clean === '0 0 * * 0') return 'Weekly on Sunday at 00:00';
-  if (clean === '0 0 * * 1') return 'Weekly on Monday at 00:00';
-  if (clean === '0 9 * * 1-5') return 'Weekdays (Mon-Fri) at 09:00';
-  if (clean === '0 0 1 * *') return 'Monthly on the 1st at 00:00';
+  // Normalize single spaces
+  const parts = clean.split(/\s+/);
+  const normalized = parts.join(' ');
+
+  // Common quick shortcuts (5-field)
+  if (normalized === '* * * * *') return 'Run every minute';
+  if (normalized === '*/2 * * * *') return 'Run every 2 minutes';
+  if (normalized === '*/5 * * * *') return 'Run every 5 minutes';
+  if (normalized === '*/10 * * * *') return 'Run every 10 minutes';
+  if (normalized === '*/15 * * * *') return 'Run every 15 minutes';
+  if (normalized === '*/20 * * * *') return 'Run every 20 minutes';
+  if (normalized === '*/30 * * * *') return 'Run every 30 minutes';
+  if (normalized === '0 * * * *') return 'Run every hour on the hour';
+  if (normalized === '30 * * * *') return 'Run every hour at minute 30';
+  if (normalized === '0 */2 * * *') return 'Run every 2 hours';
+  if (normalized === '0 */3 * * *') return 'Run every 3 hours';
+  if (normalized === '0 */4 * * *') return 'Run every 4 hours';
+  if (normalized === '0 */6 * * *') return 'Run every 6 hours';
+  if (normalized === '0 */12 * * *') return 'Run every 12 hours';
+  if (normalized === '0 0 * * *') return 'Run daily at midnight (12:00 AM)';
+  if (normalized === '0 12 * * *') return 'Run daily at noon (12:00 PM)';
+  if (normalized === '0 1 * * *') return 'Run daily at 1:00 AM';
+  if (normalized === '0 0 * * 0') return 'Run weekly on Sunday at 12:00 AM';
+  if (normalized === '0 0 * * 1') return 'Run weekly on Monday at 12:00 AM';
+  if (normalized === '0 9 * * 1-5') return 'Run weekdays (Mon-Fri) at 9:00 AM';
+  if (normalized === '0 0 1 * *') return 'Run monthly on the 1st at 12:00 AM';
+
+  // Quick shortcuts (6-field with 0 in seconds)
+  if (normalized === '0 * * * * *') return 'Run every minute';
+  if (normalized === '0 */2 * * * *') return 'Run every 2 minutes';
+  if (normalized === '0 */5 * * * *') return 'Run every 5 minutes';
+  if (normalized === '0 */10 * * * *') return 'Run every 10 minutes';
+  if (normalized === '0 */15 * * * *') return 'Run every 15 minutes';
+  if (normalized === '0 */30 * * * *') return 'Run every 30 minutes';
+  if (normalized === '0 0 * * * *') return 'Run every hour on the hour';
+  if (normalized === '0 0 0 * * *') return 'Run daily at midnight (12:00 AM)';
+  if (normalized === '0 0 1 * * *') return 'Run daily at 1:00 AM';
 
   // Parse fields
-  const parts = clean.split(/\s+/);
-  if (parts.length === 5) {
-    const [minute, hour, dom, month, dow] = parts;
+  const isSixField = parts.length === 6;
+  if (parts.length === 5 || isSixField) {
+    const sec = isSixField ? (parts[0] || '') : '';
+    const minute = isSixField ? (parts[1] || '') : (parts[0] || '');
+    const hour = isSixField ? (parts[2] || '') : (parts[1] || '');
+    const dom = isSixField ? (parts[3] || '') : (parts[2] || '');
+    const month = isSixField ? (parts[4] || '') : (parts[3] || '');
+    const dow = isSixField ? (parts[5] || '') : (parts[4] || '');
 
-    // Check step minutes
-    if (minute?.startsWith('*/') && hour === '*' && dom === '*' && month === '*' && dow === '*') {
-      return `Every ${minute.slice(2)} minutes`;
+    // Build Time Portion
+    let timeDesc = '';
+
+    // If 6-field with active seconds:
+    if (sec && sec !== '0') {
+      if (sec === '*') {
+        if (minute === '*') {
+          const hNum = parseInt(hour, 10);
+          if (!isNaN(hNum) && hNum >= 0 && hNum <= 23) {
+            timeDesc = `every second between ${formatTime12h(hNum, 0)} and ${formatTime12h((hNum + 1) % 24, 0)}`;
+          } else {
+            timeDesc = 'every second';
+          }
+        } else {
+          timeDesc = `every second at minute ${minute}`;
+        }
+      } else if (sec.startsWith('*/') || sec.startsWith('0/')) {
+        const step = sec.replace(/^[*0]\//, '');
+        timeDesc = `every ${step} seconds`;
+      } else {
+        timeDesc = `at second ${sec}`;
+      }
+    } else {
+      // 5-field or 6-field with sec === 0
+      const stepMinMatch = minute.match(/^(\*|0|\d+-\d+)\/(\d+)$/);
+      const stepHourMatch = hour.match(/^(\*|0|\d+-\d+)\/(\d+)$/);
+
+      if (minute === '*') {
+        const hNum = parseInt(hour, 10);
+        if (!isNaN(hNum) && hNum >= 0 && hNum <= 23) {
+          timeDesc = `every minute between ${formatTime12h(hNum, 0)} and ${formatTime12h((hNum + 1) % 24, 0)}`;
+        } else if (stepHourMatch) {
+          timeDesc = `every minute every ${stepHourMatch[2]} hours`;
+        } else {
+          timeDesc = 'every minute';
+        }
+      } else if (stepMinMatch) {
+        const stepM = stepMinMatch[2];
+        const hNum = parseInt(hour, 10);
+        if (!isNaN(hNum) && hNum >= 0 && hNum <= 23) {
+          timeDesc = `every ${stepM} minutes between ${formatTime12h(hNum, 0)} and ${formatTime12h((hNum + 1) % 24, 0)}`;
+        } else if (stepHourMatch) {
+          timeDesc = `every ${stepM} minutes every ${stepHourMatch[2]} hours`;
+        } else {
+          timeDesc = stepM === '1' ? 'every minute' : `every ${stepM} minutes`;
+        }
+      } else if (minute.includes(',')) {
+        const mList = minute.split(',').map((m) => parseInt(m.trim(), 10));
+        const hNum = parseInt(hour, 10);
+        if (!isNaN(hNum) && hNum >= 0 && hNum <= 23 && mList.every((m) => !isNaN(m) && m >= 0 && m <= 59)) {
+          timeDesc = `at ${mList.map((m) => formatTime12h(hNum, m)).join(' and ')}`;
+        } else {
+          timeDesc = `at minute ${minute}`;
+        }
+      } else {
+        // fixed minute
+        const mNum = parseInt(minute, 10);
+        if (!isNaN(mNum) && mNum >= 0 && mNum <= 59) {
+          if (hour === '*') {
+            timeDesc = mNum === 0 ? 'every hour on the hour' : `every hour at minute ${mNum}`;
+          } else if (stepHourMatch) {
+            timeDesc =
+              mNum === 0
+                ? `every ${stepHourMatch[2]} hours on the hour`
+                : `every ${stepHourMatch[2]} hours at minute ${mNum}`;
+          } else if (hour.includes(',')) {
+            const hList = hour.split(',').map((h) => parseInt(h.trim(), 10));
+            if (hList.every((h) => !isNaN(h) && h >= 0 && h <= 23)) {
+              timeDesc = `at ${hList.map((h) => formatTime12h(h, mNum)).join(', ')}`;
+            }
+          } else {
+            const hNum = parseInt(hour, 10);
+            if (!isNaN(hNum) && hNum >= 0 && hNum <= 23) {
+              timeDesc = `at ${formatTime12h(hNum, mNum)}`;
+            }
+          }
+        }
+      }
     }
 
-    // Check fixed time daily
-    if (
-      !minute?.includes('*') &&
-      !minute?.includes('/') &&
-      !hour?.includes('*') &&
-      !hour?.includes('/') &&
-      dom === '*' &&
-      month === '*' &&
-      dow === '*'
-    ) {
-      const padM = minute?.padStart(2, '0');
-      const padH = hour?.padStart(2, '0');
-      return `Daily at ${padH}:${padM}`;
+    if (!timeDesc) {
+      timeDesc = `at ${clean}`;
     }
 
-    // Check weekdays
+    // Build Calendar Portion (dom, month, dow)
+    // Case 1: Every day, every month, every day of week
+    if (dom === '*' && month === '*' && dow === '*') {
+      if (timeDesc.startsWith('at ')) {
+        return `Run daily ${timeDesc}`;
+      }
+      return `Run ${timeDesc} daily`;
+    }
+
+    // Case 2: Weekdays
     if (dow === '1-5' && dom === '*' && month === '*') {
-      const padM = (minute ?? '00').padStart(2, '0');
-      const padH = (hour ?? '00').padStart(2, '0');
-      return `Weekdays (Mon-Fri) at ${padH}:${padM}`;
+      if (timeDesc.startsWith('at ')) {
+        return `Run weekdays (Mon-Fri) ${timeDesc}`;
+      }
+      return `Run ${timeDesc} on weekdays (Mon-Fri)`;
     }
 
-    // Check specific day of week
-    if (dow && dow !== '*' && dom === '*' && month === '*') {
-      const dayNum = parseInt(dow, 10);
-      const dayName = !isNaN(dayNum) && dayNum >= 0 && dayNum <= 6 ? DAY_NAMES[dayNum] : dow;
-      const padM = (minute ?? '00').padStart(2, '0');
-      const padH = (hour ?? '00').padStart(2, '0');
-      return `Weekly on ${dayName} at ${padH}:${padM}`;
+    // Case 3: Weekends
+    if ((dow === '0,6' || dow === '6,0') && dom === '*' && month === '*') {
+      if (timeDesc.startsWith('at ')) {
+        return `Run weekends (Sat-Sun) ${timeDesc}`;
+      }
+      return `Run ${timeDesc} on weekends (Sat-Sun)`;
     }
 
-    // Check specific day of month
-    if (dom && dom !== '*' && month === '*' && dow === '*') {
-      const padM = (minute ?? '00').padStart(2, '0');
-      const padH = (hour ?? '00').padStart(2, '0');
-      return `Monthly on day ${dom} at ${padH}:${padM}`;
+    // Case 4: Specific Day of Week
+    if (dow !== '*' && dom === '*' && month === '*') {
+      const dNum = parseInt(dow, 10);
+      const dName = !isNaN(dNum) && dNum >= 0 && dNum <= 6 ? DAY_NAMES[dNum] : dow;
+      if (timeDesc.startsWith('at ')) {
+        return `Run weekly on ${dName} ${timeDesc}`;
+      }
+      return `Run ${timeDesc} weekly on ${dName}`;
     }
 
-    // Check specific month and day
-    if (month && month !== '*' && dom && dom !== '*' && dow === '*') {
+    // Case 5: Specific Day of Month
+    if (dom !== '*' && dow === '*' && month === '*') {
+      const domNum = parseInt(dom, 10);
+      const domStr = !isNaN(domNum) && domNum >= 1 && domNum <= 31 ? getOrdinal(domNum) : `day ${dom}`;
+      if (timeDesc.startsWith('at ')) {
+        return `Run monthly on the ${domStr} ${timeDesc}`;
+      }
+      return `Run ${timeDesc} on the ${domStr} of every month`;
+    }
+
+    // Case 6: Specific Month & Day
+    if (month !== '*' && dow === '*') {
       const mNum = parseInt(month, 10);
-      const mName = !isNaN(mNum) && mNum >= 1 && mNum <= 12 ? MONTH_NAMES[mNum - 1] : month;
-      const padM = (minute ?? '00').padStart(2, '0');
-      const padH = (hour ?? '00').padStart(2, '0');
-      return `Annually on ${mName} ${dom} at ${padH}:${padM}`;
+      const mName = !isNaN(mNum) && mNum >= 1 && mNum <= 12 ? MONTH_NAMES[mNum - 1] : `month ${month}`;
+      const domNum = parseInt(dom, 10);
+      const domStr = !isNaN(domNum) && domNum >= 1 && domNum <= 31 ? ` ${getOrdinal(domNum)}` : dom !== '*' ? ` day ${dom}` : '';
+      if (timeDesc.startsWith('at ')) {
+        return `Run annually on ${mName}${domStr} ${timeDesc}`;
+      }
+      return `Run ${timeDesc} on ${mName}${domStr}`;
     }
+
+    return `Run ${timeDesc}`;
   }
 
-  return clean;
+  return `Run on schedule (${clean})`;
 }
 
 /**

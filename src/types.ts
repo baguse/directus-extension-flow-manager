@@ -48,6 +48,7 @@ export interface IFlowOptions extends Record<string, unknown> {
   confirmationDescription?: string;
   fields?: Field[];
   method?: string;
+  cron?: string;
   [key: string]: unknown;
 }
 

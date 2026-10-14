@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
+import { Cron } from 'croner';
 import type { IFlow } from '../../types';
+import { formatCronToHuman } from '../../utils/cron-schedule.util';
 
 const props = withDefaults(
   defineProps<{
@@ -28,6 +30,7 @@ const emit = defineEmits<{
       description: string | null;
       icon: string | null;
       color: string | null;
+      options?: Record<string, unknown>;
     },
   ): void;
 }>();
@@ -45,6 +48,61 @@ const form = ref({
   description: '',
   icon: 'bolt',
   color: '',
+  cron: '',
+});
+
+const isScheduleTrigger = computed(() => props.flow?.trigger === 'schedule');
+
+const cronPresets = [
+  { label: 'Every 5m', cron: '*/5 * * * *' },
+  { label: 'Every 15m', cron: '*/15 * * * *' },
+  { label: 'Hourly', cron: '0 * * * *' },
+  { label: 'Daily (1 AM)', cron: '0 1 * * *' },
+  { label: 'Daily (Midnight)', cron: '0 0 * * *' },
+  { label: 'Weekdays (9 AM)', cron: '0 9 * * 1-5' },
+];
+
+function applyPreset(presetCron: string) {
+  form.value.cron = presetCron;
+}
+
+const cronState = computed(() => {
+  if (!isScheduleTrigger.value) {
+    return { valid: true, text: '', nextRun: null, error: null };
+  }
+  const clean = form.value.cron.trim();
+  if (!clean) {
+    return {
+      valid: false,
+      text: 'Cron expression cannot be empty',
+      nextRun: null,
+      error: 'Schedule trigger requires a cron expression (e.g. 0 1 * * *)',
+    };
+  }
+
+  try {
+    const job = new Cron(clean);
+    const human = formatCronToHuman(clean);
+    const next = job.nextRun();
+    return {
+      valid: true,
+      text: human,
+      nextRun: next
+        ? next.toLocaleString(undefined, {
+            dateStyle: 'medium',
+            timeStyle: 'short',
+          })
+        : 'No upcoming runs',
+      error: null,
+    };
+  } catch (err: unknown) {
+    return {
+      valid: false,
+      text: 'Invalid cron expression',
+      nextRun: null,
+      error: err instanceof Error ? err.message : 'Invalid cron syntax',
+    };
+  }
 });
 
 const copied = ref(false);
@@ -80,6 +138,7 @@ watch(
         description: newFlow.description || '',
         icon: newFlow.icon || 'bolt',
         color: cleanColor,
+        cron: typeof newFlow.options?.cron === 'string' ? newFlow.options.cron : '',
       };
     }
   },
@@ -113,15 +172,33 @@ function clearColor() {
 
 function handleSave() {
   if (!props.flow?.id || !form.value.name.trim() || props.loading) return;
+  if (isScheduleTrigger.value && !cronState.value.valid) return;
 
-  emit('save', {
+  const payload: {
+    id: string;
+    name: string;
+    status: string;
+    description: string | null;
+    icon: string | null;
+    color: string | null;
+    options?: Record<string, unknown>;
+  } = {
     id: props.flow.id,
     name: form.value.name.trim(),
     status: form.value.status,
     description: form.value.description.trim() || null,
     icon: form.value.icon ? form.value.icon.trim() : null,
     color: resolvedColor.value || null,
-  });
+  };
+
+  if (isScheduleTrigger.value) {
+    payload.options = {
+      ...(props.flow.options || {}),
+      cron: form.value.cron.trim(),
+    };
+  }
+
+  emit('save', payload);
 }
 </script>
 
@@ -166,6 +243,10 @@ function handleSave() {
               <span v-if="flow?.trigger" class="trigger-chip">
                 {{ flow.trigger.toUpperCase() }}
               </span>
+              <span v-if="isScheduleTrigger && cronState.valid" class="schedule-chip">
+                <v-icon name="schedule" x-small class="mr-1" />
+                {{ cronState.text }}
+              </span>
             </div>
             <div v-if="form.description" class="preview-desc">
               {{ form.description }}
@@ -195,6 +276,65 @@ function handleSave() {
               placeholder="Provide a clear description of what this flow does..."
               rows="3"
             />
+          </div>
+
+          <!-- Cron Schedule (Only for trigger === 'schedule') -->
+          <div v-if="isScheduleTrigger" class="field-group cron-field-group">
+            <div class="label-with-action">
+              <label class="field-label">
+                Cron Schedule <span class="required-star">*</span>
+              </label>
+              <span class="cron-field-hint">e.g. 0 1 * * *</span>
+            </div>
+
+            <v-input
+              v-model="form.cron"
+              placeholder="* * * * * (e.g. 0 1 * * *)"
+              class="cron-input"
+            >
+              <template #prepend>
+                <v-icon name="schedule" small />
+              </template>
+            </v-input>
+
+            <!-- Real-time Cron Human Parsing & Status -->
+            <div
+              class="cron-status-card"
+              :class="{ 'is-valid': cronState.valid, 'is-invalid': !cronState.valid }"
+            >
+              <div class="status-main">
+                <v-icon
+                  :name="cronState.valid ? 'check_circle' : 'error_outline'"
+                  small
+                  :class="cronState.valid ? 'status-icon-valid' : 'status-icon-invalid'"
+                />
+                <div class="status-texts">
+                  <div class="status-human-text">
+                    {{ cronState.valid ? cronState.text : (cronState.error || 'Invalid cron expression') }}
+                  </div>
+                  <div v-if="cronState.valid && cronState.nextRun" class="status-next-run">
+                    Next run: {{ cronState.nextRun }}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Presets -->
+            <div class="cron-presets">
+              <span class="presets-title">Presets:</span>
+              <div class="presets-buttons">
+                <button
+                  v-for="preset in cronPresets"
+                  :key="preset.cron"
+                  type="button"
+                  class="preset-button"
+                  :class="{ active: form.cron.trim() === preset.cron }"
+                  @click="applyPreset(preset.cron)"
+                >
+                  {{ preset.label }}
+                </button>
+              </div>
+            </div>
           </div>
 
           <!-- Icon & Color Row -->
@@ -232,7 +372,11 @@ function handleSave() {
         <v-button secondary :disabled="loading" @click="emit('update:modelValue', false)">
           Cancel
         </v-button>
-        <v-button :loading="loading" :disabled="!form.name.trim() || loading" @click="handleSave">
+        <v-button
+          :loading="loading"
+          :disabled="!form.name.trim() || (isScheduleTrigger && !cronState.valid) || loading"
+          @click="handleSave"
+        >
           <v-icon name="check" class="mr-1" />
           Save Changes
         </v-button>
@@ -384,6 +528,133 @@ function handleSave() {
   background: var(--theme--primary-subdued, rgba(99, 102, 241, 0.12));
   color: var(--theme--primary, #6366f1);
   letter-spacing: 0.5px;
+}
+
+.schedule-chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 12px;
+  background-color: var(--theme--primary-subdued, rgba(99, 102, 241, 0.12));
+  color: var(--theme--primary, #6366f1);
+}
+
+.cron-field-group {
+  padding: 12px 14px;
+  background-color: var(--theme--background-subdued, rgba(128, 128, 128, 0.04));
+  border: 1px solid var(--theme--border-color-subdued, rgba(128, 128, 128, 0.12));
+  border-radius: 8px;
+}
+
+.cron-field-hint {
+  font-size: 11px;
+  color: var(--theme--foreground-subdued, #64748b);
+  font-family: monospace;
+}
+
+.cron-input {
+  font-family: monospace;
+}
+
+.cron-status-card {
+  margin-top: 2px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  transition: all 0.2s ease;
+
+  &.is-valid {
+    background-color: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    color: var(--theme--foreground, #1e293b);
+  }
+
+  &.is-invalid {
+    background-color: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    color: var(--theme--danger, #dc2626);
+  }
+
+  .status-main {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .status-icon-valid {
+    color: #10b981;
+    margin-top: 1px;
+    flex-shrink: 0;
+  }
+
+  .status-icon-invalid {
+    color: var(--theme--danger, #dc2626);
+    margin-top: 1px;
+    flex-shrink: 0;
+  }
+
+  .status-texts {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .status-human-text {
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  .status-next-run {
+    font-size: 11px;
+    color: var(--theme--foreground-subdued, #64748b);
+  }
+}
+
+.cron-presets {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+
+  .presets-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--theme--foreground-subdued, #64748b);
+  }
+
+  .presets-buttons {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .preset-button {
+    background: var(--theme--background, #ffffff);
+    border: 1px solid var(--theme--border-color-subdued, rgba(128, 128, 128, 0.2));
+    border-radius: 4px;
+    padding: 2px 7px;
+    font-size: 11px;
+    color: var(--theme--foreground, #334155);
+    cursor: pointer;
+    transition: all 0.15s ease;
+
+    &:hover {
+      border-color: var(--theme--primary, #6366f1);
+      color: var(--theme--primary, #6366f1);
+    }
+
+    &.active {
+      background: var(--theme--primary, #6366f1);
+      border-color: var(--theme--primary, #6366f1);
+      color: #ffffff;
+      font-weight: 600;
+    }
+  }
 }
 
 .preview-desc {

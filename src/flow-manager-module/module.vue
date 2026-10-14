@@ -426,7 +426,7 @@ import { useStores, useApi, useLayout } from '@directus/extensions-sdk';
 import { useRoute, useRouter } from 'vue-router';
 import type { AppCollection, Field } from '@directus/types';
 
-import type { FlowViewMode, FlowsStore, IFlow, IFolder, ProcessingItem } from '../types';
+import type { FlowViewMode, FlowsStore, IFlow, IFlowOptions, IFolder, ProcessingItem } from '../types';
 import { ENDPOINT_EXTENSION_NAME, TRIGGER_TYPES } from '../constants';
 
 import { formatDate, formatDateLong } from '../utils/date.util';
@@ -1436,10 +1436,11 @@ export default defineComponent({
       description: string | null;
       icon: string | null;
       color: string | null;
+      options?: Record<string, unknown>;
     }) {
       isSavingFlow.value = true;
       try {
-        const payload = {
+        const payload: Record<string, unknown> = {
           name: flowData.name,
           status: flowData.status,
           description: flowData.description,
@@ -1451,6 +1452,10 @@ export default defineComponent({
               ? flowData.color
               : null,
         };
+
+        if (flowData.options) {
+          payload.options = flowData.options;
+        }
 
         if (selectedCredential.value === 'local') {
           await api.patch(`/flows/${flowData.id}`, payload);
@@ -1469,13 +1474,31 @@ export default defineComponent({
         const targetFlow = flows.value.find((f) => f.id === flowData.id);
         if (targetFlow) {
           Object.assign(targetFlow, payload);
+          if (flowData.options) {
+            targetFlow.options = {
+              ...(targetFlow.options || {}),
+              ...flowData.options,
+            } as unknown as IFlowOptions;
+          }
         }
         const targetTabular = tabularFlows.value.find((f) => f.id === flowData.id);
         if (targetTabular) {
           Object.assign(targetTabular, payload);
+          if (flowData.options) {
+            targetTabular.options = {
+              ...(targetTabular.options || {}),
+              ...flowData.options,
+            } as unknown as IFlowOptions;
+          }
         }
         if (selectedItem.value && selectedItem.value.id === flowData.id) {
           Object.assign(selectedItem.value, payload);
+          if (flowData.options && 'options' in selectedItem.value) {
+            (selectedItem.value as IFlow).options = {
+              ...((selectedItem.value as IFlow).options || {}),
+              ...flowData.options,
+            } as unknown as IFlowOptions;
+          }
         }
 
         await reloadFlow();

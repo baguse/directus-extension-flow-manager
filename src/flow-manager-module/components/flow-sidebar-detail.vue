@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, inject } from 'vue';
+import { Cron } from 'croner';
 import type { FlowManagerUtilsContext, IFlow, IFolder, IOperation } from '../../types';
 import {
   buildFlowDependencyGraph,
   getFlowImpact,
   type FlowImpactSummary,
 } from '../../utils/flow-dependency.util';
+import { formatCronToHuman } from '../../utils/cron-schedule.util';
 
 const props = withDefaults(
   defineProps<{
@@ -105,6 +107,47 @@ const flowImpact = computed<FlowImpactSummary | null>(() => {
   const graph = buildFlowDependencyGraph(props.allFlows, { includeCollections: true });
   return getFlowImpact(selectedFlow.value.id, graph, props.allFlows);
 });
+
+const scheduleInfo = computed(() => {
+  if (selectedFlow.value?.trigger !== 'schedule') {
+    return null;
+  }
+  const rawCron =
+    typeof selectedFlow.value.options?.cron === 'string'
+      ? selectedFlow.value.options.cron.trim()
+      : '';
+
+  if (!rawCron) {
+    return {
+      cron: '',
+      humanText: 'No schedule configured',
+      nextRun: null,
+      isValid: false,
+    };
+  }
+
+  const human = formatCronToHuman(rawCron);
+  let nextRun: string | null = null;
+  let isValid = false;
+
+  try {
+    const job = new Cron(rawCron);
+    isValid = true;
+    const next = job.nextRun();
+    if (next) {
+      nextRun = props.formatDateLong(next.toISOString());
+    }
+  } catch {
+    isValid = false;
+  }
+
+  return {
+    cron: rawCron,
+    humanText: human,
+    nextRun,
+    isValid,
+  };
+});
 </script>
 
 <template>
@@ -159,6 +202,25 @@ const flowImpact = computed<FlowImpactSummary | null>(() => {
         {{ selectedFlow.description }}
       </div>
 
+      <!-- Schedule Card (if trigger === 'schedule') -->
+      <div
+        v-if="scheduleInfo"
+        class="schedule-card"
+        title="Click to view in Cron Timeline"
+        @click="emit('viewInTimeline', selectedFlow)"
+      >
+        <div class="schedule-card-header">
+          <div class="schedule-title-row">
+            <v-icon name="schedule" small class="schedule-icon" />
+            <span class="schedule-label">Schedule Trigger</span>
+          </div>
+          <span v-if="scheduleInfo.cron" class="schedule-cron-badge">{{ scheduleInfo.cron }}</span>
+        </div>
+        <div class="schedule-human-text">
+          {{ scheduleInfo.humanText }}
+        </div>
+      </div>
+
       <!-- Metrics / Run Stats -->
       <div class="metrics-grid">
         <div class="metric-card">
@@ -177,6 +239,14 @@ const flowImpact = computed<FlowImpactSummary | null>(() => {
 
       <!-- Run Details & Health -->
       <div class="details-section">
+        <div v-if="scheduleInfo?.nextRun" class="detail-item">
+          <v-icon name="event" small class="detail-icon text-primary" />
+          <div class="detail-content">
+            <span class="detail-title">Next Scheduled Run</span>
+            <span class="detail-val">{{ scheduleInfo.nextRun }}</span>
+          </div>
+        </div>
+
         <div v-if="lastRunAt" class="detail-item">
           <v-icon name="schedule" small class="detail-icon" />
           <div class="detail-content">
@@ -585,6 +655,65 @@ const flowImpact = computed<FlowImpactSummary | null>(() => {
   padding: 8px 10px;
   border-radius: 6px;
   border-left: 2px solid var(--theme--primary, #6366f1);
+}
+
+.schedule-card {
+  padding: 10px 12px;
+  border-radius: 6px;
+  background-color: var(--theme--primary-subdued, rgba(99, 102, 241, 0.08));
+  border: 1px solid var(--theme--border-color-subdued, rgba(99, 102, 241, 0.2));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    border-color: var(--theme--primary, #6366f1);
+    background-color: var(--theme--primary-subdued, rgba(99, 102, 241, 0.12));
+  }
+}
+
+.schedule-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.schedule-title-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.schedule-icon {
+  color: var(--theme--primary, #6366f1);
+}
+
+.schedule-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--theme--primary, #6366f1);
+}
+
+.schedule-cron-badge {
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  background: var(--theme--background, #ffffff);
+  border: 1px solid var(--theme--border-color-subdued, rgba(99, 102, 241, 0.25));
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--theme--foreground, #1e293b);
+}
+
+.schedule-human-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--theme--foreground, #1e293b);
+  line-height: 1.35;
 }
 
 .metrics-grid {
