@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue';
 import type { IFlowDiffResult } from '../../types';
+import { generateHighlightedJsonDiff } from '../../utils/diff-highlighter.util';
+import type { HighlightedJsonDiff } from '../../utils/diff-highlighter.util';
 
 const props = withDefaults(
   defineProps<{
@@ -26,6 +28,38 @@ const sourcePreRef = ref<HTMLElement | null>(null);
 const targetPreRef = ref<HTMLElement | null>(null);
 const isSyncScrollEnabled = ref(true);
 const isLineWrapEnabled = ref(false);
+
+const isHighlightDiffEnabled = ref(true);
+const diffViewMode = ref<'split' | 'unified'>('split');
+const currentDiffIndex = ref(0);
+const diffContainerRef = ref<HTMLElement | null>(null);
+
+const highlightedDiff = computed<HighlightedJsonDiff>(() => {
+  return generateHighlightedJsonDiff(props.diff?.rawSourceJson, props.diff?.rawTargetJson);
+});
+
+const totalDiffChunks = computed(() => highlightedDiff.value.diffRowIndices.length);
+
+function scrollToDiff(index: number) {
+  if (totalDiffChunks.value === 0) return;
+  const clampedIndex = (index + totalDiffChunks.value) % totalDiffChunks.value;
+  currentDiffIndex.value = clampedIndex;
+
+  nextTick(() => {
+    const el = diffContainerRef.value?.querySelector(`[data-diff-chunk="${clampedIndex}"]`);
+    if (el) {
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  });
+}
+
+function nextDiff() {
+  scrollToDiff(currentDiffIndex.value + 1);
+}
+
+function prevDiff() {
+  scrollToDiff(currentDiffIndex.value - 1);
+}
 
 let isSyncing = false;
 
@@ -94,6 +128,11 @@ watch(activeTab, (tab) => {
         targetPreRef.value.scrollTop = 0;
         targetPreRef.value.scrollLeft = 0;
       }
+      if (diffContainerRef.value) {
+        diffContainerRef.value.scrollTop = 0;
+        diffContainerRef.value.scrollLeft = 0;
+      }
+      currentDiffIndex.value = 0;
     });
   }
 });
@@ -290,24 +329,74 @@ function formatValue(val: unknown, field?: string): string {
         <!-- Raw JSON Compare Tab -->
         <div v-else class="raw-json-container">
           <div class="raw-json-toolbar">
-            <div class="json-stats-hint">
-              <v-icon
-                :name="isSyncScrollEnabled ? 'sync' : 'sync_disabled'"
-                small
-                class="mr-1 sync-icon"
-              />
-              <span>{{ isSyncScrollEnabled ? 'Scroll synced' : 'Scroll independent' }}</span>
+            <div class="toolbar-left-stats">
+              <div v-if="highlightedDiff.stats.hasChanges" class="diff-stats-pill">
+                <span class="stat-tag added" title="Added lines">+{{ highlightedDiff.stats.addedLines }}</span>
+                <span class="stat-tag removed" title="Removed lines">-{{ highlightedDiff.stats.removedLines }}</span>
+                <span class="stat-tag chunks">{{ totalDiffChunks }} difference{{ totalDiffChunks > 1 ? 's' : '' }}</span>
+              </div>
+              <div v-else class="diff-stats-identical">
+                <v-icon name="check_circle" small class="identical-icon" />
+                <span>JSON payloads are identical</span>
+              </div>
+
+              <!-- Jump to diff navigation -->
+              <div v-if="isHighlightDiffEnabled && totalDiffChunks > 0" class="diff-navigator">
+                <button
+                  type="button"
+                  class="nav-btn"
+                  title="Previous difference"
+                  @click="prevDiff"
+                >
+                  <v-icon name="arrow_upward" small />
+                </button>
+                <span class="nav-counter">{{ currentDiffIndex + 1 }}/{{ totalDiffChunks }}</span>
+                <button
+                  type="button"
+                  class="nav-btn"
+                  title="Next difference"
+                  @click="nextDiff"
+                >
+                  <v-icon name="arrow_downward" small />
+                </button>
+              </div>
             </div>
+
             <div class="toolbar-controls">
+              <!-- Highlight Diff Toggle -->
               <button
                 type="button"
-                :class="['tool-btn', { active: isSyncScrollEnabled }]"
-                title="Toggle synchronized scrolling"
-                @click="toggleSyncScroll"
+                :class="['tool-btn', { active: isHighlightDiffEnabled }]"
+                title="Toggle diff highlighting"
+                @click="isHighlightDiffEnabled = !isHighlightDiffEnabled"
               >
-                <v-icon :name="isSyncScrollEnabled ? 'sync' : 'sync_disabled'" small class="mr-1" />
-                Sync Scroll: {{ isSyncScrollEnabled ? 'ON' : 'OFF' }}
+                <v-icon name="format_paint" small class="mr-1" />
+                Diff Highlight: {{ isHighlightDiffEnabled ? 'ON' : 'OFF' }}
               </button>
+
+              <!-- Split / Unified Toggle (only shown when Highlight is ON) -->
+              <div v-if="isHighlightDiffEnabled" class="view-mode-toggle-group">
+                <button
+                  type="button"
+                  :class="['mode-btn', { active: diffViewMode === 'split' }]"
+                  title="Side-by-side split view"
+                  @click="diffViewMode = 'split'"
+                >
+                  <v-icon name="vertical_split" small class="mr-1" />
+                  Split
+                </button>
+                <button
+                  type="button"
+                  :class="['mode-btn', { active: diffViewMode === 'unified' }]"
+                  title="Unified inline view"
+                  @click="diffViewMode = 'unified'"
+                >
+                  <v-icon name="view_agenda" small class="mr-1" />
+                  Unified
+                </button>
+              </div>
+
+              <!-- Wrap Lines Toggle -->
               <button
                 type="button"
                 :class="['tool-btn', { active: isLineWrapEnabled }]"
@@ -317,10 +406,137 @@ function formatValue(val: unknown, field?: string): string {
                 <v-icon name="wrap_text" small class="mr-1" />
                 Wrap Lines
               </button>
+
+              <!-- Sync Scroll (only when in raw unhighlighted mode) -->
+              <button
+                v-if="!isHighlightDiffEnabled"
+                type="button"
+                :class="['tool-btn', { active: isSyncScrollEnabled }]"
+                title="Toggle synchronized scrolling"
+                @click="toggleSyncScroll"
+              >
+                <v-icon :name="isSyncScrollEnabled ? 'sync' : 'sync_disabled'" small class="mr-1" />
+                Sync: {{ isSyncScrollEnabled ? 'ON' : 'OFF' }}
+              </button>
             </div>
           </div>
 
-          <div class="raw-json-grid">
+          <!-- Highlighted Diff View (Default) -->
+          <div
+            v-if="isHighlightDiffEnabled"
+            ref="diffContainerRef"
+            :class="['diff-table-container', { 'wrap-lines': isLineWrapEnabled }]"
+          >
+            <!-- Column Titles for Split Mode -->
+            <div v-if="diffViewMode === 'split'" class="diff-header-bar">
+              <div class="diff-header-col source">
+                <span class="pane-badge source">Source</span>
+                <span class="pane-title-text">{{ sourceTitle }}</span>
+              </div>
+              <div class="diff-header-col target">
+                <span class="pane-badge target">Target</span>
+                <span class="pane-title-text">{{ targetTitle }}</span>
+              </div>
+            </div>
+
+            <!-- SPLIT (SIDE-BY-SIDE) MODE -->
+            <div v-if="diffViewMode === 'split'" class="diff-rows-wrapper split-mode">
+              <div
+                v-for="row in highlightedDiff.sideBySideRows"
+                :key="row.rowIndex"
+                class="diff-row split-mode"
+                :class="{
+                  'is-diff': row.isDiff,
+                  'is-current-chunk': row.diffIndex === currentDiffIndex,
+                }"
+                :data-row-index="row.rowIndex"
+                :data-diff-chunk="row.diffIndex"
+              >
+                <!-- Left Cell (Source) -->
+                <div class="diff-cell left-cell" :class="row.left.type">
+                  <span class="line-num">{{ row.left.lineNum ?? '' }}</span>
+                  <span class="diff-sign">{{ row.left.type === 'removed' ? '-' : '' }}</span>
+                  <span class="line-text">
+                    <template v-if="row.left.type === 'empty'">
+                      <span class="empty-line-filler" />
+                    </template>
+                    <template v-else-if="row.left.wordParts && row.left.wordParts.length > 0">
+                      <span
+                        v-for="(part, pIdx) in row.left.wordParts"
+                        :key="pIdx"
+                        :class="['word-part', { 'word-changed': part.changed }]"
+                      >{{ part.text }}</span>
+                    </template>
+                    <template v-else>
+                      {{ row.left.text }}
+                    </template>
+                  </span>
+                </div>
+
+                <!-- Right Cell (Target) -->
+                <div class="diff-cell right-cell" :class="row.right.type">
+                  <span class="line-num">{{ row.right.lineNum ?? '' }}</span>
+                  <span class="diff-sign">{{ row.right.type === 'added' ? '+' : '' }}</span>
+                  <span class="line-text">
+                    <template v-if="row.right.type === 'empty'">
+                      <span class="empty-line-filler" />
+                    </template>
+                    <template v-else-if="row.right.wordParts && row.right.wordParts.length > 0">
+                      <span
+                        v-for="(part, pIdx) in row.right.wordParts"
+                        :key="pIdx"
+                        :class="['word-part', { 'word-changed': part.changed }]"
+                      >{{ part.text }}</span>
+                    </template>
+                    <template v-else>
+                      {{ row.right.text }}
+                    </template>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- UNIFIED (INLINE) MODE -->
+            <div v-else class="diff-rows-wrapper unified-mode">
+              <div
+                v-for="uRow in highlightedDiff.unifiedRows"
+                :key="uRow.rowIndex"
+                class="diff-row unified"
+                :class="[
+                  uRow.type,
+                  {
+                    'is-diff': uRow.isDiff,
+                    'is-current-chunk': uRow.diffIndex === currentDiffIndex,
+                  },
+                ]"
+                :data-row-index="uRow.rowIndex"
+                :data-diff-chunk="uRow.diffIndex"
+              >
+                <div class="diff-cell unified-cell" :class="uRow.type">
+                  <span class="line-num left">{{ uRow.leftLineNum ?? '' }}</span>
+                  <span class="line-num right">{{ uRow.rightLineNum ?? '' }}</span>
+                  <span class="diff-sign">
+                    {{ uRow.type === 'added' ? '+' : uRow.type === 'removed' ? '-' : ' ' }}
+                  </span>
+                  <span class="line-text">
+                    <template v-if="uRow.wordParts && uRow.wordParts.length > 0">
+                      <span
+                        v-for="(part, pIdx) in uRow.wordParts"
+                        :key="pIdx"
+                        :class="['word-part', { 'word-changed': part.changed }]"
+                      >{{ part.text }}</span>
+                    </template>
+                    <template v-else>
+                      {{ uRow.text }}
+                    </template>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Raw Fallback View (when Diff Highlight is turned OFF) -->
+          <div v-else class="raw-json-grid">
             <div class="json-pane">
               <div class="pane-title">
                 <span class="pane-badge source">Source</span>
@@ -807,5 +1023,295 @@ function formatValue(val: unknown, field?: string): string {
 
 .mr-2 {
   margin-right: 8px;
+}
+
+.toolbar-left-stats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.diff-stats-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: var(--theme--background-subdued, #f1f5f9);
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+
+  .stat-tag {
+    &.added {
+      color: #10b981;
+    }
+    &.removed {
+      color: #ef4444;
+    }
+    &.chunks {
+      color: var(--theme--foreground-subdued, #64748b);
+      font-weight: 500;
+      margin-left: 2px;
+    }
+  }
+}
+
+.diff-stats-identical {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #10b981;
+  font-weight: 500;
+
+  .identical-icon {
+    font-size: 14px;
+    color: #10b981;
+  }
+}
+
+.diff-navigator {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background-color: var(--theme--background, #ffffff);
+  border: 1px solid var(--theme--border-color-subdued, #cbd5e1);
+  border-radius: 4px;
+  padding: 1px 4px;
+
+  .nav-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 2px;
+    color: var(--theme--foreground-subdued, #64748b);
+    border-radius: 2px;
+
+    &:hover {
+      background-color: var(--theme--background-subdued, #f1f5f9);
+      color: var(--theme--foreground, #1e293b);
+    }
+  }
+
+  .nav-counter {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--theme--foreground-subdued, #64748b);
+    padding: 0 4px;
+  }
+}
+
+.view-mode-toggle-group {
+  display: inline-flex;
+  border: 1px solid var(--theme--border-color-subdued, #cbd5e1);
+  border-radius: 4px;
+  overflow: hidden;
+
+  .mode-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-weight: 500;
+    border: none;
+    background-color: var(--theme--background, #ffffff);
+    color: var(--theme--foreground-subdued, #64748b);
+    cursor: pointer;
+    transition: all 0.15s ease;
+
+    &.active {
+      background-color: rgba(99, 102, 241, 0.12);
+      color: var(--theme--primary, #6366f1);
+      font-weight: 600;
+    }
+
+    &:hover:not(.active) {
+      background-color: var(--theme--background-subdued, #f1f5f9);
+    }
+  }
+}
+
+.diff-table-container {
+  display: flex;
+  flex-direction: column;
+  background-color: #0f172a;
+  color: #f8fafc;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  overflow: auto;
+  max-height: 48vh;
+  width: 100%;
+  box-sizing: border-box;
+
+  &.wrap-lines {
+    .line-text {
+      white-space: pre-wrap !important;
+      word-break: break-all;
+    }
+  }
+}
+
+.diff-header-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  background-color: #1e293b;
+  border-bottom: 1px solid #334155;
+  padding: 6px 12px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.diff-header-col {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  min-width: 0;
+}
+
+.diff-rows-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-width: 100%;
+}
+
+.diff-row {
+  display: grid;
+  width: 100%;
+  box-sizing: border-box;
+  transition: background-color 0.1s ease;
+
+  &.split-mode {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  &.unified {
+    grid-template-columns: 1fr;
+  }
+
+  &.is-current-chunk {
+    background-color: rgba(99, 102, 241, 0.18) !important;
+    outline: 1px solid rgba(99, 102, 241, 0.5);
+  }
+
+  &:hover {
+    filter: brightness(1.08);
+  }
+}
+
+.diff-cell {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  box-sizing: border-box;
+
+  &.left-cell {
+    border-right: 1px solid #1e293b;
+  }
+
+  &.removed {
+    background-color: rgba(239, 68, 68, 0.14);
+    color: #fca5a5;
+
+    .line-num {
+      background-color: rgba(239, 68, 68, 0.22);
+      color: #f87171;
+    }
+  }
+
+  &.added {
+    background-color: rgba(34, 197, 94, 0.14);
+    color: #86efac;
+
+    .line-num {
+      background-color: rgba(34, 197, 94, 0.22);
+      color: #4ade80;
+    }
+  }
+
+  &.empty {
+    background-color: rgba(15, 23, 42, 0.4);
+    background-image: repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 5px,
+      rgba(255, 255, 255, 0.02) 5px,
+      rgba(255, 255, 255, 0.02) 10px
+    );
+  }
+}
+
+.line-num {
+  width: 38px;
+  min-width: 38px;
+  text-align: right;
+  padding: 0 6px;
+  color: #475569;
+  background-color: rgba(0, 0, 0, 0.2);
+  user-select: none;
+  font-size: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+
+  &.left {
+    border-right: none;
+  }
+  &.right {
+    padding-left: 2px;
+  }
+}
+
+.diff-sign {
+  width: 16px;
+  min-width: 16px;
+  text-align: center;
+  user-select: none;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.line-text {
+  flex: 1;
+  padding: 0 8px;
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.empty-line-filler {
+  display: inline-block;
+  height: 100%;
+  width: 100%;
+}
+
+.word-part {
+  &.word-changed {
+    font-weight: 700;
+    border-radius: 2px;
+    padding: 0 2px;
+  }
+}
+
+.diff-cell.removed .word-changed {
+  background-color: rgba(239, 68, 68, 0.45);
+  color: #ffffff;
+}
+
+.diff-cell.added .word-changed {
+  background-color: rgba(34, 197, 94, 0.45);
+  color: #ffffff;
 }
 </style>
