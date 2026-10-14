@@ -20,7 +20,7 @@
 
     <template v-if="isDatabaseUpdated">
       <FlowBatchActions
-        v-if="viewMode !== 'GRAPH'"
+        v-if="viewMode === 'LIST' || viewMode === 'TABLE'"
         v-model:show-select="showSelect"
         v-model:is-select-all="isSelectAll"
         :view-list-mode="viewListMode"
