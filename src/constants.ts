@@ -3,10 +3,12 @@ import { ExtendedField } from './types';
 export const TRIGGER_TYPES = ['event', 'manual', 'operation', 'schedule', 'webhook'];
 export const NPM_LINK = 'https://registry.npmjs.org/directus-extension-flow-manager';
 export const ENDPOINT_EXTENSION_NAME = 'flow-manager-endpoint';
-export const SWAP_THRESHOLD = 0.65;
-export const ANIMATION_DURATION = 150;
-export const EMPTY_INSERT_THRESHOLD = 30;
-export const INVERT_SWAP = true;
+export const SWAP_THRESHOLD = 0.35;
+export const ANIMATION_DURATION = 200;
+export const EASING = 'cubic-bezier(0.25, 1, 0.5, 1)';
+export const FALLBACK_TOLERANCE = 3;
+export const EMPTY_INSERT_THRESHOLD = 25;
+export const INVERT_SWAP = false;
 export const FORCE_FALLBACK = true;
 export const FALLBACK_ON_BODY = true;
 

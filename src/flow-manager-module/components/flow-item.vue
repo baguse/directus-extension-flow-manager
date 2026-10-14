@@ -1,13 +1,15 @@
 <script lang="ts" setup>
 import { toRefs, computed, inject } from 'vue';
-import type { FlowManagerUtilsContext, IFlow, IFolder } from '../../types';
+import { FlowManagerUtilsContext, IFlow, IFolder } from '../../types';
 import Draggable from 'vuedraggable';
 import { useLocalStorage } from '../../composables/use-local-storage';
 import itemOptions from './item-options.vue';
+import { ANIMATION_DURATION, EASING, EMPTY_INSERT_THRESHOLD, FALLBACK_ON_BODY, FALLBACK_TOLERANCE, FORCE_FALLBACK, INVERT_SWAP, SWAP_THRESHOLD } from '../../constants';
+import { onDragEnd, onDragStart } from '../../utils/flow-drag.util';
 
 const props = withDefaults(
   defineProps<{
-    item: (IFlow & IFolder) | IFlow | IFolder;
+    item: IFlow & IFolder;
     items: (IFlow | IFolder)[];
     showSelect: boolean;
     selectedItems: string[];
@@ -23,26 +25,29 @@ const emit = defineEmits(['selectItem']);
 
 const { item, items, selectedItems, showSelect } = toRefs(props);
 const flowManagerUtils = inject<FlowManagerUtilsContext>('flowManagerUtils');
-const nestedFlows = computed(() =>
-  items.value
+const nestedFlows = computed(() => {
+  const itemId = props.item?.id ? String(props.item.id).trim() : '';
+  const itemName = (props.item as IFolder)?.name ? String((props.item as IFolder).name).trim() : '';
+
+  if (!itemId && !itemName) return [];
+
+  return (items.value || [])
     .filter((flow) => {
-      const cat = flow.flow_manager_metadata_id?.flow_manager_category;
-      return cat === props.item.id;
+      if (!flow || flow.id === itemId) return false;
+      return flow.flow_manager_metadata_id?.flow_manager_category === props.item.id;
     })
     .sort(
       (a, b) =>
         (a.flow_manager_metadata_id?.flow_manager_order || 0) -
         (b.flow_manager_metadata_id?.flow_manager_order || 0),
-    ),
-);
+    );
+});
 const { data: isItemExpanded } = useLocalStorage<boolean>(
   `settings-collapsed-flow-manager-${props.item.id}`,
   true,
 );
 
-const flowItem = computed(() => item.value as IFlow);
-
-const isActive = computed(() => !isCategory.value && flowItem.value.status === 'active');
+const isActive = computed(() => !isCategory.value && item.value.status === 'active');
 
 const isCategory = computed(() => item.value.type === 'category');
 
@@ -60,7 +65,7 @@ const resolvedColor = computed(() => {
 });
 
 const triggerType = computed(() => {
-  return flowItem.value.trigger?.toUpperCase();
+  return item.value.trigger?.toUpperCase();
 });
 
 const isLocal = computed(() => flowManagerUtils?.selectedCredential?.value === 'local');
@@ -79,16 +84,19 @@ function toggleCollapse() {
 }
 
 function onGroupSortChange(updates: IFlow[]) {
-  flowManagerUtils?.onSort?.(updates, item.value.id);
+  flowManagerUtils?.onSort(updates, item.value.id);
 }
 
 function selectItem() {
   flowManagerUtils?.selectItem?.(item.value);
+  if (isCategory.value) {
+    toggleCollapse();
+  }
 }
 </script>
 
 <template>
-  <div class="row-item">
+  <div class="row-item" :class="{ 'is-category': isCategory }">
     <v-list-item
       block
       dense
@@ -124,43 +132,31 @@ function selectItem() {
       <div v-if="!isCategory && !isActive" class="item-detail">
         <v-badge
           v-if="triggerType"
-          :value="flowItem.flow_manager_metadata_id?.flow_manager_run_counter || 0"
-          :class="{
-            'badge-success': !flowItem.flow_manager_metadata_id?.flow_manager_last_run_message,
-            'badge-error': !!flowItem.flow_manager_metadata_id?.flow_manager_last_run_message,
-          }"
+          :value="item.flow_manager_metadata_id?.flow_manager_run_counter || 0"
+          class="notifications-badge"
         >
-          <v-chip x-small active class="item-name mr-4 trigger-chip is-inactive">{{
-            triggerType
-          }}</v-chip>
+          <v-chip x-small class="item-name text-gray mr-4 trigger-chip">{{ triggerType }}</v-chip>
         </v-badge>
         <span ref="itemName" class="item-name text-gray">{{ item.name }}</span>
-        <span v-if="flowItem.description" class="item-note text-gray">{{
-          flowItem.description
-        }}</span>
+        <span v-if="item.description" class="item-note text-gray">{{ item.description }}</span>
       </div>
       <div v-else class="item-detail">
         <v-badge
           v-if="triggerType"
-          :value="flowItem.flow_manager_metadata_id?.flow_manager_run_counter || 0"
-          :class="{
-            'badge-success': !flowItem.flow_manager_metadata_id?.flow_manager_last_run_message,
-            'badge-error': !!flowItem.flow_manager_metadata_id?.flow_manager_last_run_message,
-          }"
+          :value="item.flow_manager_metadata_id?.flow_manager_run_counter || 0"
+          class="notifications-badge"
         >
-          <v-chip x-small active class="item-name mr-4 trigger-chip">{{ triggerType }}</v-chip>
+          <v-chip x-small active class="item-name mr-4 trigger-chip">{{ triggerType }} </v-chip>
         </v-badge>
         <span ref="itemName" class="item-name">{{ item.name }}</span>
-        <span v-if="!isCategory && flowItem.description" class="item-note">{{
-          flowItem.description
-        }}</span>
+        <span v-if="!isCategory && item.description" class="item-note">{{ item.description }}</span>
       </div>
       <v-icon
         v-if="!isCategory"
         v-tooltip="'Go to Flow'"
         name="open_in_new"
         clickable
-        @click.stop.prevent="() => flowManagerUtils?.goToFlow({ item: flowItem })"
+        @click.stop.prevent="() => flowManagerUtils?.goToFlow({ item })"
       />
       <v-icon
         v-if="nestedFlows?.length"
@@ -172,17 +168,26 @@ function selectItem() {
       <item-options :item="item" :is-local="isLocal" />
     </v-list-item>
 
+
     <transition-expand>
       <draggable
-        v-if="isItemExpanded"
-        :force-fallback="true"
+        v-if="!nestedFlows.length || isItemExpanded"
+        :force-fallback="FORCE_FALLBACK"
+        :fallback-on-body="FALLBACK_ON_BODY"
+        :fallback-tolerance="FALLBACK_TOLERANCE"
+        :empty-insert-threshold="EMPTY_INSERT_THRESHOLD"
+        :invert-swap="INVERT_SWAP"
+        :animation="ANIMATION_DURATION"
+        :easing="EASING"
+        :swap-threshold="SWAP_THRESHOLD"
         :model-value="nestedFlows"
         :group="{ name: 'flows' }"
-        :swap-threshold="0.3"
         class="drag-container"
         item-key="id"
         handle=".drag-handle"
         @update:model-value="onGroupSortChange"
+        @start="onDragStart"
+        @end="onDragEnd"
       >
         <template #item="{ element }">
           <flow-item
@@ -199,7 +204,7 @@ function selectItem() {
 
 <style lang="scss">
 .drag-handle {
-  cursor: move;
+  cursor: grab;
 }
 
 .mr-4 {
@@ -207,12 +212,51 @@ function selectItem() {
 }
 
 .drag-container {
-  margin-top: 8px;
-  margin-left: 20px;
+  margin-top: 4px;
+  margin-left: 24px;
+  padding: 0;
+  min-height: 0;
+  transition: border-color var(--fast, 0.15s) ease, background-color var(--fast, 0.15s) ease;
+
+  > .row-item:last-child {
+    margin-bottom: 0;
+  }
 }
 
-.drag-handle {
-  cursor: grab;
+.drag-container:empty {
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+}
+
+body.is-dragging-flow {
+  cursor: grabbing !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+
+  * {
+    user-select: none !important;
+  }
+
+}
+
+.sortable-fallback {
+  opacity: 0.95 !important;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18), 0 4px 10px rgba(0, 0, 0, 0.08) !important;
+  border-radius: var(--border-radius, 6px) !important;
+  pointer-events: none !important;
+  cursor: grabbing !important;
+  background-color: var(--theme--background, var(--background-normal, #ffffff)) !important;
+  border: 1px solid var(--theme--primary, var(--primary, #6644ff)) !important;
+  height: auto !important;
+  max-height: 320px;
+  margin-bottom: 0 !important;
+  overflow: hidden !important;
+}
+
+.row-item {
+  margin-bottom: 8px;
+  will-change: transform;
 }
 
 .item-name {
@@ -228,10 +272,6 @@ function selectItem() {
   overflow: hidden;
   font-family: var(--family-monospace);
   pointer-events: none;
-}
-
-.row-item {
-  margin-bottom: 8px;
 }
 
 .item-note {
@@ -253,28 +293,7 @@ function selectItem() {
 }
 
 .trigger-chip {
-  --v-chip-color: var(--foreground-inverted, var(--theme--foreground-inverted, #ffffff));
-  --v-chip-background-color: var(--theme--primary);
-  background-color: var(--theme--primary) !important;
-  color: var(--foreground-inverted, var(--theme--foreground-inverted, #ffffff)) !important;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-
-  :deep(*) {
-    color: var(--foreground-inverted, var(--theme--foreground-inverted, #ffffff)) !important;
-  }
-
-  &.is-inactive {
-    opacity: 0.7;
-  }
-}
-
-.badge-error {
-  --v-badge-background-color: #fa284b;
-}
-
-.badge-success {
-  --v-badge-background-color: #4a9e35;
+  --v-chip-color: white;
+  --v-chip-background-color: var(--theme--primary, var(--primary));
 }
 </style>
