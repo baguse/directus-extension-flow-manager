@@ -6,6 +6,8 @@ import { ENDPOINT_EXTENSION_NAME } from '../constants';
 import type { ActivityHistory, IFlow, IOperation } from '../types';
 import { parseDirectusDate } from '../utils/date.util';
 import { useFlowCredentials } from '../composables/use-flow-credentials';
+import FlowTimeTravelPlayer from './components/time-travel/flow-time-travel-player.vue';
+import { buildTimeTravelTraceFromActivity } from '../utils/time-travel-debugger.util';
 
 interface ApiErrorResponse {
   response?: {
@@ -67,8 +69,24 @@ const LIMIT = 10;
 const activeFilter = ref<'all' | 'success' | 'error'>('all');
 const searchQuery = ref('');
 const selectedLog = ref<ActivityHistory | null>(null);
+const drawerMode = ref<'replay' | 'timeline'>('replay');
 const copiedId = ref(false);
 const copySuccessKey = ref<string | null>(null);
+
+const timeTravelTrace = computed(() => {
+  if (!flow.value || !selectedLog.value) return null;
+  return buildTimeTravelTraceFromActivity(flow.value, selectedLog.value);
+});
+
+function openReplay(item: ActivityHistory) {
+  selectedLog.value = item;
+  drawerMode.value = 'replay';
+}
+
+function openTrace(item: ActivityHistory) {
+  selectedLog.value = item;
+  drawerMode.value = 'timeline';
+}
 
 const expandedSections = ref({
   options: false,
@@ -82,7 +100,7 @@ const tableHeaders = [
   { text: 'Execution Time', value: 'date', width: 220 },
   { text: 'Failed Operation', value: 'operation', width: 200 },
   { text: 'Message / Output', value: 'message' },
-  { text: '', value: 'actions', width: 100, align: 'right' },
+  { text: '', value: 'actions', width: 170, align: 'right' },
 ];
 
 const successRate = computed(() => {
@@ -652,7 +670,7 @@ onMounted(() => {
               :headers="tableHeaders"
               class="history-table"
               :active="selectedLog ? [selectedLog.id] : []"
-              @click:row="({ item }: { item: ActivityHistory }) => (selectedLog = item)"
+              @click:row="({ item }: { item: ActivityHistory }) => openReplay(item)"
             >
               <template #[`item.type`]="{ item }">
                 <span :class="['status-badge', item.type]">
@@ -690,16 +708,27 @@ onMounted(() => {
               </template>
 
               <template #[`item.actions`]="{ item }">
-                <v-button
-                  v-tooltip.bottom="'Inspect Execution Trace'"
-                  x-small
-                  secondary
-                  class="inspect-btn"
-                  @click.stop="selectedLog = item"
-                >
-                  <v-icon name="visibility" x-small class="mr-1" />
-                  Trace
-                </v-button>
+                <div class="row-actions">
+                  <v-button
+                    v-tooltip.bottom="'Time-Travel Replay'"
+                    x-small
+                    class="replay-btn"
+                    @click.stop="openReplay(item)"
+                  >
+                    <v-icon name="slow_motion_video" x-small class="mr-1" />
+                    Replay
+                  </v-button>
+                  <v-button
+                    v-tooltip.bottom="'Inspect Execution Trace'"
+                    x-small
+                    secondary
+                    class="inspect-btn"
+                    @click.stop="openTrace(item)"
+                  >
+                    <v-icon name="visibility" x-small class="mr-1" />
+                    Trace
+                  </v-button>
+                </div>
               </template>
             </v-table>
 
@@ -727,16 +756,56 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- 4. Execution Trace Drawer -->
+    <!-- 4. Execution Trace & Time-Travel Drawer -->
     <v-drawer
-      :title="selectedLog ? `Execution Trace (${formatFullDate(selectedLog.date)})` : 'Execution'"
+      :title="
+        selectedLog
+          ? `${drawerMode === 'replay' ? 'Time-Travel Debugger' : 'Execution Trace'} (${formatFullDate(selectedLog.date)})`
+          : 'Execution'
+      "
       :model-value="!!selectedLog"
-      icon="insights"
+      :icon="drawerMode === 'replay' ? 'slow_motion_video' : 'insights'"
       @update:model-value="selectedLog = null"
       @cancel="selectedLog = null"
     >
-      <div v-if="logDetail && selectedLog" class="drawer-body">
-        <!-- Status Alert Banner -->
+      <div v-if="selectedLog" class="drawer-body">
+        <!-- View Mode Switcher -->
+        <div class="drawer-mode-bar">
+          <div class="mode-toggles">
+            <button
+              type="button"
+              class="mode-toggle-btn"
+              :class="{ active: drawerMode === 'replay' }"
+              @click="drawerMode = 'replay'"
+            >
+              <v-icon name="slow_motion_video" small />
+              <span>Time-Travel Replay</span>
+              <span class="mode-badge">Debugger</span>
+            </button>
+            <button
+              type="button"
+              class="mode-toggle-btn"
+              :class="{ active: drawerMode === 'timeline' }"
+              @click="drawerMode = 'timeline'"
+            >
+              <v-icon name="format_list_bulleted" small />
+              <span>Pipeline Timeline</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 4A. Time-Travel Replay Player -->
+        <div v-if="drawerMode === 'replay'" class="player-wrapper">
+          <FlowTimeTravelPlayer
+            v-if="timeTravelTrace"
+            :trace="timeTravelTrace"
+            :flow="flow"
+          />
+        </div>
+
+        <!-- 4B. Classic Timeline View -->
+        <div v-else-if="logDetail" class="classic-timeline-wrapper">
+          <!-- Status Alert Banner -->
         <div :class="['execution-banner', selectedLog.type]">
           <v-icon
             :name="selectedLog.type === 'success' ? 'check_circle' : 'error'"
@@ -921,7 +990,8 @@ onMounted(() => {
           </div>
         </div>
       </div>
-    </v-drawer>
+    </div>
+  </v-drawer>
   </private-view>
 </template>
 
@@ -1607,5 +1677,91 @@ onMounted(() => {
 
 .action-nav-btn {
   margin-left: 6px;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.replay-btn {
+  --v-button-background-color: var(--theme--primary, #6366f1);
+  --v-button-color: #ffffff;
+  font-weight: 600;
+
+  &:hover {
+    --v-button-background-color: #4f46e5;
+  }
+}
+
+.drawer-mode-bar {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.mode-toggles {
+  display: flex;
+  background: var(--theme--background-subdued, #f1f5f9);
+  padding: 3px;
+  border-radius: 8px;
+  border: 1px solid var(--theme--border-color-subdued, #e2e8f0);
+}
+
+.mode-switch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  background: transparent;
+  color: var(--theme--foreground-subdued, #64748b);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+
+  &:hover {
+    color: var(--theme--foreground, #0f172a);
+  }
+
+  &.active {
+    background: var(--theme--background-normal, #ffffff);
+    color: var(--theme--primary, #6366f1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  }
+}
+
+.mode-badge {
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--theme--primary, #6366f1);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.player-wrapper {
+  animation: fadeIn 0.15s ease;
+}
+
+.classic-timeline-wrapper {
+  animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>

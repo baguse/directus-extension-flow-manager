@@ -9,6 +9,8 @@ import {
   type SimulationResult,
   type SimulationStepResult,
 } from '../../../utils/flow-simulator.util';
+import FlowTimeTravelPlayer from '../time-travel/flow-time-travel-player.vue';
+import { buildTimeTravelTraceFromSimulation } from '../../../utils/time-travel-debugger.util';
 
 const props = withDefaults(
   defineProps<{
@@ -35,7 +37,12 @@ const simulationResult = ref<SimulationResult | null>(null);
 const triggerPayloadJson = ref('');
 const payloadError = ref<string | null>(null);
 const selectedStepIndex = ref<number>(1);
-const activeTab = ref<'transit' | 'summary' | 'payload'>('transit');
+const activeTab = ref<'replay' | 'transit' | 'summary' | 'payload'>('transit');
+
+const simulationTimeTravelTrace = computed(() => {
+  if (!simulationResult.value) return null;
+  return buildTimeTravelTraceFromSimulation(simulationResult.value);
+});
 
 const activeCredential = computed<ICredential | null>(() => {
   if (!props.selectedCredential || props.selectedCredential === 'local') return null;
@@ -226,6 +233,15 @@ function getCategoryIcon(category: string): string {
               }}</span>
             </button>
             <button
+              v-if="simulationResult"
+              type="button"
+              :class="['nav-pill', { active: activeTab === 'replay' }]"
+              @click="activeTab = 'replay'"
+            >
+              <v-icon name="slow_motion_video" small class="mr-1" />
+              Time-Travel Replay
+            </button>
+            <button
               type="button"
               :class="['nav-pill', { active: activeTab === 'summary' }]"
               @click="activeTab = 'summary'"
@@ -306,6 +322,15 @@ function getCategoryIcon(category: string): string {
               <div class="kpi-lbl">Execution Time</div>
             </div>
           </div>
+        </div>
+
+        <!-- TAB 0: TIME-TRAVEL REPLAY -->
+        <div v-if="activeTab === 'replay' && simulationResult" class="replay-tab-content">
+          <FlowTimeTravelPlayer
+            v-if="simulationTimeTravelTrace"
+            :trace="simulationTimeTravelTrace"
+            :flow="flow"
+          />
         </div>
 
         <!-- TAB 1: STEP TRANSIT EXPLORER -->
@@ -1310,5 +1335,9 @@ function getCategoryIcon(category: string): string {
   gap: 8px;
   padding: 12px 20px;
   border-top: 1px solid var(--theme--border-color-subdued, #e2e8f0);
+}
+
+.replay-tab-content {
+  padding: 8px 0;
 }
 </style>
