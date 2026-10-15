@@ -459,7 +459,8 @@ function formatValue(val: unknown): string {
         <div v-if="isInspecting" class="state-box inspecting-state">
           <v-progress-linear indeterminate class="mb-3" />
           <div class="inspect-text">
-            Connecting to <strong>{{ selectedItem?.name }}</strong> and comparing flow definitions...
+            Connecting to <strong>{{ selectedItem?.name }}</strong> and comparing flow
+            definitions...
           </div>
         </div>
 
@@ -487,8 +488,8 @@ function formatValue(val: unknown): string {
               <div class="banner-title">New Flow on Remote (No Conflict)</div>
               <div class="banner-desc">
                 Flow <strong>"{{ targetFlow?.name }}"</strong> does not exist on
-                <strong>{{ selectedItem?.name }}</strong>. Pushing will create a new flow with the
-                exact same ID.
+                <strong>{{ selectedItem?.name }}</strong
+                >. Pushing will create a new flow with the exact same ID.
               </div>
             </div>
           </div>
@@ -550,8 +551,8 @@ function formatValue(val: unknown): string {
             <div class="banner-content">
               <div class="banner-title">Differences Detected Between Local & Remote</div>
               <div class="banner-desc">
-                Flow exists on <strong>{{ selectedItem?.name }}</strong>. Select which changes to
-                stage and merge into the remote instance.
+                Flow exists on <strong>{{ selectedItem?.name }}</strong
+                >. Select which changes to stage and merge into the remote instance.
               </div>
             </div>
             <div class="diff-counter-pill">
@@ -593,11 +594,7 @@ function formatValue(val: unknown): string {
           <div v-if="activeTab === 'merge'" class="merge-tab-content">
             <div class="merge-toolbar">
               <div class="merge-quick-btns">
-                <button
-                  type="button"
-                  class="action-link-btn"
-                  @click="toggleAll(!isAllStaged)"
-                >
+                <button type="button" class="action-link-btn" @click="toggleAll(!isAllStaged)">
                   <v-icon :name="isAllStaged ? 'remove_done' : 'done_all'" small class="mr-1" />
                   {{ isAllStaged ? 'Deselect All' : 'Select All Incoming Changes' }}
                 </button>
@@ -623,7 +620,9 @@ function formatValue(val: unknown): string {
             >
               <div class="merge-section-header">
                 <v-icon name="tune" small class="mr-1" />
-                <span class="section-heading">Flow Settings ({{ diffResult.metadataChanges.length }})</span>
+                <span class="section-heading"
+                  >Flow Settings ({{ diffResult.metadataChanges.length }})</span
+                >
               </div>
               <div class="merge-table">
                 <div
@@ -662,21 +661,37 @@ function formatValue(val: unknown): string {
             <div v-if="addedOps.length > 0" class="merge-section">
               <div class="merge-section-header green-header">
                 <v-icon name="add_circle" small class="mr-1" />
-                <span class="section-heading">Operations to Create on Remote (+{{ addedOps.length }})</span>
+                <span class="section-heading"
+                  >Operations to Create on Remote (+{{ addedOps.length }})</span
+                >
               </div>
               <div class="ops-merge-list">
                 <div
                   v-for="op in addedOps"
                   :key="`add-${op.key}`"
                   class="op-merge-item added"
-                  :class="{ staged: stagedCreateOpIds.has(targetFlow?.operations?.find(o => o.key === op.key)?.id || '') }"
-                  @click="toggleCreateOp(targetFlow?.operations?.find(o => o.key === op.key)?.id || '')"
+                  :class="{
+                    staged: stagedCreateOpIds.has(
+                      targetFlow?.operations?.find((o) => o.key === op.key)?.id || '',
+                    ),
+                  }"
+                  @click="
+                    toggleCreateOp(targetFlow?.operations?.find((o) => o.key === op.key)?.id || '')
+                  "
                 >
                   <div class="op-check-col" @click.stop>
                     <input
                       type="checkbox"
-                      :checked="stagedCreateOpIds.has(targetFlow?.operations?.find(o => o.key === op.key)?.id || '')"
-                      @change="toggleCreateOp(targetFlow?.operations?.find(o => o.key === op.key)?.id || '')"
+                      :checked="
+                        stagedCreateOpIds.has(
+                          targetFlow?.operations?.find((o) => o.key === op.key)?.id || '',
+                        )
+                      "
+                      @change="
+                        toggleCreateOp(
+                          targetFlow?.operations?.find((o) => o.key === op.key)?.id || '',
+                        )
+                      "
                     />
                   </div>
                   <span class="op-type-tag added">+ Added</span>
@@ -691,22 +706,38 @@ function formatValue(val: unknown): string {
             <div v-if="modifiedOps.length > 0" class="merge-section">
               <div class="merge-section-header orange-header">
                 <v-icon name="edit" small class="mr-1" />
-                <span class="section-heading">Operations to Update on Remote (~{{ modifiedOps.length }})</span>
+                <span class="section-heading"
+                  >Operations to Update on Remote (~{{ modifiedOps.length }})</span
+                >
               </div>
               <div class="ops-merge-list">
                 <div
                   v-for="op in modifiedOps"
                   :key="`mod-${op.key}`"
                   class="op-merge-item modified"
-                  :class="{ staged: stagedUpdateOpIds.has(targetFlow?.operations?.find(o => o.key === op.key)?.id || '') }"
-                  @click="toggleUpdateOp(targetFlow?.operations?.find(o => o.key === op.key)?.id || '')"
+                  :class="{
+                    staged: stagedUpdateOpIds.has(
+                      targetFlow?.operations?.find((o) => o.key === op.key)?.id || '',
+                    ),
+                  }"
+                  @click="
+                    toggleUpdateOp(targetFlow?.operations?.find((o) => o.key === op.key)?.id || '')
+                  "
                 >
                   <div class="op-main-row">
                     <div class="op-check-col" @click.stop>
                       <input
                         type="checkbox"
-                        :checked="stagedUpdateOpIds.has(targetFlow?.operations?.find(o => o.key === op.key)?.id || '')"
-                        @change="toggleUpdateOp(targetFlow?.operations?.find(o => o.key === op.key)?.id || '')"
+                        :checked="
+                          stagedUpdateOpIds.has(
+                            targetFlow?.operations?.find((o) => o.key === op.key)?.id || '',
+                          )
+                        "
+                        @change="
+                          toggleUpdateOp(
+                            targetFlow?.operations?.find((o) => o.key === op.key)?.id || '',
+                          )
+                        "
                       />
                     </div>
                     <span class="op-type-tag modified">~ Modified</span>
@@ -729,7 +760,9 @@ function formatValue(val: unknown): string {
             <div v-if="removedOps.length > 0" class="merge-section">
               <div class="merge-section-header red-header">
                 <v-icon name="remove_circle" small class="mr-1" />
-                <span class="section-heading">Operations Only on Remote (-{{ removedOps.length }})</span>
+                <span class="section-heading"
+                  >Operations Only on Remote (-{{ removedOps.length }})</span
+                >
               </div>
               <div class="section-hint-box">
                 These operations exist on the remote instance but were removed locally. By default,
@@ -741,14 +774,34 @@ function formatValue(val: unknown): string {
                   v-for="op in removedOps"
                   :key="`rem-${op.key}`"
                   class="op-merge-item removed"
-                  :class="{ staged: stagedDeleteOpIds.has(preflightResult?.remoteFlow?.operations?.find(o => o.key === op.key)?.id || '') }"
-                  @click="toggleDeleteOp(preflightResult?.remoteFlow?.operations?.find(o => o.key === op.key)?.id || '')"
+                  :class="{
+                    staged: stagedDeleteOpIds.has(
+                      preflightResult?.remoteFlow?.operations?.find((o) => o.key === op.key)?.id ||
+                        '',
+                    ),
+                  }"
+                  @click="
+                    toggleDeleteOp(
+                      preflightResult?.remoteFlow?.operations?.find((o) => o.key === op.key)?.id ||
+                        '',
+                    )
+                  "
                 >
                   <div class="op-check-col" @click.stop>
                     <input
                       type="checkbox"
-                      :checked="stagedDeleteOpIds.has(preflightResult?.remoteFlow?.operations?.find(o => o.key === op.key)?.id || '')"
-                      @change="toggleDeleteOp(preflightResult?.remoteFlow?.operations?.find(o => o.key === op.key)?.id || '')"
+                      :checked="
+                        stagedDeleteOpIds.has(
+                          preflightResult?.remoteFlow?.operations?.find((o) => o.key === op.key)
+                            ?.id || '',
+                        )
+                      "
+                      @change="
+                        toggleDeleteOp(
+                          preflightResult?.remoteFlow?.operations?.find((o) => o.key === op.key)
+                            ?.id || '',
+                        )
+                      "
                     />
                   </div>
                   <span class="op-type-tag removed">- Delete from Remote</span>
@@ -825,11 +878,20 @@ function formatValue(val: unknown): string {
               <div class="toolbar-left-stats">
                 <div class="diff-stats-pill">
                   <span class="stat-tag added">+{{ highlightedJsonDiff.stats.addedLines }}</span>
-                  <span class="stat-tag removed">-{{ highlightedJsonDiff.stats.removedLines }}</span>
-                  <span class="stat-tag chunks">{{ totalDiffChunks }} change{{ totalDiffChunks > 1 ? 's' : '' }}</span>
+                  <span class="stat-tag removed"
+                    >-{{ highlightedJsonDiff.stats.removedLines }}</span
+                  >
+                  <span class="stat-tag chunks"
+                    >{{ totalDiffChunks }} change{{ totalDiffChunks > 1 ? 's' : '' }}</span
+                  >
                 </div>
                 <div v-if="totalDiffChunks > 0" class="diff-navigator">
-                  <button type="button" class="nav-btn" title="Previous difference" @click="prevDiff">
+                  <button
+                    type="button"
+                    class="nav-btn"
+                    title="Previous difference"
+                    @click="prevDiff"
+                  >
                     <v-icon name="arrow_upward" small />
                   </button>
                   <span class="nav-counter">{{ currentDiffIndex + 1 }}/{{ totalDiffChunks }}</span>
@@ -909,7 +971,8 @@ function formatValue(val: unknown): string {
                           v-for="(part, pIdx) in row.left.wordParts"
                           :key="pIdx"
                           :class="['word-part', { 'word-changed': part.changed }]"
-                        >{{ part.text }}</span>
+                          >{{ part.text }}</span
+                        >
                       </template>
                       <template v-else>{{ row.left.text }}</template>
                     </span>
@@ -927,7 +990,8 @@ function formatValue(val: unknown): string {
                           v-for="(part, pIdx) in row.right.wordParts"
                           :key="pIdx"
                           :class="['word-part', { 'word-changed': part.changed }]"
-                        >{{ part.text }}</span>
+                          >{{ part.text }}</span
+                        >
                       </template>
                       <template v-else>{{ row.right.text }}</template>
                     </span>
@@ -962,7 +1026,8 @@ function formatValue(val: unknown): string {
                           v-for="(part, pIdx) in uRow.wordParts"
                           :key="pIdx"
                           :class="['word-part', { 'word-changed': part.changed }]"
-                        >{{ part.text }}</span>
+                          >{{ part.text }}</span
+                        >
                       </template>
                       <template v-else>{{ uRow.text }}</template>
                     </span>
@@ -1006,9 +1071,7 @@ function formatValue(val: unknown): string {
             :loading="loading"
             @click="handleConfirmPush(false)"
           >
-            <template v-if="!preflightResult || isInspecting">
-              Push to Cloud
-            </template>
+            <template v-if="!preflightResult || isInspecting"> Push to Cloud </template>
             <template v-else-if="!preflightResult.exists">
               <v-icon name="cloud_upload" left />
               Push & Create on Remote
@@ -2046,7 +2109,6 @@ function formatValue(val: unknown): string {
   background-color: rgba(34, 197, 94, 0.45);
   color: #ffffff;
 }
-
 
 :deep(.v-card-actions.dialog-actions-bar),
 :deep(.v-card-actions),

@@ -200,11 +200,21 @@ async function copySelectedTextToClipboard() {
         <template #[`item.name`]="{ item }">
           <div class="name-cell">
             <span class="flow-name-text">{{ item.name }}</span>
-            <v-chip v-if="item.options?.locked" x-small class="badge-chip locked-chip" title="Safety Lock Active">
+            <v-chip
+              v-if="item.options?.locked"
+              x-small
+              class="badge-chip locked-chip"
+              title="Safety Lock Active"
+            >
               <v-icon name="lock" x-small class="mr-1" />
               Locked
             </v-chip>
-            <v-chip v-if="item.options?.archived" x-small class="badge-chip archived-chip" title="Archived Flow">
+            <v-chip
+              v-if="item.options?.archived"
+              x-small
+              class="badge-chip archived-chip"
+              title="Archived Flow"
+            >
               <v-icon name="archive" x-small class="mr-1" />
               Archived
             </v-chip>
@@ -318,11 +328,7 @@ async function copySelectedTextToClipboard() {
                 </v-list-item-icon>
                 <v-list-item-content> Enable Safety Lock </v-list-item-content>
               </v-list-item>
-              <v-list-item
-                v-else
-                clickable
-                @click="confirmUnlockFlow(item)"
-              >
+              <v-list-item v-else clickable @click="confirmUnlockFlow(item)">
                 <v-list-item-icon>
                   <v-icon name="lock_open" />
                 </v-list-item-icon>
@@ -340,11 +346,7 @@ async function copySelectedTextToClipboard() {
                 </v-list-item-icon>
                 <v-list-item-content> Archive Flow </v-list-item-content>
               </v-list-item>
-              <v-list-item
-                v-else
-                clickable
-                @click="emit('restoreFlow', item)"
-              >
+              <v-list-item v-else clickable @click="emit('restoreFlow', item)">
                 <v-list-item-icon>
                   <v-icon name="unarchive" />
                 </v-list-item-icon>
@@ -512,7 +514,10 @@ async function copySelectedTextToClipboard() {
     </div>
 
     <!-- Unlock Confirmation Dialog -->
-    <v-dialog :model-value="!!unlockFlowTarget" @update:model-value="!$event && (unlockFlowTarget = null)">
+    <v-dialog
+      :model-value="!!unlockFlowTarget"
+      @update:model-value="!$event && (unlockFlowTarget = null)"
+    >
       <v-card v-if="unlockFlowTarget" class="unlock-dialog-card">
         <v-card-title class="dialog-title">
           <v-icon name="lock_open" left />
@@ -520,16 +525,16 @@ async function copySelectedTextToClipboard() {
         </v-card-title>
         <v-card-text>
           <p>
-            Are you sure you want to disable Safety Lock for <strong>{{ unlockFlowTarget.name }}</strong>?
+            Are you sure you want to disable Safety Lock for
+            <strong>{{ unlockFlowTarget.name }}</strong
+            >?
           </p>
           <p class="unlock-subtext">
             Unlocking will allow changes, status updates, and deletions on this flow.
           </p>
         </v-card-text>
         <v-card-actions class="dialog-actions">
-          <v-button secondary @click="unlockFlowTarget = null">
-            Cancel
-          </v-button>
+          <v-button secondary @click="unlockFlowTarget = null"> Cancel </v-button>
           <v-button kind="warning" @click="handleUnlockProceed">
             <v-icon name="lock_open" left />
             Unlock Flow

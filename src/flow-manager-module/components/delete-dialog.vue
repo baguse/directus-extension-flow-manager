@@ -114,7 +114,10 @@ function handleProceed() {
         <!-- Category Delete -->
         <template v-if="isCategory">
           <span>
-            Are you sure you want to delete folder [<span class="bold-text">{{ selectedItem?.name }}</span>]?
+            Are you sure you want to delete folder [<span class="bold-text">{{
+              selectedItem?.name
+            }}</span
+            >]?
           </span>
           <p class="sub-text mt-2">
             Flows inside this folder will not be deleted; they will be moved to the root level.
@@ -125,10 +128,12 @@ function handleProceed() {
         <template v-else-if="!isBatchAction && isSingleLocked">
           <v-notice type="warning" class="mb-3">
             <span class="bold-text">Protected by Safety Lock</span><br />
-            Flow <strong>{{ singleFlow?.name }}</strong> is frozen with Safety Lock. You must unlock it before it can be archived or deleted.
+            Flow <strong>{{ singleFlow?.name }}</strong> is frozen with Safety Lock. You must unlock
+            it before it can be archived or deleted.
           </v-notice>
           <p class="help-text">
-            To unlock this flow, close this dialog, click the <strong>🔒 Locked</strong> toggle in the right sidebar detail, and confirm.
+            To unlock this flow, close this dialog, click the <strong>🔒 Locked</strong> toggle in
+            the right sidebar detail, and confirm.
           </p>
         </template>
 
@@ -136,44 +141,48 @@ function handleProceed() {
         <template v-else-if="!isBatchAction && singleFlow">
           <p class="flow-confirm-text">
             <template v-if="isPermanent">
-              Are you sure you want to <strong class="danger-text">permanently delete</strong> [<strong>{{ singleFlow.name }}</strong>]?
+              Are you sure you want to
+              <strong class="danger-text">permanently delete</strong> [<strong>{{
+                singleFlow.name
+              }}</strong
+              >]?
             </template>
             <template v-else>
-              Move [<strong>{{ singleFlow.name }}</strong>] to the <strong>Archive</strong>?
+              Move [<strong>{{ singleFlow.name }}</strong
+              >] to the <strong>Archive</strong>?
             </template>
           </p>
 
           <v-notice :type="isPermanent ? 'danger' : 'info'" class="mt-3 mb-3">
             <template v-if="isPermanent">
-              This will permanently erase the flow, all its operation steps, and run history from the database. <strong>This action cannot be undone.</strong>
+              This will permanently erase the flow, all its operation steps, and run history from
+              the database. <strong>This action cannot be undone.</strong>
             </template>
             <template v-else>
-              The flow will be deactivated and moved to the <strong>Archive</strong> category. All nodes, history, and triggers are safely preserved and can be restored at any time.
+              The flow will be deactivated and moved to the <strong>Archive</strong> category. All
+              nodes, history, and triggers are safely preserved and can be restored at any time.
             </template>
           </v-notice>
 
           <!-- Checkbox for permanent delete (only if not already archived) -->
           <div v-if="!isAlreadyArchived" class="permanent-checkbox-wrapper">
-            <v-checkbox
-              v-model="isPermanent"
-              label="Delete permanently from database"
-            />
+            <v-checkbox v-model="isPermanent" label="Delete permanently from database" />
           </div>
         </template>
 
         <!-- Batch Action -->
         <template v-else-if="isBatchAction">
           <v-notice v-if="lockedBatchFlows.length" type="warning" class="mb-3">
-            {{ lockedBatchFlows.length }} of {{ selectedFlows?.length }} flow(s) are protected by Safety Lock and will be skipped.
+            {{ lockedBatchFlows.length }} of {{ selectedFlows?.length }} flow(s) are protected by
+            Safety Lock and will be skipped.
           </v-notice>
 
           <p class="flow-confirm-text">
             <template v-if="isPermanent">
-              Are you sure you want to <strong class="danger-text">permanently delete</strong> {{ eligibleBatchFlows.length }} selected flow(s)?
+              Are you sure you want to <strong class="danger-text">permanently delete</strong>
+              {{ eligibleBatchFlows.length }} selected flow(s)?
             </template>
-            <template v-else>
-              Archive {{ eligibleBatchFlows.length }} selected flow(s)?
-            </template>
+            <template v-else> Archive {{ eligibleBatchFlows.length }} selected flow(s)? </template>
           </p>
 
           <v-notice :type="isPermanent ? 'danger' : 'info'" class="mt-3 mb-3">
@@ -181,12 +190,17 @@ function handleProceed() {
               Selected flows and their operations will be completely erased from the database.
             </template>
             <template v-else>
-              Selected flows will be deactivated and moved to the Archive category. You can restore them anytime.
+              Selected flows will be deactivated and moved to the Archive category. You can restore
+              them anytime.
             </template>
           </v-notice>
 
           <v-list class="list-process">
-            <v-list-item v-for="item in selectedFlows" :key="item.id" :class="{ 'locked-item': item.options?.locked }">
+            <v-list-item
+              v-for="item in selectedFlows"
+              :key="item.id"
+              :class="{ 'locked-item': item.options?.locked }"
+            >
               <v-list-item-icon>
                 <v-icon
                   :color="
@@ -207,10 +221,7 @@ function handleProceed() {
           </v-list>
 
           <div class="permanent-checkbox-wrapper mt-3">
-            <v-checkbox
-              v-model="isPermanent"
-              label="Delete permanently from database"
-            />
+            <v-checkbox v-model="isPermanent" label="Delete permanently from database" />
           </div>
         </template>
       </v-card-text>
@@ -228,7 +239,9 @@ function handleProceed() {
           <v-icon :name="isCategory ? 'delete' : isPermanent ? 'delete_forever' : 'archive'" left />
           <template v-if="isCategory">Delete Folder</template>
           <template v-else-if="isPermanent">Delete Permanently</template>
-          <template v-else>Archive Flow{{ isBatchAction && eligibleBatchFlows.length > 1 ? 's' : '' }}</template>
+          <template v-else
+            >Archive Flow{{ isBatchAction && eligibleBatchFlows.length > 1 ? 's' : '' }}</template
+          >
         </v-button>
       </v-card-actions>
     </v-card>

@@ -146,7 +146,10 @@ function computeMyers(a: string[], b: string[], offset: number): RawDiffItem[] {
           if (!prevV) break;
           const currK = currX - currY;
           let prevK: number;
-          if (currK === -step || (currK !== step && (prevV[currK - 1] ?? -1) < (prevV[currK + 1] ?? -1))) {
+          if (
+            currK === -step ||
+            (currK !== step && (prevV[currK - 1] ?? -1) < (prevV[currK + 1] ?? -1))
+          ) {
             prevK = currK + 1;
           } else {
             prevK = currK - 1;

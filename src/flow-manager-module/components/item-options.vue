@@ -53,7 +53,11 @@
           </v-list-item-icon>
           <v-list-item-content> Export for Git </v-list-item-content>
         </v-list-item>
-        <v-list-item :disabled="flowItem.options?.locked" clickable @click="showEditFlowDialog(flowItem)">
+        <v-list-item
+          :disabled="flowItem.options?.locked"
+          clickable
+          @click="showEditFlowDialog(flowItem)"
+        >
           <v-list-item-icon>
             <v-icon name="edit" />
           </v-list-item-icon>
@@ -69,11 +73,7 @@
           </v-list-item-icon>
           <v-list-item-content> Enable Safety Lock </v-list-item-content>
         </v-list-item>
-        <v-list-item
-          v-else
-          clickable
-          @click="showUnlockModal = true"
-        >
+        <v-list-item v-else clickable @click="showUnlockModal = true">
           <v-list-item-icon>
             <v-icon name="lock_open" />
           </v-list-item-icon>
@@ -90,11 +90,7 @@
           </v-list-item-icon>
           <v-list-item-content> Archive Flow </v-list-item-content>
         </v-list-item>
-        <v-list-item
-          v-else
-          clickable
-          @click="handleRestoreFlow(flowItem)"
-        >
+        <v-list-item v-else clickable @click="handleRestoreFlow(flowItem)">
           <v-list-item-icon>
             <v-icon name="unarchive" />
           </v-list-item-icon>
@@ -156,16 +152,15 @@
         </v-card-title>
         <v-card-text>
           <p>
-            Are you sure you want to disable Safety Lock for <strong>{{ flowItem.name }}</strong>?
+            Are you sure you want to disable Safety Lock for <strong>{{ flowItem.name }}</strong
+            >?
           </p>
           <p class="unlock-subtext">
             Unlocking will allow changes, status updates, and deletions on this flow.
           </p>
         </v-card-text>
         <v-card-actions class="dialog-actions">
-          <v-button secondary @click="showUnlockModal = false">
-            Cancel
-          </v-button>
+          <v-button secondary @click="showUnlockModal = false"> Cancel </v-button>
           <v-button kind="warning" @click="handleConfirmUnlock">
             <v-icon name="lock_open" left />
             Unlock Flow

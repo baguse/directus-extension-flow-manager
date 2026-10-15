@@ -331,9 +331,15 @@ function formatValue(val: unknown, field?: string): string {
           <div class="raw-json-toolbar">
             <div class="toolbar-left-stats">
               <div v-if="highlightedDiff.stats.hasChanges" class="diff-stats-pill">
-                <span class="stat-tag added" title="Added lines">+{{ highlightedDiff.stats.addedLines }}</span>
-                <span class="stat-tag removed" title="Removed lines">-{{ highlightedDiff.stats.removedLines }}</span>
-                <span class="stat-tag chunks">{{ totalDiffChunks }} difference{{ totalDiffChunks > 1 ? 's' : '' }}</span>
+                <span class="stat-tag added" title="Added lines"
+                  >+{{ highlightedDiff.stats.addedLines }}</span
+                >
+                <span class="stat-tag removed" title="Removed lines"
+                  >-{{ highlightedDiff.stats.removedLines }}</span
+                >
+                <span class="stat-tag chunks"
+                  >{{ totalDiffChunks }} difference{{ totalDiffChunks > 1 ? 's' : '' }}</span
+                >
               </div>
               <div v-else class="diff-stats-identical">
                 <v-icon name="check_circle" small class="identical-icon" />
@@ -342,21 +348,11 @@ function formatValue(val: unknown, field?: string): string {
 
               <!-- Jump to diff navigation -->
               <div v-if="isHighlightDiffEnabled && totalDiffChunks > 0" class="diff-navigator">
-                <button
-                  type="button"
-                  class="nav-btn"
-                  title="Previous difference"
-                  @click="prevDiff"
-                >
+                <button type="button" class="nav-btn" title="Previous difference" @click="prevDiff">
                   <v-icon name="arrow_upward" small />
                 </button>
                 <span class="nav-counter">{{ currentDiffIndex + 1 }}/{{ totalDiffChunks }}</span>
-                <button
-                  type="button"
-                  class="nav-btn"
-                  title="Next difference"
-                  @click="nextDiff"
-                >
+                <button type="button" class="nav-btn" title="Next difference" @click="nextDiff">
                   <v-icon name="arrow_downward" small />
                 </button>
               </div>
@@ -465,7 +461,8 @@ function formatValue(val: unknown, field?: string): string {
                         v-for="(part, pIdx) in row.left.wordParts"
                         :key="pIdx"
                         :class="['word-part', { 'word-changed': part.changed }]"
-                      >{{ part.text }}</span>
+                        >{{ part.text }}</span
+                      >
                     </template>
                     <template v-else>
                       {{ row.left.text }}
@@ -486,7 +483,8 @@ function formatValue(val: unknown, field?: string): string {
                         v-for="(part, pIdx) in row.right.wordParts"
                         :key="pIdx"
                         :class="['word-part', { 'word-changed': part.changed }]"
-                      >{{ part.text }}</span>
+                        >{{ part.text }}</span
+                      >
                     </template>
                     <template v-else>
                       {{ row.right.text }}
@@ -524,7 +522,8 @@ function formatValue(val: unknown, field?: string): string {
                         v-for="(part, pIdx) in uRow.wordParts"
                         :key="pIdx"
                         :class="['word-part', { 'word-changed': part.changed }]"
-                      >{{ part.text }}</span>
+                        >{{ part.text }}</span
+                      >
                     </template>
                     <template v-else>
                       {{ uRow.text }}

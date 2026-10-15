@@ -310,7 +310,11 @@ function handleSave() {
                 />
                 <div class="status-texts">
                   <div class="status-human-text">
-                    {{ cronState.valid ? cronState.text : (cronState.error || 'Invalid cron expression') }}
+                    {{
+                      cronState.valid
+                        ? cronState.text
+                        : cronState.error || 'Invalid cron expression'
+                    }}
                   </div>
                   <div v-if="cronState.valid && cronState.nextRun" class="status-next-run">
                     Next run: {{ cronState.nextRun }}

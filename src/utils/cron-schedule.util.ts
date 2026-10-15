@@ -163,12 +163,12 @@ export function formatCronToHuman(cronStr?: string | null): string {
   // Parse fields
   const isSixField = parts.length === 6;
   if (parts.length === 5 || isSixField) {
-    const sec = isSixField ? (parts[0] || '') : '';
-    const minute = isSixField ? (parts[1] || '') : (parts[0] || '');
-    const hour = isSixField ? (parts[2] || '') : (parts[1] || '');
-    const dom = isSixField ? (parts[3] || '') : (parts[2] || '');
-    const month = isSixField ? (parts[4] || '') : (parts[3] || '');
-    const dow = isSixField ? (parts[5] || '') : (parts[4] || '');
+    const sec = isSixField ? parts[0] || '' : '';
+    const minute = isSixField ? parts[1] || '' : parts[0] || '';
+    const hour = isSixField ? parts[2] || '' : parts[1] || '';
+    const dom = isSixField ? parts[3] || '' : parts[2] || '';
+    const month = isSixField ? parts[4] || '' : parts[3] || '';
+    const dow = isSixField ? parts[5] || '' : parts[4] || '';
 
     // Build Time Portion
     let timeDesc = '';
@@ -219,7 +219,12 @@ export function formatCronToHuman(cronStr?: string | null): string {
       } else if (minute.includes(',')) {
         const mList = minute.split(',').map((m) => parseInt(m.trim(), 10));
         const hNum = parseInt(hour, 10);
-        if (!isNaN(hNum) && hNum >= 0 && hNum <= 23 && mList.every((m) => !isNaN(m) && m >= 0 && m <= 59)) {
+        if (
+          !isNaN(hNum) &&
+          hNum >= 0 &&
+          hNum <= 23 &&
+          mList.every((m) => !isNaN(m) && m >= 0 && m <= 59)
+        ) {
           timeDesc = `at ${mList.map((m) => formatTime12h(hNum, m)).join(' and ')}`;
         } else {
           timeDesc = `at minute ${minute}`;
@@ -292,7 +297,8 @@ export function formatCronToHuman(cronStr?: string | null): string {
     // Case 5: Specific Day of Month
     if (dom !== '*' && dow === '*' && month === '*') {
       const domNum = parseInt(dom, 10);
-      const domStr = !isNaN(domNum) && domNum >= 1 && domNum <= 31 ? getOrdinal(domNum) : `day ${dom}`;
+      const domStr =
+        !isNaN(domNum) && domNum >= 1 && domNum <= 31 ? getOrdinal(domNum) : `day ${dom}`;
       if (timeDesc.startsWith('at ')) {
         return `Run monthly on the ${domStr} ${timeDesc}`;
       }
@@ -302,9 +308,15 @@ export function formatCronToHuman(cronStr?: string | null): string {
     // Case 6: Specific Month & Day
     if (month !== '*' && dow === '*') {
       const mNum = parseInt(month, 10);
-      const mName = !isNaN(mNum) && mNum >= 1 && mNum <= 12 ? MONTH_NAMES[mNum - 1] : `month ${month}`;
+      const mName =
+        !isNaN(mNum) && mNum >= 1 && mNum <= 12 ? MONTH_NAMES[mNum - 1] : `month ${month}`;
       const domNum = parseInt(dom, 10);
-      const domStr = !isNaN(domNum) && domNum >= 1 && domNum <= 31 ? ` ${getOrdinal(domNum)}` : dom !== '*' ? ` day ${dom}` : '';
+      const domStr =
+        !isNaN(domNum) && domNum >= 1 && domNum <= 31
+          ? ` ${getOrdinal(domNum)}`
+          : dom !== '*'
+            ? ` day ${dom}`
+            : '';
       if (timeDesc.startsWith('at ')) {
         return `Run annually on ${mName}${domStr} ${timeDesc}`;
       }

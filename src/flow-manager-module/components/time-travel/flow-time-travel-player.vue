@@ -44,7 +44,11 @@ function initFrame() {
   }
 }
 
-watch(() => props.trace, () => initFrame(), { immediate: true });
+watch(
+  () => props.trace,
+  () => initFrame(),
+  { immediate: true },
+);
 
 const frames = computed(() => props.trace.frames || []);
 const totalFrames = computed(() => frames.value.length);
@@ -488,7 +492,9 @@ const totalDeltaCount = computed(() => {
         <div class="delta-header">
           <div class="delta-summary">
             <span class="diff-tag added">+{{ currentFrame.delta.added.length }} added</span>
-            <span class="diff-tag modified">~{{ currentFrame.delta.modified.length }} modified</span>
+            <span class="diff-tag modified"
+              >~{{ currentFrame.delta.modified.length }} modified</span
+            >
             <span class="diff-tag removed">-{{ currentFrame.delta.removed.length }} removed</span>
           </div>
           <span class="delta-hint">State changes introduced at this millisecond</span>
@@ -497,12 +503,18 @@ const totalDeltaCount = computed(() => {
         <div v-if="totalDeltaCount === 0" class="empty-state">
           <v-icon name="horizontal_rule" class="empty-icon" />
           <div class="empty-title">No scope mutations</div>
-          <div class="empty-sub">This step did not introduce new keys or alter existing variables in $data.</div>
+          <div class="empty-sub">
+            This step did not introduce new keys or alter existing variables in $data.
+          </div>
         </div>
 
         <div v-else class="delta-list">
           <!-- Added items -->
-          <div v-for="item in currentFrame.delta.added" :key="`add_${item.key}`" class="delta-item added">
+          <div
+            v-for="item in currentFrame.delta.added"
+            :key="`add_${item.key}`"
+            class="delta-item added"
+          >
             <div class="delta-item-head">
               <span class="action-badge add">+ ADDED</span>
               <strong class="delta-key">{{ item.key }}</strong>
@@ -512,14 +524,21 @@ const totalDeltaCount = computed(() => {
                 :title="copySuccessKey === `add_${item.key}` ? 'Copied!' : 'Copy Value'"
                 @click="copyText(formatJson(item.value), `add_${item.key}`)"
               >
-                <v-icon :name="copySuccessKey === `add_${item.key}` ? 'check' : 'content_copy'" x-small />
+                <v-icon
+                  :name="copySuccessKey === `add_${item.key}` ? 'check' : 'content_copy'"
+                  x-small
+                />
               </button>
             </div>
             <pre class="delta-code"><code>{{ formatJson(item.value) }}</code></pre>
           </div>
 
           <!-- Modified items -->
-          <div v-for="item in currentFrame.delta.modified" :key="`mod_${item.key}`" class="delta-item modified">
+          <div
+            v-for="item in currentFrame.delta.modified"
+            :key="`mod_${item.key}`"
+            class="delta-item modified"
+          >
             <div class="delta-item-head">
               <span class="action-badge mod">~ MODIFIED</span>
               <strong class="delta-key">{{ item.key }}</strong>
@@ -537,7 +556,11 @@ const totalDeltaCount = computed(() => {
           </div>
 
           <!-- Removed items -->
-          <div v-for="item in currentFrame.delta.removed" :key="`rem_${item.key}`" class="delta-item removed">
+          <div
+            v-for="item in currentFrame.delta.removed"
+            :key="`rem_${item.key}`"
+            class="delta-item removed"
+          >
             <div class="delta-item-head">
               <span class="action-badge rem">- REMOVED</span>
               <strong class="delta-key">{{ item.key }}</strong>
@@ -580,7 +603,10 @@ const totalDeltaCount = computed(() => {
 
         <div class="last-body" :class="[lastViewMode]">
           <!-- Input $last -->
-          <div v-if="lastViewMode === 'split' || lastViewMode === 'input'" class="last-card input-card">
+          <div
+            v-if="lastViewMode === 'split' || lastViewMode === 'input'"
+            class="last-card input-card"
+          >
             <div class="last-card-head">
               <div class="head-left">
                 <v-icon name="arrow_downward" small />
@@ -599,7 +625,10 @@ const totalDeltaCount = computed(() => {
           </div>
 
           <!-- Output $last -->
-          <div v-if="lastViewMode === 'split' || lastViewMode === 'output'" class="last-card output-card">
+          <div
+            v-if="lastViewMode === 'split' || lastViewMode === 'output'"
+            class="last-card output-card"
+          >
             <div class="last-card-head">
               <div class="head-left">
                 <v-icon name="arrow_upward" small />
@@ -665,7 +694,9 @@ const totalDeltaCount = computed(() => {
           >
             <div class="scope-key-head">
               <span class="key-name">{{ key }}</span>
-              <span v-if="key === currentFrame.stepKey" class="key-pill current-pill">Active Step</span>
+              <span v-if="key === currentFrame.stepKey" class="key-pill current-pill"
+                >Active Step</span
+              >
               <span v-else-if="key === '$last'" class="key-pill last-pill">$last</span>
               <button
                 type="button"
@@ -673,10 +704,15 @@ const totalDeltaCount = computed(() => {
                 :title="copySuccessKey === `scope_${key}` ? 'Copied!' : 'Copy'"
                 @click="copyText(formatJson(currentFrame.afterState.scope[key]), `scope_${key}`)"
               >
-                <v-icon :name="copySuccessKey === `scope_${key}` ? 'check' : 'content_copy'" x-small />
+                <v-icon
+                  :name="copySuccessKey === `scope_${key}` ? 'check' : 'content_copy'"
+                  x-small
+                />
               </button>
             </div>
-            <pre class="scope-code"><code>{{ formatJson(currentFrame.afterState.scope[key]) }}</code></pre>
+            <pre
+              class="scope-code"
+            ><code>{{ formatJson(currentFrame.afterState.scope[key]) }}</code></pre>
           </div>
         </div>
       </div>

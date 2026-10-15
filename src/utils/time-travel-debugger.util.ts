@@ -26,7 +26,8 @@ export interface TimeTravelFrame {
   name: string;
   operationId?: string;
   operationType: string;
-  category: 'trigger' | 'read' | 'mutation' | 'network' | 'logic' | 'transform' | 'control' | 'other';
+  category:
+    'trigger' | 'read' | 'mutation' | 'network' | 'logic' | 'transform' | 'control' | 'other';
   icon: string;
   color?: string | null;
   status: 'trigger' | 'resolve' | 'reject' | 'skipped' | 'intercepted';
@@ -80,11 +81,15 @@ function getOperationCategory(type?: string): TimeTravelFrame['category'] {
   if (!type) return 'other';
   const clean = type.toLowerCase();
   if (clean.includes('read') || clean.includes('item-read')) return 'read';
-  if (clean.includes('create') || clean.includes('update') || clean.includes('delete')) return 'mutation';
-  if (clean.includes('webhook') || clean.includes('request') || clean.includes('mail')) return 'network';
+  if (clean.includes('create') || clean.includes('update') || clean.includes('delete'))
+    return 'mutation';
+  if (clean.includes('webhook') || clean.includes('request') || clean.includes('mail'))
+    return 'network';
   if (clean.includes('condition') || clean.includes('filter')) return 'logic';
-  if (clean.includes('transform') || clean.includes('json') || clean.includes('script')) return 'transform';
-  if (clean.includes('trigger') || clean.includes('flow') || clean.includes('sleep')) return 'control';
+  if (clean.includes('transform') || clean.includes('json') || clean.includes('script'))
+    return 'transform';
+  if (clean.includes('trigger') || clean.includes('flow') || clean.includes('sleep'))
+    return 'control';
   return 'other';
 }
 
@@ -305,13 +310,12 @@ export function buildTimeTravelTraceFromActivity(
 /**
  * Converts a sandbox SimulationResult into a TimeTravelTrace for interactive replay.
  */
-export function buildTimeTravelTraceFromSimulation(
-  simulation: SimulationResult,
-): TimeTravelTrace {
+export function buildTimeTravelTraceFromSimulation(simulation: SimulationResult): TimeTravelTrace {
   const frames: TimeTravelFrame[] = [];
 
   // Frame 0: Trigger
-  const triggerPayload = (simulation.steps[0]?.inputContext?.trigger as Record<string, unknown>) ?? {};
+  const triggerPayload =
+    (simulation.steps[0]?.inputContext?.trigger as Record<string, unknown>) ?? {};
   const triggerScope: Record<string, unknown> = {
     $trigger: triggerPayload,
     $last: triggerPayload,

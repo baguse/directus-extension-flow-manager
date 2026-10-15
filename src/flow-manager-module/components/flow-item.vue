@@ -4,7 +4,16 @@ import { FlowManagerUtilsContext, IFlow, IFolder } from '../../types';
 import Draggable from 'vuedraggable';
 import { useLocalStorage } from '../../composables/use-local-storage';
 import itemOptions from './item-options.vue';
-import { ANIMATION_DURATION, EASING, EMPTY_INSERT_THRESHOLD, FALLBACK_ON_BODY, FALLBACK_TOLERANCE, FORCE_FALLBACK, INVERT_SWAP, SWAP_THRESHOLD } from '../../constants';
+import {
+  ANIMATION_DURATION,
+  EASING,
+  EMPTY_INSERT_THRESHOLD,
+  FALLBACK_ON_BODY,
+  FALLBACK_TOLERANCE,
+  FORCE_FALLBACK,
+  INVERT_SWAP,
+  SWAP_THRESHOLD,
+} from '../../constants';
 import { onDragEnd, onDragStart } from '../../utils/flow-drag.util';
 
 const props = withDefaults(
@@ -139,11 +148,21 @@ function selectItem() {
           <v-chip x-small class="item-name text-gray mr-4 trigger-chip">{{ triggerType }}</v-chip>
         </v-badge>
         <span ref="itemName" class="item-name text-gray">{{ item.name }}</span>
-        <v-chip v-if="item.options?.locked" x-small class="badge-chip locked-chip" title="Safety Lock Active">
+        <v-chip
+          v-if="item.options?.locked"
+          x-small
+          class="badge-chip locked-chip"
+          title="Safety Lock Active"
+        >
           <v-icon name="lock" x-small class="mr-1" />
           Locked
         </v-chip>
-        <v-chip v-if="item.options?.archived" x-small class="badge-chip archived-chip" title="Archived Flow">
+        <v-chip
+          v-if="item.options?.archived"
+          x-small
+          class="badge-chip archived-chip"
+          title="Archived Flow"
+        >
           <v-icon name="archive" x-small class="mr-1" />
           Archived
         </v-chip>
@@ -158,11 +177,21 @@ function selectItem() {
           <v-chip x-small active class="item-name mr-4 trigger-chip">{{ triggerType }} </v-chip>
         </v-badge>
         <span ref="itemName" class="item-name">{{ item.name }}</span>
-        <v-chip v-if="item.options?.locked" x-small class="badge-chip locked-chip" title="Safety Lock Active">
+        <v-chip
+          v-if="item.options?.locked"
+          x-small
+          class="badge-chip locked-chip"
+          title="Safety Lock Active"
+        >
           <v-icon name="lock" x-small class="mr-1" />
           Locked
         </v-chip>
-        <v-chip v-if="item.options?.archived" x-small class="badge-chip archived-chip" title="Archived Flow">
+        <v-chip
+          v-if="item.options?.archived"
+          x-small
+          class="badge-chip archived-chip"
+          title="Archived Flow"
+        >
           <v-icon name="archive" x-small class="mr-1" />
           Archived
         </v-chip>
@@ -184,7 +213,6 @@ function selectItem() {
       />
       <item-options :item="item" :is-local="isLocal" @click.stop />
     </v-list-item>
-
 
     <transition-expand>
       <draggable
@@ -233,7 +261,9 @@ function selectItem() {
   margin-left: 24px;
   padding: 0;
   min-height: 0;
-  transition: border-color var(--fast, 0.15s) ease, background-color var(--fast, 0.15s) ease;
+  transition:
+    border-color var(--fast, 0.15s) ease,
+    background-color var(--fast, 0.15s) ease;
 
   > .row-item:last-child {
     margin-bottom: 0;
@@ -254,12 +284,13 @@ body.is-dragging-flow {
   * {
     user-select: none !important;
   }
-
 }
 
 .sortable-fallback {
   opacity: 0.95 !important;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18), 0 4px 10px rgba(0, 0, 0, 0.08) !important;
+  box-shadow:
+    0 12px 28px rgba(0, 0, 0, 0.18),
+    0 4px 10px rgba(0, 0, 0, 0.08) !important;
   border-radius: var(--border-radius, 6px) !important;
   pointer-events: none !important;
   cursor: grabbing !important;

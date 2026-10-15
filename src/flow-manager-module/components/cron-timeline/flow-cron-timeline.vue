@@ -531,7 +531,11 @@ function handleSimulateFlow(flowItem: ScheduledFlowItem) {
 
         <!-- Category Dropdown -->
         <div
-          v-if="flowCategories.length > 0 || flowsWithChildren.length > 0 || individualScheduledFlows.length > 0"
+          v-if="
+            flowCategories.length > 0 ||
+            flowsWithChildren.length > 0 ||
+            individualScheduledFlows.length > 0
+          "
           class="category-select-wrapper"
         >
           <select v-model="filterCategory" class="native-category-select">

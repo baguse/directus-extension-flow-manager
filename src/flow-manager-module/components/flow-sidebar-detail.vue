@@ -576,16 +576,16 @@ const scheduleInfo = computed(() => {
           </v-card-title>
           <v-card-text>
             <p>
-              Are you sure you want to disable Safety Lock for <strong>{{ selectedFlow.name }}</strong>?
+              Are you sure you want to disable Safety Lock for
+              <strong>{{ selectedFlow.name }}</strong
+              >?
             </p>
             <p class="unlock-subtext">
               Unlocking will allow changes, status updates, and deletions on this flow.
             </p>
           </v-card-text>
           <v-card-actions class="dialog-actions">
-            <v-button secondary @click="showUnlockModal = false">
-              Cancel
-            </v-button>
+            <v-button secondary @click="showUnlockModal = false"> Cancel </v-button>
             <v-button kind="warning" @click="handleConfirmUnlock">
               <v-icon name="lock_open" left />
               Unlock Flow

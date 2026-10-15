@@ -39,9 +39,7 @@ const eligibleBatchFlows = computed(() => {
     );
   }
   if (props.action === 'unarchive') {
-    return flows.filter(
-      (f) => f.options?.locked !== true && f.options?.archived === true,
-    );
+    return flows.filter((f) => f.options?.locked !== true && f.options?.archived === true);
   }
   return flows.filter((f) => f.options?.locked !== true);
 });
@@ -102,17 +100,22 @@ const proceedButtonText = computed(() => {
 
       <v-card-text>
         <v-notice v-if="lockedBatchFlows.length" type="warning" class="mb-3">
-          {{ lockedBatchFlows.length }} of {{ selectedFlows?.length }} flow(s) are protected by Safety Lock and will be skipped.
+          {{ lockedBatchFlows.length }} of {{ selectedFlows?.length }} flow(s) are protected by
+          Safety Lock and will be skipped.
         </v-notice>
 
         <template v-if="eligibleBatchFlows.length === 0">
           <p class="sub-text mt-2">
-            All selected flows are protected by Safety Lock or already in the desired state. No changes will be made.
+            All selected flows are protected by Safety Lock or already in the desired state. No
+            changes will be made.
           </p>
         </template>
         <template v-else>
           <p class="flow-confirm-text">
-            Are you sure you want to {{ actionVerb }} <strong>{{ eligibleBatchFlows.length }}</strong> selected flow{{ eligibleBatchFlows.length > 1 ? 's' : '' }}?
+            Are you sure you want to {{ actionVerb }}
+            <strong>{{ eligibleBatchFlows.length }}</strong> selected flow{{
+              eligibleBatchFlows.length > 1 ? 's' : ''
+            }}?
           </p>
         </template>
 
@@ -137,14 +140,14 @@ const proceedButtonText = computed(() => {
             <v-list-item-content>
               {{ item.name }}
               <span v-if="item.options?.locked" class="locked-tag">(Locked - skipped)</span>
-              <span
-                v-else-if="action === 'active' && item.status === 'active'"
-                class="status-tag"
-              >(Already active)</span>
+              <span v-else-if="action === 'active' && item.status === 'active'" class="status-tag"
+                >(Already active)</span
+              >
               <span
                 v-else-if="action === 'inactive' && item.status === 'inactive'"
                 class="status-tag"
-              >(Already inactive)</span>
+                >(Already inactive)</span
+              >
             </v-list-item-content>
           </v-list-item>
         </v-list>
@@ -154,11 +157,7 @@ const proceedButtonText = computed(() => {
         <v-button secondary :disabled="loading" @click="emit('update:modelValue', false)">
           Cancel
         </v-button>
-        <v-button
-          :disabled="isProceedDisabled"
-          :loading="loading"
-          @click="emit('proceed')"
-        >
+        <v-button :disabled="isProceedDisabled" :loading="loading" @click="emit('proceed')">
           <v-icon :name="dialogIcon" left />
           {{ proceedButtonText }}
         </v-button>

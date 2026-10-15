@@ -268,8 +268,7 @@ export function useFlowActions(options: UseFlowActionsOptions) {
       });
 
       const message =
-        res.data?.message ||
-        `The flow has been pushed to "${credential?.name}" successfully`;
+        res.data?.message || `The flow has been pushed to "${credential?.name}" successfully`;
 
       notificationsStore.add({
         type: 'success',
@@ -278,7 +277,8 @@ export function useFlowActions(options: UseFlowActionsOptions) {
         persist: true,
       });
     } catch (e: unknown) {
-      const errObj = e as { response?: { data?: { error?: string; message?: string } } } | undefined;
+      const errObj = e as
+        { response?: { data?: { error?: string; message?: string } } } | undefined;
       const errRes = errObj?.response?.data?.error || errObj?.response?.data?.message;
       const errorMsg =
         errRes || 'Push to cloud failed. Please check credentials and remote permissions.';
@@ -649,7 +649,10 @@ export function useFlowActions(options: UseFlowActionsOptions) {
         try {
           await saveCategories();
         } catch (err) {
-          console.error('[FLOW MANAGER] Failed to save categories when moving children to root:', err);
+          console.error(
+            '[FLOW MANAGER] Failed to save categories when moving children to root:',
+            err,
+          );
         }
       }
     }
@@ -673,7 +676,8 @@ export function useFlowActions(options: UseFlowActionsOptions) {
 
       for (const child of childFlows) {
         const metaId =
-          typeof child.flow_manager_metadata_id === 'object' && child.flow_manager_metadata_id !== null
+          typeof child.flow_manager_metadata_id === 'object' &&
+          child.flow_manager_metadata_id !== null
             ? (child.flow_manager_metadata_id as { id?: string }).id
             : typeof child.flow_manager_metadata_id === 'string'
               ? child.flow_manager_metadata_id
@@ -698,7 +702,10 @@ export function useFlowActions(options: UseFlowActionsOptions) {
         // Update in local state
         const target = flows.value.find((f) => f.id === child.id);
         if (target) {
-          if (!target.flow_manager_metadata_id || typeof target.flow_manager_metadata_id !== 'object') {
+          if (
+            !target.flow_manager_metadata_id ||
+            typeof target.flow_manager_metadata_id !== 'object'
+          ) {
             target.flow_manager_metadata_id = {
               id: metaId,
               flow_manager_category: undefined,
@@ -712,7 +719,10 @@ export function useFlowActions(options: UseFlowActionsOptions) {
         if (tabularFlows?.value) {
           const tabTarget = tabularFlows.value.find((f) => f.id === child.id);
           if (tabTarget) {
-            if (!tabTarget.flow_manager_metadata_id || typeof tabTarget.flow_manager_metadata_id !== 'object') {
+            if (
+              !tabTarget.flow_manager_metadata_id ||
+              typeof tabTarget.flow_manager_metadata_id !== 'object'
+            ) {
               tabTarget.flow_manager_metadata_id = {
                 id: metaId,
                 flow_manager_category: undefined,

@@ -7,6 +7,7 @@ import { ENDPOINT_EXTENSION_NAME } from '../constants';
 import { useFlowCredentials } from '../composables/use-flow-credentials';
 import { formatConnectionError } from '../utils/error.util';
 import ContentNavigation from './components/navigation.vue';
+import CredentialDialog from './components/credential-dialog.vue';
 
 interface FlowStatItem {
   id: string;
@@ -32,12 +33,36 @@ const settingsStore = useSettingsStore();
 const fieldsStore = useFieldsStore();
 const notificationsStore = useNotificationsStore();
 
-const { credentials, selectedCredential, vaultStatus, serverInfo, getServerInfo } =
-  useFlowCredentials({
-    api,
-    settingsStore,
-    fieldsStore,
-  });
+const {
+  credentials,
+  selectedCredential,
+  vaultStatus,
+  serverInfo,
+  getServerInfo,
+  isVaultOperationLoading,
+  vaultErrorMessage,
+  legacyCredentials,
+  unlockVault,
+  setupVault,
+  changeVaultPin,
+  lockVault,
+} = useFlowCredentials({
+  api,
+  settingsStore,
+  fieldsStore,
+});
+
+const credentialDialog = ref(false);
+
+async function onCredentialDialogClose(val: boolean) {
+  credentialDialog.value = val;
+  if (!val) {
+    await getServerInfo();
+    if (!isLocalInstance.value) {
+      await loadFlows();
+    }
+  }
+}
 
 provide('flowManagerUtils', {
   credentials,
@@ -86,6 +111,13 @@ watch(selectedCredential, async (newVal) => {
 watch([credentials, vaultStatus], () => {
   if (selectedCredential.value !== 'local' && flows.value.length === 0 && !loading.value) {
     loadFlows();
+  }
+});
+
+watch(vaultStatus, async (newStatus, oldStatus) => {
+  if (newStatus === 'unlocked' && oldStatus === 'locked') {
+    await getServerInfo();
+    await loadFlows();
   }
 });
 
@@ -475,6 +507,20 @@ onBeforeUnmount(() => {
 
     <template #actions>
       <v-button
+        v-tooltip.bottom="
+          vaultStatus === 'locked'
+            ? 'Vault Locked — Click to Unlock or Manage Credentials'
+            : 'Remote Directus Credentials'
+        "
+        icon
+        rounded
+        secondary
+        @click="credentialDialog = true"
+      >
+        <v-icon :name="vaultStatus === 'locked' ? 'lock' : 'database'" />
+      </v-button>
+
+      <v-button
         v-tooltip.bottom="'Recalculate Run & Error Counters from Activity Logs'"
         icon
         rounded
@@ -505,15 +551,32 @@ onBeforeUnmount(() => {
           <strong class="remote-name">{{ activeCredential.name }}</strong>
           <code class="remote-url">{{ activeCredential.url }}</code>
         </div>
+        <v-button
+          v-tooltip.bottom="'Edit or Manage Remote Credentials'"
+          x-small
+          secondary
+          class="remote-edit-btn"
+          @click="credentialDialog = true"
+        >
+          <v-icon name="edit" x-small class="mr-1" />
+          Edit Credential
+        </v-button>
       </div>
 
       <div v-if="!isLocalInstance && vaultStatus === 'locked'" class="vault-locked-notice">
         <v-notice type="warning" icon="lock">
-          The Flow Manager Vault is locked. Please unlock the vault in
-          <router-link :to="{ path: '/flow-manager', query: { credential: selectedCredential } }">
-            Flows Directory
-          </router-link>
-          to view analytics for remote instances.
+          <div class="vault-notice-content">
+            <span class="vault-notice-text">
+              The Flow Manager Vault is locked. Unlock the vault to decrypt credentials and view
+              analytics for
+              <strong>{{ activeCredentialName }}</strong
+              >.
+            </span>
+            <v-button small secondary class="unlock-inline-btn" @click="credentialDialog = true">
+              <v-icon name="lock_open" small class="mr-1" />
+              Unlock Vault
+            </v-button>
+          </div>
         </v-notice>
       </div>
 
@@ -829,6 +892,20 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </div>
+
+    <CredentialDialog
+      v-model:credentials="credentials"
+      :value="credentialDialog"
+      :vault-status="vaultStatus"
+      :is-vault-loading="isVaultOperationLoading"
+      :vault-error="vaultErrorMessage"
+      :legacy-credentials="legacyCredentials"
+      :on-unlock-vault="unlockVault"
+      :on-setup-vault="setupVault"
+      :on-change-vault-pin="changeVaultPin"
+      :on-lock-vault="lockVault"
+      @update:model-value="onCredentialDialogClose"
+    />
   </private-view>
 </template>
 
@@ -882,8 +959,36 @@ onBeforeUnmount(() => {
   }
 }
 
+.remote-edit-btn {
+  font-weight: 500;
+}
+
 .vault-locked-notice {
   margin-bottom: 20px;
+
+  .vault-notice-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .vault-notice-text {
+    flex: 1;
+    font-size: 13px;
+  }
+
+  .unlock-inline-btn {
+    --v-button-background-color: var(--theme--warning, #f59e0b);
+    --v-button-color: #ffffff;
+    font-weight: 600;
+
+    &:hover {
+      --v-button-background-color: #d97706;
+    }
+  }
 }
 
 .dashboard-loading {

@@ -40,7 +40,9 @@ const useFields = ({
           if (!existingField) {
             notExistsFields.push(requiredField);
           } else if (existingField.type !== requiredField.type) {
-            if (!(requiredField.type === 'uuid' && ['string', 'uuid'].includes(existingField.type))) {
+            if (!(
+              requiredField.type === 'uuid' && ['string', 'uuid'].includes(existingField.type)
+            )) {
               differentFields.push(requiredField);
             }
           }

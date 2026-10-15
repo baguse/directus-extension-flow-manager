@@ -449,7 +449,14 @@ import { useStores, useApi, useLayout } from '@directus/extensions-sdk';
 import { useRoute, useRouter } from 'vue-router';
 import type { AppCollection, Field } from '@directus/types';
 
-import type { FlowViewMode, FlowsStore, IFlow, IFlowOptions, IFolder, ProcessingItem } from '../types';
+import type {
+  FlowViewMode,
+  FlowsStore,
+  IFlow,
+  IFlowOptions,
+  IFolder,
+  ProcessingItem,
+} from '../types';
 import { ENDPOINT_EXTENSION_NAME, TRIGGER_TYPES } from '../constants';
 
 import { formatDate, formatDateLong } from '../utils/date.util';
@@ -649,11 +656,15 @@ export default defineComponent({
     });
 
     const selectedFlowsActive = computed<IFlow[]>(() => {
-      return selectedFlows.value.filter((flow) => flow.status === 'active' && !flow.options?.archived);
+      return selectedFlows.value.filter(
+        (flow) => flow.status === 'active' && !flow.options?.archived,
+      );
     });
 
     const selectedFlowsInactive = computed<IFlow[]>(() => {
-      return selectedFlows.value.filter((flow) => flow.status === 'inactive' && !flow.options?.archived);
+      return selectedFlows.value.filter(
+        (flow) => flow.status === 'inactive' && !flow.options?.archived,
+      );
     });
 
     const selectedFlowsArchived = computed<IFlow[]>(() => {
@@ -1042,10 +1053,7 @@ export default defineComponent({
         return flows.value.filter((f) => !f.options?.archived);
       }
 
-      return [
-        ...flowCategories.value,
-        ...flows.value.filter((f) => !f.options?.archived),
-      ];
+      return [...flowCategories.value, ...flows.value.filter((f) => !f.options?.archived)];
     });
 
     const {

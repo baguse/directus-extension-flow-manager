@@ -878,8 +878,7 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
     const { flow_manager_metadata_id: _meta, id: _idRule, ...restFilter } = currentFilter;
 
     if (category !== 'all') {
-      const hasChildren =
-        flowChildMap.value[category] && flowChildMap.value[category]!.length > 0;
+      const hasChildren = flowChildMap.value[category] && flowChildMap.value[category]!.length > 0;
       const isFolder = flowCategories.value.some((c) => c.id === category);
 
       if (!isFolder && !hasChildren && flows.value.some((f) => f.id === category)) {

@@ -76,7 +76,9 @@
             <v-icon name="archive" small class="quick-nav-icon" />
             <span class="quick-nav-label">Archive</span>
           </div>
-          <span v-if="archivedFlowsCount > 0" class="quick-nav-counter archive-counter">{{ archivedFlowsCount }}</span>
+          <span v-if="archivedFlowsCount > 0" class="quick-nav-counter archive-counter">{{
+            archivedFlowsCount
+          }}</span>
         </button>
       </div>
 
@@ -152,7 +154,10 @@
     </div>
 
     <!-- Footer Summary Strip -->
-    <div v-if="!hideFlows && (activeFlowsCount > 0 || archivedFlowsCount > 0)" class="sidebar-footer">
+    <div
+      v-if="!hideFlows && (activeFlowsCount > 0 || archivedFlowsCount > 0)"
+      class="sidebar-footer"
+    >
       <span class="footer-count">
         {{ activeFlowsCount }} {{ activeFlowsCount === 1 ? 'flow' : 'flows' }}
         <template v-if="archivedFlowsCount > 0"> ({{ archivedFlowsCount }} archived)</template>

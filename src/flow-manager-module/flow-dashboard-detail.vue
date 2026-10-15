@@ -8,6 +8,7 @@ import { parseDirectusDate } from '../utils/date.util';
 import { useFlowCredentials } from '../composables/use-flow-credentials';
 import FlowTimeTravelPlayer from './components/time-travel/flow-time-travel-player.vue';
 import { buildTimeTravelTraceFromActivity } from '../utils/time-travel-debugger.util';
+import CredentialDialog from './components/credential-dialog.vue';
 
 interface ApiErrorResponse {
   response?: {
@@ -31,11 +32,32 @@ const { useSettingsStore, useFieldsStore } = useStores();
 const settingsStore = useSettingsStore();
 const fieldsStore = useFieldsStore();
 
-const { credentials, selectedCredential, vaultStatus } = useFlowCredentials({
+const {
+  credentials,
+  selectedCredential,
+  vaultStatus,
+  isVaultOperationLoading,
+  vaultErrorMessage,
+  legacyCredentials,
+  unlockVault,
+  setupVault,
+  changeVaultPin,
+  lockVault,
+} = useFlowCredentials({
   api,
   settingsStore,
   fieldsStore,
 });
+
+const credentialDialog = ref(false);
+
+async function onCredentialDialogClose(val: boolean) {
+  credentialDialog.value = val;
+  if (!val && !isLocalInstance.value) {
+    await loadFlow();
+    await loadActivityHistories();
+  }
+}
 
 if (route.query.credential && typeof route.query.credential === 'string') {
   selectedCredential.value = route.query.credential;
@@ -427,7 +449,15 @@ watch(
 
 watch([credentials, vaultStatus], () => {
   if (selectedCredential.value !== 'local' && !flow.value && !loading.value) {
+    loadFlow();
     loadActivityHistories();
+  }
+});
+
+watch(vaultStatus, async (newStatus, oldStatus) => {
+  if (newStatus === 'unlocked' && oldStatus === 'locked') {
+    await loadFlow();
+    await loadActivityHistories();
   }
 });
 
@@ -455,6 +485,27 @@ onMounted(() => {
     </template>
 
     <template #actions>
+      <v-button
+        v-tooltip.bottom="
+          vaultStatus === 'locked'
+            ? 'Vault Locked — Click to Unlock or Manage Credentials'
+            : 'Remote Directus Credentials'
+        "
+        rounded
+        secondary
+        class="credential-action-btn mr-1"
+        :class="{ 'vault-locked-btn': vaultStatus === 'locked' }"
+        @click="credentialDialog = true"
+      >
+        <v-icon
+          :name="vaultStatus === 'locked' ? 'lock' : 'database'"
+          small
+          class="mr-1"
+          :class="{ 'locked-icon': vaultStatus === 'locked' }"
+        />
+        <span>{{ vaultStatus === 'locked' ? 'Unlock Vault' : 'Credentials' }}</span>
+      </v-button>
+
       <v-button
         v-tooltip.bottom="'Refresh Activity'"
         icon
@@ -491,7 +542,15 @@ onMounted(() => {
 
       <div v-else-if="error" class="error-state">
         <v-notice type="danger" :title="error">
-          Could not retrieve activity history for this flow.
+          <div class="error-notice-content">
+            <div>Could not retrieve activity history for this flow.</div>
+            <div v-if="vaultStatus === 'locked'" class="mt-2">
+              <v-button small secondary class="unlock-inline-btn" @click="credentialDialog = true">
+                <v-icon name="lock_open" small class="mr-1" />
+                Unlock Vault
+              </v-button>
+            </div>
+          </div>
         </v-notice>
         <v-button
           class="mt-4"
@@ -796,193 +855,192 @@ onMounted(() => {
 
         <!-- 4A. Time-Travel Replay Player -->
         <div v-if="drawerMode === 'replay'" class="player-wrapper">
-          <FlowTimeTravelPlayer
-            v-if="timeTravelTrace"
-            :trace="timeTravelTrace"
-            :flow="flow"
-          />
+          <FlowTimeTravelPlayer v-if="timeTravelTrace" :trace="timeTravelTrace" :flow="flow" />
         </div>
 
         <!-- 4B. Classic Timeline View -->
         <div v-else-if="logDetail" class="classic-timeline-wrapper">
           <!-- Status Alert Banner -->
-        <div :class="['execution-banner', selectedLog.type]">
-          <v-icon
-            :name="selectedLog.type === 'success' ? 'check_circle' : 'error'"
-            class="banner-status-icon"
-          />
-          <div class="banner-status-text">
-            <div class="banner-title">
-              {{
-                selectedLog.type === 'success' ? 'Flow Execution Passed' : 'Flow Execution Failed'
-              }}
-            </div>
-            <div v-if="selectedLog.message" class="banner-msg">
-              {{ selectedLog.message }}
-            </div>
-            <div v-if="selectedLog.operation" class="banner-op">
-              Failed at step: <strong>{{ selectedLog.operation }}</strong>
-            </div>
-          </div>
-        </div>
-
-        <!-- Pipeline Timeline -->
-        <div class="timeline-container">
-          <div class="timeline-title">
-            <v-icon name="alt_route" small class="mr-1" />
-            Execution Pipeline Steps
-          </div>
-
-          <!-- Step 0: Trigger -->
-          <div class="timeline-step trigger-step">
-            <div class="step-marker passed">
-              <v-icon name="bolt" small />
-            </div>
-            <div class="step-card">
-              <div class="step-card-header">
-                <span class="step-badge trigger">TRIGGER</span>
-                <span class="step-name">{{ formatTriggerType(logDetail.trigger.type) }}</span>
+          <div :class="['execution-banner', selectedLog.type]">
+            <v-icon
+              :name="selectedLog.type === 'success' ? 'check_circle' : 'error'"
+              class="banner-status-icon"
+            />
+            <div class="banner-status-text">
+              <div class="banner-title">
+                {{
+                  selectedLog.type === 'success' ? 'Flow Execution Passed' : 'Flow Execution Failed'
+                }}
               </div>
+              <div v-if="selectedLog.message" class="banner-msg">
+                {{ selectedLog.message }}
+              </div>
+              <div v-if="selectedLog.operation" class="banner-op">
+                Failed at step: <strong>{{ selectedLog.operation }}</strong>
+              </div>
+            </div>
+          </div>
 
-              <!-- Trigger Collapsible Sections -->
-              <div class="collapsible-group">
-                <div class="collapsible-box">
-                  <div
-                    class="collapsible-bar"
-                    @click="expandedSections.payload = !expandedSections.payload"
-                  >
-                    <v-icon :name="expandedSections.payload ? 'expand_more' : 'chevron_right'" />
-                    <span>Trigger Payload ($trigger)</span>
-                  </div>
-                  <div v-if="expandedSections.payload" class="code-view">
-                    <button
-                      type="button"
-                      class="code-copy-btn"
-                      :title="copySuccessKey === 'trigger_payload' ? 'Copied!' : 'Copy JSON'"
-                      @click.stop="
-                        copyText(formatJSON(logDetail.trigger.payload), 'trigger_payload')
-                      "
-                    >
-                      <v-icon
-                        :name="copySuccessKey === 'trigger_payload' ? 'check' : 'content_copy'"
-                        x-small
-                      />
-                    </button>
-                    <pre
-                      class="code-content"
-                    ><code>{{ formatJSON(logDetail.trigger.payload) }}</code></pre>
-                  </div>
+          <!-- Pipeline Timeline -->
+          <div class="timeline-container">
+            <div class="timeline-title">
+              <v-icon name="alt_route" small class="mr-1" />
+              Execution Pipeline Steps
+            </div>
+
+            <!-- Step 0: Trigger -->
+            <div class="timeline-step trigger-step">
+              <div class="step-marker passed">
+                <v-icon name="bolt" small />
+              </div>
+              <div class="step-card">
+                <div class="step-card-header">
+                  <span class="step-badge trigger">TRIGGER</span>
+                  <span class="step-name">{{ formatTriggerType(logDetail.trigger.type) }}</span>
                 </div>
 
-                <div class="collapsible-box">
-                  <div
-                    class="collapsible-bar"
-                    @click="expandedSections.accountability = !expandedSections.accountability"
-                  >
-                    <v-icon
-                      :name="expandedSections.accountability ? 'expand_more' : 'chevron_right'"
-                    />
-                    <span>Accountability ($accountability)</span>
-                  </div>
-                  <div v-if="expandedSections.accountability" class="code-view">
-                    <button
-                      type="button"
-                      class="code-copy-btn"
-                      :title="copySuccessKey === 'trigger_accountability' ? 'Copied!' : 'Copy JSON'"
-                      @click.stop="
-                        copyText(
-                          formatJSON(logDetail.trigger.accountability),
-                          'trigger_accountability',
-                        )
-                      "
+                <!-- Trigger Collapsible Sections -->
+                <div class="collapsible-group">
+                  <div class="collapsible-box">
+                    <div
+                      class="collapsible-bar"
+                      @click="expandedSections.payload = !expandedSections.payload"
                     >
+                      <v-icon :name="expandedSections.payload ? 'expand_more' : 'chevron_right'" />
+                      <span>Trigger Payload ($trigger)</span>
+                    </div>
+                    <div v-if="expandedSections.payload" class="code-view">
+                      <button
+                        type="button"
+                        class="code-copy-btn"
+                        :title="copySuccessKey === 'trigger_payload' ? 'Copied!' : 'Copy JSON'"
+                        @click.stop="
+                          copyText(formatJSON(logDetail.trigger.payload), 'trigger_payload')
+                        "
+                      >
+                        <v-icon
+                          :name="copySuccessKey === 'trigger_payload' ? 'check' : 'content_copy'"
+                          x-small
+                        />
+                      </button>
+                      <pre
+                        class="code-content"
+                      ><code>{{ formatJSON(logDetail.trigger.payload) }}</code></pre>
+                    </div>
+                  </div>
+
+                  <div class="collapsible-box">
+                    <div
+                      class="collapsible-bar"
+                      @click="expandedSections.accountability = !expandedSections.accountability"
+                    >
+                      <v-icon
+                        :name="expandedSections.accountability ? 'expand_more' : 'chevron_right'"
+                      />
+                      <span>Accountability ($accountability)</span>
+                    </div>
+                    <div v-if="expandedSections.accountability" class="code-view">
+                      <button
+                        type="button"
+                        class="code-copy-btn"
+                        :title="
+                          copySuccessKey === 'trigger_accountability' ? 'Copied!' : 'Copy JSON'
+                        "
+                        @click.stop="
+                          copyText(
+                            formatJSON(logDetail.trigger.accountability),
+                            'trigger_accountability',
+                          )
+                        "
+                      >
+                        <v-icon
+                          :name="
+                            copySuccessKey === 'trigger_accountability' ? 'check' : 'content_copy'
+                          "
+                          x-small
+                        />
+                      </button>
+                      <pre
+                        class="code-content"
+                      ><code>{{ formatJSON(logDetail.trigger.accountability) }}</code></pre>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Pipeline Execution Steps -->
+            <div
+              v-for="(step, sIdx) in logDetail.steps"
+              :key="step.key || sIdx"
+              :class="['timeline-step', step.status === 'reject' ? 'failed-step' : 'passed-step']"
+            >
+              <div :class="['step-marker', step.status === 'reject' ? 'failed' : 'passed']">
+                <v-icon :name="step.status === 'reject' ? 'close' : 'check'" small />
+              </div>
+
+              <div class="step-card">
+                <div class="step-card-header">
+                  <span :class="['step-badge', step.status === 'reject' ? 'rejected' : 'resolved']">
+                    {{ step.status === 'reject' ? 'FAILED' : 'PASSED' }}
+                  </span>
+                  <span class="step-name">{{ step.operation?.name || step.key }}</span>
+                  <code class="step-key">[{{ step.key }}]</code>
+                  <span v-if="step.operation?.type" class="step-kind">
+                    {{ formatStepType(step.operation.type) }}
+                  </span>
+                </div>
+
+                <!-- Step Collapsible Details -->
+                <div class="collapsible-group">
+                  <div class="collapsible-box">
+                    <div class="collapsible-bar" @click="toggleStepSection(sIdx, 'options')">
                       <v-icon
                         :name="
-                          copySuccessKey === 'trigger_accountability' ? 'check' : 'content_copy'
+                          isStepSectionExpanded(sIdx, 'options') ? 'expand_more' : 'chevron_right'
                         "
-                        x-small
                       />
-                    </button>
-                    <pre
-                      class="code-content"
-                    ><code>{{ formatJSON(logDetail.trigger.accountability) }}</code></pre>
+                      <span>Operation Options</span>
+                    </div>
+                    <div v-if="isStepSectionExpanded(sIdx, 'options')" class="code-view">
+                      <button
+                        type="button"
+                        class="code-copy-btn"
+                        :title="copySuccessKey === `step_${sIdx}_opt` ? 'Copied!' : 'Copy JSON'"
+                        @click.stop="copyText(formatJSON(step.options), `step_${sIdx}_opt`)"
+                      >
+                        <v-icon
+                          :name="copySuccessKey === `step_${sIdx}_opt` ? 'check' : 'content_copy'"
+                          x-small
+                        />
+                      </button>
+                      <pre class="code-content"><code>{{ formatJSON(step.options) }}</code></pre>
+                    </div>
                   </div>
-                </div>
-              </div>
-            </div>
-          </div>
 
-          <!-- Pipeline Execution Steps -->
-          <div
-            v-for="(step, sIdx) in logDetail.steps"
-            :key="step.key || sIdx"
-            :class="['timeline-step', step.status === 'reject' ? 'failed-step' : 'passed-step']"
-          >
-            <div :class="['step-marker', step.status === 'reject' ? 'failed' : 'passed']">
-              <v-icon :name="step.status === 'reject' ? 'close' : 'check'" small />
-            </div>
-
-            <div class="step-card">
-              <div class="step-card-header">
-                <span :class="['step-badge', step.status === 'reject' ? 'rejected' : 'resolved']">
-                  {{ step.status === 'reject' ? 'FAILED' : 'PASSED' }}
-                </span>
-                <span class="step-name">{{ step.operation?.name || step.key }}</span>
-                <code class="step-key">[{{ step.key }}]</code>
-                <span v-if="step.operation?.type" class="step-kind">
-                  {{ formatStepType(step.operation.type) }}
-                </span>
-              </div>
-
-              <!-- Step Collapsible Details -->
-              <div class="collapsible-group">
-                <div class="collapsible-box">
-                  <div class="collapsible-bar" @click="toggleStepSection(sIdx, 'options')">
-                    <v-icon
-                      :name="
-                        isStepSectionExpanded(sIdx, 'options') ? 'expand_more' : 'chevron_right'
-                      "
-                    />
-                    <span>Operation Options</span>
-                  </div>
-                  <div v-if="isStepSectionExpanded(sIdx, 'options')" class="code-view">
-                    <button
-                      type="button"
-                      class="code-copy-btn"
-                      :title="copySuccessKey === `step_${sIdx}_opt` ? 'Copied!' : 'Copy JSON'"
-                      @click.stop="copyText(formatJSON(step.options), `step_${sIdx}_opt`)"
-                    >
+                  <div class="collapsible-box">
+                    <div class="collapsible-bar" @click="toggleStepSection(sIdx, 'payload')">
                       <v-icon
-                        :name="copySuccessKey === `step_${sIdx}_opt` ? 'check' : 'content_copy'"
-                        x-small
+                        :name="
+                          isStepSectionExpanded(sIdx, 'payload') ? 'expand_more' : 'chevron_right'
+                        "
                       />
-                    </button>
-                    <pre class="code-content"><code>{{ formatJSON(step.options) }}</code></pre>
-                  </div>
-                </div>
-
-                <div class="collapsible-box">
-                  <div class="collapsible-bar" @click="toggleStepSection(sIdx, 'payload')">
-                    <v-icon
-                      :name="
-                        isStepSectionExpanded(sIdx, 'payload') ? 'expand_more' : 'chevron_right'
-                      "
-                    />
-                    <span>Step Output / Payload</span>
-                  </div>
-                  <div v-if="isStepSectionExpanded(sIdx, 'payload')" class="code-view">
-                    <button
-                      type="button"
-                      class="code-copy-btn"
-                      :title="copySuccessKey === `step_${sIdx}_pay` ? 'Copied!' : 'Copy JSON'"
-                      @click.stop="copyText(formatJSON(step.payload), `step_${sIdx}_pay`)"
-                    >
-                      <v-icon
-                        :name="copySuccessKey === `step_${sIdx}_pay` ? 'check' : 'content_copy'"
-                        x-small
-                      />
-                    </button>
-                    <pre class="code-content"><code>{{ formatJSON(step.payload) }}</code></pre>
+                      <span>Step Output / Payload</span>
+                    </div>
+                    <div v-if="isStepSectionExpanded(sIdx, 'payload')" class="code-view">
+                      <button
+                        type="button"
+                        class="code-copy-btn"
+                        :title="copySuccessKey === `step_${sIdx}_pay` ? 'Copied!' : 'Copy JSON'"
+                        @click.stop="copyText(formatJSON(step.payload), `step_${sIdx}_pay`)"
+                      >
+                        <v-icon
+                          :name="copySuccessKey === `step_${sIdx}_pay` ? 'check' : 'content_copy'"
+                          x-small
+                        />
+                      </button>
+                      <pre class="code-content"><code>{{ formatJSON(step.payload) }}</code></pre>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -990,8 +1048,21 @@ onMounted(() => {
           </div>
         </div>
       </div>
-    </div>
-  </v-drawer>
+    </v-drawer>
+
+    <CredentialDialog
+      v-model:credentials="credentials"
+      :value="credentialDialog"
+      :vault-status="vaultStatus"
+      :is-vault-loading="isVaultOperationLoading"
+      :vault-error="vaultErrorMessage"
+      :legacy-credentials="legacyCredentials"
+      :on-unlock-vault="unlockVault"
+      :on-setup-vault="setupVault"
+      :on-change-vault-pin="changeVaultPin"
+      :on-lock-vault="lockVault"
+      @update:model-value="onCredentialDialogClose"
+    />
   </private-view>
 </template>
 
@@ -1763,5 +1834,38 @@ onMounted(() => {
     opacity: 1;
     transform: translateY(0);
   }
+}
+.credential-action-btn {
+  font-weight: 600;
+
+  &.vault-locked-btn {
+    --v-button-color: var(--theme--warning, #f59e0b);
+    border-color: rgba(245, 158, 11, 0.4);
+    background-color: rgba(245, 158, 11, 0.08);
+
+    &:hover {
+      background-color: rgba(245, 158, 11, 0.15);
+    }
+  }
+
+  .locked-icon {
+    color: var(--theme--warning, #f59e0b);
+  }
+}
+
+.unlock-inline-btn {
+  --v-button-background-color: var(--theme--warning, #f59e0b);
+  --v-button-color: #ffffff;
+  font-weight: 600;
+
+  &:hover {
+    --v-button-background-color: #d97706;
+  }
+}
+
+.error-notice-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 </style>

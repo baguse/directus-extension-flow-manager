@@ -7,8 +7,7 @@ type ExceptionConstructor = new (message: string) => Error;
 export default defineHook(({ action, filter }, context) => {
   const { services, env } = context;
   const exceptions = (context as Record<string, unknown>).exceptions as
-    | Record<string, ExceptionConstructor>
-    | undefined;
+    Record<string, ExceptionConstructor> | undefined;
   // Safety Lock: Prevent deletion of locked flows if enforcement is enabled
   filter('flows.delete', async (keys: string[], _meta, { database }) => {
     const rawVal =
