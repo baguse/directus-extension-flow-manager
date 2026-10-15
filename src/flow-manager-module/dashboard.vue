@@ -56,9 +56,9 @@ const credentialDialog = ref(false);
 
 async function onCredentialDialogClose(val: boolean) {
   credentialDialog.value = val;
-  if (!val) {
-    await getServerInfo();
-    if (!isLocalInstance.value) {
+  if (!val && vaultStatus.value === 'unlocked') {
+    if (!isLocalInstance.value && flows.value.length === 0) {
+      getServerInfo();
       await loadFlows();
     }
   }
@@ -68,6 +68,15 @@ provide('flowManagerUtils', {
   credentials,
   selectedCredential,
   setCredential: (cred: string) => {
+    // If the vault is locked, prevent automatic drops/resets to 'local'
+    if (
+      vaultStatus.value === 'locked' &&
+      (!cred || cred === 'local') &&
+      selectedCredential.value &&
+      selectedCredential.value !== 'local'
+    ) {
+      return;
+    }
     selectedCredential.value = cred;
   },
 });
@@ -104,20 +113,35 @@ watch(selectedCredential, async (newVal) => {
     delete query.credential;
   }
   router.replace({ query });
-  await getServerInfo();
+  getServerInfo();
   await loadFlows();
-});
-
-watch([credentials, vaultStatus], () => {
-  if (selectedCredential.value !== 'local' && flows.value.length === 0 && !loading.value) {
-    loadFlows();
-  }
 });
 
 watch(vaultStatus, async (newStatus, oldStatus) => {
   if (newStatus === 'unlocked' && oldStatus === 'locked') {
-    await getServerInfo();
+    const queryCred = route.query.credential as string | undefined;
+    if (queryCred && queryCred !== 'local' && selectedCredential.value !== queryCred) {
+      const match = credentials.value.find((c) => c.id === queryCred);
+      if (match) {
+        selectedCredential.value = queryCred;
+        return;
+      }
+    }
+    getServerInfo();
     await loadFlows();
+  } else if (newStatus === 'locked') {
+    if (!isLocalInstance.value) {
+      flows.value = [];
+    }
+  }
+});
+
+watch(credentials, async () => {
+  if (vaultStatus.value === 'unlocked' && !isLocalInstance.value) {
+    if (flows.value.length === 0 && !loading.value) {
+      getServerInfo();
+      await loadFlows();
+    }
   }
 });
 
@@ -389,44 +413,93 @@ function mapRawFlows(rawList: Record<string, unknown>[]): FlowStatItem[] {
   });
 }
 
-async function loadFlows() {
-  loading.value = true;
-  try {
-    if (isLocalInstance.value) {
-      const { data } = await api.get<{ data: Record<string, unknown>[] }>('/flows', {
-        params: {
-          fields:
-            'id,name,icon,color,status,trigger,flow_manager_metadata_id.flow_manager_run_counter,flow_manager_metadata_id.flow_manager_success_counter,flow_manager_metadata_id.flow_manager_error_counter,flow_manager_metadata_id.flow_manager_last_run_at,flow_manager_metadata_id.flow_manager_last_run_message,flow_manager_metadata_id.flow_manager_last_run_operation',
-          limit: -1,
-        },
-      });
-      flows.value = mapRawFlows(data.data ?? []);
-    } else {
-      const cred = activeCredential.value;
-      if (!cred) {
-        flows.value = [];
-        return;
-      }
-      const { data } = await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
-        url: `${cred.url}/flows?fields=id,name,icon,color,status,trigger,flow_manager_metadata_id.flow_manager_run_counter,flow_manager_metadata_id.flow_manager_success_counter,flow_manager_metadata_id.flow_manager_error_counter,flow_manager_metadata_id.flow_manager_last_run_at,flow_manager_metadata_id.flow_manager_last_run_message,flow_manager_metadata_id.flow_manager_last_run_operation&limit=-1`,
-        staticToken: cred.staticToken,
-        method: 'GET',
-      });
-      const rawData = (data?.data ?? data) as Record<string, unknown>[];
-      flows.value = mapRawFlows(Array.isArray(rawData) ? rawData : []);
-    }
-  } catch (err: unknown) {
-    flows.value = [];
-    const errorMsg = formatConnectionError(err, 'Failed to load flow analytics.');
-    notificationsStore.add({
-      type: 'error',
-      title: 'Analytics Load Failed',
-      text: errorMsg,
-      closeable: true,
-    });
-  } finally {
-    loading.value = false;
+let activeLoadPromise: Promise<void> | null = null;
+let activeLoadTarget = '';
+
+async function loadFlows(): Promise<void> {
+  const targetInstance = selectedCredential.value || 'local';
+  if (activeLoadPromise && activeLoadTarget === targetInstance) {
+    return activeLoadPromise;
   }
+  activeLoadTarget = targetInstance;
+  activeLoadPromise = (async () => {
+    loading.value = true;
+    try {
+      if (isLocalInstance.value) {
+        const { data } = await api.get<{ data: Record<string, unknown>[] }>('/flows', {
+          params: {
+            fields:
+              'id,name,icon,color,status,trigger,flow_manager_metadata_id.flow_manager_run_counter,flow_manager_metadata_id.flow_manager_success_counter,flow_manager_metadata_id.flow_manager_error_counter,flow_manager_metadata_id.flow_manager_last_run_at,flow_manager_metadata_id.flow_manager_last_run_message,flow_manager_metadata_id.flow_manager_last_run_operation',
+            limit: -1,
+          },
+        });
+        flows.value = mapRawFlows(data?.data ?? []);
+      } else {
+        let cred = activeCredential.value;
+        if (!cred && selectedCredential.value && selectedCredential.value !== 'local') {
+          cred = credentials.value.find((c) => c.id === selectedCredential.value);
+        }
+        if (!cred && route.query.credential && route.query.credential !== 'local') {
+          cred = credentials.value.find((c) => c.id === (route.query.credential as string));
+          if (cred) {
+            selectedCredential.value = cred.id;
+          }
+        }
+        if (!cred) {
+          if (vaultStatus.value === 'locked') {
+            return;
+          }
+          flows.value = [];
+          return;
+        }
+        const res = await api.post<unknown>(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+          url: `${cred.url}/flows?fields=id,name,icon,color,status,trigger,flow_manager_metadata_id.flow_manager_run_counter,flow_manager_metadata_id.flow_manager_success_counter,flow_manager_metadata_id.flow_manager_error_counter,flow_manager_metadata_id.flow_manager_last_run_at,flow_manager_metadata_id.flow_manager_last_run_message,flow_manager_metadata_id.flow_manager_last_run_operation&limit=-1`,
+          staticToken: cred.staticToken,
+          method: 'GET',
+        });
+
+        let rawData = res.data;
+        if (typeof rawData === 'string') {
+          try {
+            rawData = JSON.parse(rawData);
+          } catch {
+            // ignore
+          }
+        }
+
+        let rawList: Record<string, unknown>[] = [];
+        if (Array.isArray(rawData)) {
+          rawList = rawData as Record<string, unknown>[];
+        } else if (rawData && typeof rawData === 'object') {
+          const nestedData = (rawData as Record<string, unknown>).data;
+          if (Array.isArray(nestedData)) {
+            rawList = nestedData as Record<string, unknown>[];
+          } else if (nestedData && typeof nestedData === 'object') {
+            const doubleNested = (nestedData as Record<string, unknown>).data;
+            if (Array.isArray(doubleNested)) {
+              rawList = doubleNested as Record<string, unknown>[];
+            }
+          }
+        }
+        flows.value = mapRawFlows(rawList);
+      }
+    } catch (err: unknown) {
+      flows.value = [];
+      const errorMsg = formatConnectionError(err, 'Failed to load flow analytics.');
+      notificationsStore.add({
+        type: 'error',
+        title: 'Analytics Load Failed',
+        text: errorMsg,
+        closeable: true,
+      });
+    } finally {
+      loading.value = false;
+    }
+  })().finally(() => {
+    activeLoadPromise = null;
+  });
+
+  return activeLoadPromise;
 }
 
 const isSyncingCounters = ref(false);
@@ -507,31 +580,6 @@ onBeforeUnmount(() => {
 
     <template #actions>
       <v-button
-        v-tooltip.bottom="
-          vaultStatus === 'locked'
-            ? 'Vault Locked — Click to Unlock or Manage Credentials'
-            : 'Remote Directus Credentials'
-        "
-        icon
-        rounded
-        secondary
-        @click="credentialDialog = true"
-      >
-        <v-icon :name="vaultStatus === 'locked' ? 'lock' : 'database'" />
-      </v-button>
-
-      <v-button
-        v-tooltip.bottom="'Recalculate Run & Error Counters from Activity Logs'"
-        icon
-        rounded
-        secondary
-        :loading="isSyncingCounters"
-        @click="syncCounters"
-      >
-        <v-icon name="sync" />
-      </v-button>
-
-      <v-button
         v-tooltip.bottom="'Refresh Analytics'"
         icon
         rounded
@@ -541,6 +589,41 @@ onBeforeUnmount(() => {
       >
         <v-icon name="refresh" />
       </v-button>
+
+      <v-menu placement="bottom-end" show-arrow :close-on-content-click="true">
+        <template #activator="{ toggle, active }">
+          <v-button
+            v-tooltip.bottom="'Options'"
+            rounded
+            icon
+            secondary
+            :active="active"
+            @click="toggle"
+          >
+            <v-icon name="more_vert" />
+          </v-button>
+        </template>
+
+        <v-list>
+          <v-list-item clickable :disabled="isSyncingCounters" @click="syncCounters">
+            <v-list-item-icon>
+              <v-icon name="sync" />
+            </v-list-item-icon>
+            <v-list-item-content>
+              {{ isSyncingCounters ? 'Syncing...' : 'Sync Counters' }}
+            </v-list-item-content>
+          </v-list-item>
+
+          <v-list-item clickable @click="credentialDialog = true">
+            <v-list-item-icon>
+              <v-icon :name="vaultStatus === 'locked' ? 'lock' : 'database'" />
+            </v-list-item-icon>
+            <v-list-item-content>
+              {{ vaultStatus === 'locked' ? 'Unlock Vault' : 'Credentials' }}
+            </v-list-item-content>
+          </v-list-item>
+        </v-list>
+      </v-menu>
     </template>
 
     <div class="dashboard-container">
@@ -756,6 +839,7 @@ onBeforeUnmount(() => {
                 type="text"
                 placeholder="Search flow by name or ID..."
                 class="search-input"
+                autocomplete="off"
               />
               <button
                 v-if="searchQuery"

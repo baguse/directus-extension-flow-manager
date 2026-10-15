@@ -313,13 +313,23 @@ const credentialOptions = computed(() => {
       value: credential.id,
     })) || [];
 
-  return [
+  const options = [
     {
       text: 'Local Directus',
       value: 'local',
     },
     ...credentials,
   ];
+
+  const currentVal = selectedCredential.value;
+  if (currentVal && currentVal !== 'local' && !options.some((o) => o.value === currentVal)) {
+    options.push({
+      text: 'Remote Directus',
+      value: currentVal,
+    });
+  }
+
+  return options;
 });
 
 const filteredItemFlag = computed(() => {

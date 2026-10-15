@@ -315,7 +315,16 @@ async function loadFlow() {
       flowName.value = data?.data?.name ?? '';
       flow.value = data?.data ?? null;
     } else {
-      const cred = activeCredential.value;
+      let cred = activeCredential.value;
+      if (!cred && selectedCredential.value && selectedCredential.value !== 'local') {
+        cred = credentials.value.find((c) => c.id === selectedCredential.value);
+      }
+      if (!cred && route.query.credential && route.query.credential !== 'local') {
+        cred = credentials.value.find((c) => c.id === (route.query.credential as string));
+        if (cred) {
+          selectedCredential.value = cred.id;
+        }
+      }
       if (!cred) {
         flowName.value = '';
         flow.value = null;
@@ -326,9 +335,21 @@ async function loadFlow() {
         staticToken: cred.staticToken,
         method: 'GET',
       });
-      const flowData = (data?.data ?? data) as IFlow;
-      flowName.value = flowData?.name ?? '';
-      flow.value = flowData ?? null;
+      let flowData: unknown = data;
+      if (typeof flowData === 'string') {
+        try {
+          flowData = JSON.parse(flowData);
+        } catch {
+          // ignore
+        }
+      }
+      const resolved = (
+        flowData && typeof flowData === 'object' && 'data' in flowData
+          ? (flowData as Record<string, unknown>).data
+          : flowData
+      ) as IFlow | null;
+      flowName.value = resolved?.name ?? '';
+      flow.value = resolved ?? null;
     }
   } catch {
     flowName.value = '';
@@ -355,24 +376,48 @@ async function loadActivityHistories() {
       }>(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/dashboard/${flowId.value}?${queries.join('&')}`);
       resData = data;
     } else {
-      const cred = activeCredential.value;
+      let cred = activeCredential.value;
+      if (!cred && selectedCredential.value && selectedCredential.value !== 'local') {
+        cred = credentials.value.find((c) => c.id === selectedCredential.value);
+      }
+      if (!cred && route.query.credential && route.query.credential !== 'local') {
+        cred = credentials.value.find((c) => c.id === (route.query.credential as string));
+        if (cred) {
+          selectedCredential.value = cred.id;
+        }
+      }
       if (!cred) {
         if (vaultStatus.value === 'locked') {
           throw new Error('Flow Manager Vault is locked. Please unlock the vault first.');
         }
         throw new Error('Remote credential not found.');
       }
-      const { data } = await api.post<{
+      const { data } = await api.post<unknown>(
+        `/${ENDPOINT_EXTENSION_NAME}/flow-manager/dashboard/${flowId.value}`,
+        {
+          url: cred.url,
+          staticToken: cred.staticToken,
+          page: page.value,
+          limit: LIMIT,
+        },
+      );
+      let parsedData: unknown = data;
+      if (typeof parsedData === 'string') {
+        try {
+          parsedData = JSON.parse(parsedData);
+        } catch {
+          // ignore
+        }
+      }
+      resData = (
+        parsedData && typeof parsedData === 'object' && 'data' in parsedData
+          ? (parsedData as Record<string, unknown>).data
+          : parsedData
+      ) as {
         activityHistories: ActivityHistory[];
         successCount: number;
         errorCount: number;
-      }>(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/dashboard/${flowId.value}`, {
-        url: cred.url,
-        staticToken: cred.staticToken,
-        page: page.value,
-        limit: LIMIT,
-      });
-      resData = data;
+      };
     }
     activityHistories.value = resData?.activityHistories ?? [];
     const successVal =
@@ -448,15 +493,29 @@ watch(
 );
 
 watch([credentials, vaultStatus], () => {
+  const queryCred = route.query.credential as string | undefined;
+  if (queryCred && queryCred !== 'local' && selectedCredential.value !== queryCred) {
+    const match = credentials.value.find((c) => c.id === queryCred);
+    if (match) {
+      selectedCredential.value = queryCred;
+      return;
+    }
+  }
   if (selectedCredential.value !== 'local' && !flow.value && !loading.value) {
-    loadFlow();
     loadActivityHistories();
   }
 });
 
 watch(vaultStatus, async (newStatus, oldStatus) => {
   if (newStatus === 'unlocked' && oldStatus === 'locked') {
-    await loadFlow();
+    const queryCred = route.query.credential as string | undefined;
+    if (queryCred && queryCred !== 'local' && selectedCredential.value !== queryCred) {
+      const match = credentials.value.find((c) => c.id === queryCred);
+      if (match) {
+        selectedCredential.value = queryCred;
+        return;
+      }
+    }
     await loadActivityHistories();
   }
 });
