@@ -9,10 +9,12 @@ withDefaults(
   defineProps<{
     items: (IFlow | IFolder)[];
     allFlows: (IFlow | IFolder)[];
+    isArchive?: boolean;
     showSelect?: boolean;
     selectedItems?: string[];
   }>(),
   {
+    isArchive: false,
     showSelect: false,
     selectedItems: () => [],
   },
@@ -24,7 +26,16 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <v-list class="draggable-list">
+  <div v-if="!items.length" class="empty-list-container">
+    <v-info
+      :icon="isArchive ? 'archive' : 'folder_open'"
+      :title="isArchive ? 'Archive is Empty' : 'This folder is empty'"
+      center
+    >
+      {{ isArchive ? 'Flows moved to Archive will appear here safely out of the workspace.' : 'No flows in this category.' }}
+    </v-info>
+  </div>
+  <v-list v-else class="draggable-list">
     <draggable
       :force-fallback="FORCE_FALLBACK"
       :fallback-on-body="FALLBACK_ON_BODY"
@@ -57,6 +68,12 @@ const emit = defineEmits<{
 </template>
 
 <style lang="scss" scoped>
+.empty-list-container {
+  padding: 48px 16px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
 .root-drag-container {
   padding: 8px 0;
   overflow: visible;

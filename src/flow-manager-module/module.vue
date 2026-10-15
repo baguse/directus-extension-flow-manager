@@ -27,10 +27,12 @@
         :selected-items-count="selectedItems.length"
         :selected-flows-inactive-count="selectedFlowsInactive.length"
         :selected-flows-active-count="selectedFlowsActive.length"
+        :selected-flows-archived-count="selectedFlowsArchived.length"
         :selected-credential="selectedCredential"
         @select-all="selectAll()"
-        @activate-selected="() => changeFlowStatus('active')"
-        @deactivate-selected="() => changeFlowStatus('inactive')"
+        @activate-selected="activateSelectedItems"
+        @deactivate-selected="deactivateSelectedItems"
+        @unarchive-selected="unarchiveSelectedItems"
         @backup-selected="backupSelectedItems"
         @duplicate-selected="duplicateSelectedItems"
         @delete-selected="deleteSelectedItems"
@@ -40,7 +42,8 @@
       <FlowListView
         v-if="viewMode === 'LIST'"
         :items="parentId ? currentFlows : rootFlows"
-        :all-flows="allFlows"
+        :all-flows="parentId === '__archive__' ? currentFlows : activeAllFlows"
+        :is-archive="parentId === '__archive__'"
         :show-select="showSelect"
         :selected-items="selectedItems"
         @sort="onSort"
@@ -51,7 +54,7 @@
         v-model:headers="headers"
         v-model:page="tablePage"
         v-model:limit="tableLimit"
-        :items="tabularFlows"
+        :items="displayedTabularFlows"
         :sort="tableSort"
         :loading="isTabularFlowLoading"
         :show-select="showSelect"
@@ -73,6 +76,9 @@
         @backup="backup"
         @push-to-cloud="showPushToCloud"
         @delete="showDeleteItemDialog"
+        @toggle-safety-lock="toggleSafetyLock"
+        @archive-flow="archiveFlow"
+        @restore-flow="restoreFlow"
         @set-status-filter="setStatusFilter"
         @set-trigger-filter="setTriggerFilter"
         @set-category-filter="setCategoryFilter"
@@ -80,7 +86,7 @@
       />
       <FlowDependencyGraph
         v-else-if="viewMode === 'GRAPH'"
-        :flows="flows"
+        :flows="activeFlowsList"
         :flow-categories="flowCategories"
         :selected-flow-id="selectedItem?.id"
         @select-flow="selectItem"
@@ -89,7 +95,7 @@
       />
       <FlowCronTimeline
         v-else-if="viewMode === 'TIMELINE'"
-        :flows="flows"
+        :flows="activeFlowsList"
         :flow-categories="flowCategories"
         :selected-flow-id="selectedItem?.id"
         :selected-credential="selectedCredential"
@@ -259,6 +265,9 @@
         @view-in-graph="onViewInGraph"
         @view-in-timeline="onViewInTimeline"
         @simulate-flow="openSimulationDialog"
+        @toggle-safety-lock="toggleSafetyLock"
+        @archive-flow="archiveFlow"
+        @restore-flow="restoreFlow"
       />
     </template>
 
@@ -335,6 +344,14 @@
       :loading="loadingDeleteItem"
       @update:model-value="deleteItemDialog = $event"
       @proceed="deleteItem"
+    />
+
+    <BatchStatusDialog
+      :value="batchStatusDialog"
+      :action="batchStatusAction"
+      :selected-flows="batchStatusAction === 'unarchive' ? selectedFlowsArchived : selectedFlows"
+      @update:model-value="batchStatusDialog = $event"
+      @proceed="onProceedBatchStatus"
     />
 
     <RunManualFlowForm
@@ -442,6 +459,7 @@ import SearchInput from './components/search-input.vue';
 import LoadingDialog from './components/loading-dialog.vue';
 import CredentialDialog from './components/credential-dialog.vue';
 import DeleteDialog from './components/delete-dialog.vue';
+import BatchStatusDialog from './components/batch-status-dialog.vue';
 import PushToCloudDialog from './components/push-to-cloud-dialog.vue';
 import RunWebhookFlowForm from './components/run-webhook-flow-form.vue';
 import RestoreConfirmationDialog from './components/restore-confirmation-dialog.vue';
@@ -473,6 +491,7 @@ export default defineComponent({
     LoadingDialog,
     CredentialDialog,
     DeleteDialog,
+    BatchStatusDialog,
     PushToCloudDialog,
     RunWebhookFlowForm,
     RestoreConfirmationDialog,
@@ -626,15 +645,23 @@ export default defineComponent({
     });
 
     const selectedFlowsActive = computed<IFlow[]>(() => {
-      return selectedFlows.value.filter((flow) => flow.status === 'active');
+      return selectedFlows.value.filter((flow) => flow.status === 'active' && !flow.options?.archived);
     });
 
     const selectedFlowsInactive = computed<IFlow[]>(() => {
-      return selectedFlows.value.filter((flow) => flow.status === 'inactive');
+      return selectedFlows.value.filter((flow) => flow.status === 'inactive' && !flow.options?.archived);
+    });
+
+    const selectedFlowsArchived = computed<IFlow[]>(() => {
+      return selectedFlows.value.filter((flow) => flow.options?.archived === true);
     });
     const title = computed(() => {
       if (!parentId.value) {
         return 'Flow Manager';
+      }
+
+      if (parentId.value === '__archive__') {
+        return 'Flow Manager - Archive';
       }
 
       const currentParent =
@@ -650,6 +677,10 @@ export default defineComponent({
     const iconName = computed(() => {
       if (!parentId.value) {
         return 'bolt';
+      }
+
+      if (parentId.value === '__archive__') {
+        return 'archive';
       }
 
       const currentParent: IFlow | IFolder | undefined =
@@ -774,6 +805,11 @@ export default defineComponent({
       backupSelectedItems,
       deleteItem,
       deleteSelectedItems,
+      archiveFlow,
+      batchArchiveFlows,
+      restoreFlow,
+      batchRestoreFlows,
+      toggleSafetyLock,
       pendingDelete,
       undoDelete,
       commitPermanentDelete,
@@ -810,6 +846,68 @@ export default defineComponent({
         indeterminate: indeterminateProcess,
       },
     });
+
+    const activeFlowsList = computed<IFlow[]>(() => {
+      return flows.value.filter((f) => !f.options?.archived);
+    });
+
+    const displayedTabularFlows = computed<IFlow[]>(() => {
+      if (parentId.value === '__archive__') {
+        return tabularFlows.value.filter((flow) => flow.options?.archived === true);
+      }
+      return tabularFlows.value.filter((flow) => !flow.options?.archived);
+    });
+
+    const batchStatusDialog = ref(false);
+    const batchStatusAction = ref<'active' | 'inactive' | 'unarchive'>('active');
+
+    function activateSelectedItems() {
+      const hasLocked = selectedFlows.value.some((f) => f.options?.locked === true);
+      if (hasLocked) {
+        batchStatusAction.value = 'active';
+        batchStatusDialog.value = true;
+      } else {
+        changeFlowStatus('active');
+      }
+    }
+
+    function deactivateSelectedItems() {
+      const hasLocked = selectedFlows.value.some((f) => f.options?.locked === true);
+      if (hasLocked) {
+        batchStatusAction.value = 'inactive';
+        batchStatusDialog.value = true;
+      } else {
+        changeFlowStatus('inactive');
+      }
+    }
+
+    async function unarchiveSelectedItems() {
+      const archived = selectedFlowsArchived.value;
+      if (!archived.length) return;
+      const hasLocked = archived.some((f) => f.options?.locked === true);
+      if (hasLocked) {
+        batchStatusAction.value = 'unarchive';
+        batchStatusDialog.value = true;
+      } else {
+        await batchRestoreFlows(archived);
+        selectedItems.value = [];
+        isSelectAll.value = false;
+      }
+    }
+
+    async function onProceedBatchStatus() {
+      batchStatusDialog.value = false;
+      if (batchStatusAction.value === 'active' || batchStatusAction.value === 'inactive') {
+        await changeFlowStatus(batchStatusAction.value);
+      } else if (batchStatusAction.value === 'unarchive') {
+        const archived = selectedFlowsArchived.value;
+        if (archived.length) {
+          await batchRestoreFlows(archived);
+          selectedItems.value = [];
+          isSelectAll.value = false;
+        }
+      }
+    }
 
     const {
       restoredFile,
@@ -863,17 +961,20 @@ export default defineComponent({
 
     const rootFlows = computed<(IFlow | IFolder)[]>(() => {
       if (!flowFieldConfiguration.value.isConfigured || !isSettingFieldConfigured.value) {
-        return [...flows.value];
+        return flows.value.filter((flow) => !flow.options?.archived);
       }
 
       return [
         ...flowCategories.value.filter((category: IFolder) => {
           const cat = category.flow_manager_metadata_id?.flow_manager_category;
-          return !cat || (!folderMap.value[cat] && !flowIdMap.value[cat]);
+          const isParentArchived = cat && flowIdMap.value[cat]?.options?.archived;
+          return !cat || isParentArchived || (!folderMap.value[cat] && !flowIdMap.value[cat]);
         }),
         ...flows.value.filter((flow: IFlow) => {
+          if (flow.options?.archived) return false;
           const cat = flow.flow_manager_metadata_id?.flow_manager_category;
-          return !cat || (!folderMap.value[cat] && !flowIdMap.value[cat]);
+          const isParentArchived = cat && flowIdMap.value[cat]?.options?.archived;
+          return !cat || isParentArchived || (!folderMap.value[cat] && !flowIdMap.value[cat]);
         }),
       ].sort(
         (a, b) =>
@@ -883,8 +984,20 @@ export default defineComponent({
     });
 
     const currentFlows = computed<(IFlow | IFolder)[]>(() => {
+      if (parentId.value === '__archive__') {
+        return flows.value
+          .filter((flow) => flow.options?.archived === true)
+          .sort(
+            (a, b) =>
+              (a.flow_manager_metadata_id?.flow_manager_order || 0) -
+              (b.flow_manager_metadata_id?.flow_manager_order || 0),
+          );
+      }
+
       if (parentId.value) {
-        const childFlows = flowChildMap.value[parentId.value] || [];
+        const childFlows = (flowChildMap.value[parentId.value] || []).filter(
+          (item) => !(item as IFlow).options?.archived,
+        );
         return [...childFlows].sort(
           (a, b) =>
             (a.flow_manager_metadata_id?.flow_manager_order || 0) -
@@ -901,6 +1014,17 @@ export default defineComponent({
       }
 
       return [...flowCategories.value, ...flows.value];
+    });
+
+    const activeAllFlows = computed<(IFlow | IFolder)[]>(() => {
+      if (!flowFieldConfiguration.value.isConfigured || !isSettingFieldConfigured.value) {
+        return flows.value.filter((f) => !f.options?.archived);
+      }
+
+      return [
+        ...flowCategories.value,
+        ...flows.value.filter((f) => !f.options?.archived),
+      ];
     });
 
     const {
@@ -950,6 +1074,10 @@ export default defineComponent({
     }
 
     async function onSort(updates: (IFlow & IFolder)[], group: string | null = null) {
+      if (parentId.value === '__archive__') {
+        return;
+      }
+
       const flowPayload: {
         id: string;
         flow_manager_metadata_id: {
@@ -1565,6 +1693,11 @@ export default defineComponent({
       setViewMode: (mode: FlowViewMode) => {
         viewMode.value = mode;
       },
+      toggleSafetyLock,
+      archiveFlow,
+      batchArchiveFlows,
+      restoreFlow,
+      batchRestoreFlows,
     });
 
     function onViewInGraph(flow: IFlow) {
@@ -1727,6 +1860,21 @@ export default defineComponent({
       simulationDialog,
       selectedFlowForSimulation,
       openSimulationDialog,
+      activeFlowsList,
+      activeAllFlows,
+      displayedTabularFlows,
+      toggleSafetyLock,
+      archiveFlow,
+      restoreFlow,
+      batchArchiveFlows,
+      batchRestoreFlows,
+      selectedFlowsArchived,
+      unarchiveSelectedItems,
+      batchStatusDialog,
+      batchStatusAction,
+      activateSelectedItems,
+      deactivateSelectedItems,
+      onProceedBatchStatus,
     };
   },
 });

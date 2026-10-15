@@ -27,9 +27,43 @@ const emit = defineEmits<{
   (e: 'viewInGraph', flow: IFlow): void;
   (e: 'viewInTimeline', flow: IFlow): void;
   (e: 'simulateFlow', flow: IFlow): void;
+  (e: 'toggleSafetyLock', flow: IFlow, targetState?: boolean): void;
+  (e: 'archiveFlow', flow: IFlow): void;
+  (e: 'restoreFlow', flow: IFlow): void;
 }>();
 
 const flowManagerUtils = inject<FlowManagerUtilsContext>('flowManagerUtils');
+
+const showUnlockModal = ref(false);
+
+function openUnlockModal() {
+  showUnlockModal.value = true;
+}
+
+function handleConfirmUnlock() {
+  if (selectedFlow.value) {
+    emit('toggleSafetyLock', selectedFlow.value, false);
+    showUnlockModal.value = false;
+  }
+}
+
+function handleLockFlow() {
+  if (selectedFlow.value) {
+    emit('toggleSafetyLock', selectedFlow.value, true);
+  }
+}
+
+function handleArchiveFlow() {
+  if (selectedFlow.value) {
+    emit('archiveFlow', selectedFlow.value);
+  }
+}
+
+function handleRestoreFlow() {
+  if (selectedFlow.value) {
+    emit('restoreFlow', selectedFlow.value);
+  }
+}
 
 const copied = ref(false);
 let copyTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -179,8 +213,45 @@ const scheduleInfo = computed(() => {
             <span v-if="selectedFlow.trigger" class="trigger-chip">
               {{ selectedFlow.trigger }}
             </span>
+            <span v-if="selectedFlow.options?.locked" class="status-chip locked-chip">
+              <v-icon name="lock" x-small class="mr-1" />
+              Locked
+            </span>
+            <span v-if="selectedFlow.options?.archived" class="status-chip archived-chip">
+              <v-icon name="archive" x-small class="mr-1" />
+              Archived
+            </span>
           </div>
         </div>
+      </div>
+
+      <!-- Safety Lock & Archive Status Banners -->
+      <div v-if="selectedFlow.options?.locked" class="safety-lock-banner">
+        <div class="safety-lock-content">
+          <v-icon name="lock" class="lock-banner-icon" />
+          <div class="lock-banner-text">
+            <strong>Safety Lock Active</strong>
+            <p>Direct edits, status changes, and deletion are disabled.</p>
+          </div>
+        </div>
+        <v-button x-small secondary class="unlock-btn" @click="openUnlockModal">
+          <v-icon name="lock_open" left />
+          Unlock
+        </v-button>
+      </div>
+
+      <div v-else-if="selectedFlow.options?.archived" class="archived-banner">
+        <div class="archived-content">
+          <v-icon name="archive" class="archive-banner-icon" />
+          <div class="archive-banner-text">
+            <strong>Archived Flow</strong>
+            <p>Inactive and stored safely in the Archive folder.</p>
+          </div>
+        </div>
+        <v-button x-small secondary class="restore-btn" @click="handleRestoreFlow">
+          <v-icon name="unarchive" left />
+          Restore
+        </v-button>
       </div>
 
       <!-- Flow ID with Copy -->
@@ -422,10 +493,56 @@ const scheduleInfo = computed(() => {
           small
           secondary
           class="sidebar-btn"
+          :disabled="selectedFlow.options?.locked"
           @click="flowManagerUtils.showEditFlowDialog(selectedFlow)"
         >
           <v-icon name="edit" class="mr-1" />
           Edit Flow Options
+        </v-button>
+
+        <!-- Safety Lock Action Button -->
+        <v-button
+          v-if="!selectedFlow.options?.locked"
+          small
+          secondary
+          class="sidebar-btn lock-action-btn"
+          @click="handleLockFlow"
+        >
+          <v-icon name="lock" class="mr-1" />
+          Enable Safety Lock
+        </v-button>
+        <v-button
+          v-else
+          small
+          secondary
+          class="sidebar-btn unlock-action-btn"
+          @click="openUnlockModal"
+        >
+          <v-icon name="lock_open" class="mr-1" />
+          Unlock Flow
+        </v-button>
+
+        <!-- Soft Archive / Restore Action Button -->
+        <v-button
+          v-if="!selectedFlow.options?.archived"
+          small
+          secondary
+          class="sidebar-btn archive-action-btn"
+          :disabled="selectedFlow.options?.locked"
+          @click="handleArchiveFlow"
+        >
+          <v-icon name="archive" class="mr-1" />
+          Archive Flow
+        </v-button>
+        <v-button
+          v-else
+          small
+          secondary
+          class="sidebar-btn restore-action-btn"
+          @click="handleRestoreFlow"
+        >
+          <v-icon name="unarchive" class="mr-1" />
+          Restore to Workspace
         </v-button>
 
         <v-button
@@ -449,6 +566,33 @@ const scheduleInfo = computed(() => {
           Open Flow in Settings
         </v-button>
       </div>
+
+      <!-- Unlock Confirmation Modal -->
+      <v-dialog :model-value="showUnlockModal" @update:model-value="showUnlockModal = $event">
+        <v-card class="unlock-dialog-card">
+          <v-card-title class="dialog-title">
+            <v-icon name="lock_open" left />
+            <span>Unlock Flow</span>
+          </v-card-title>
+          <v-card-text>
+            <p>
+              Are you sure you want to disable Safety Lock for <strong>{{ selectedFlow.name }}</strong>?
+            </p>
+            <p class="unlock-subtext">
+              Unlocking will allow changes, status updates, and deletions on this flow.
+            </p>
+          </v-card-text>
+          <v-card-actions class="dialog-actions">
+            <v-button secondary @click="showUnlockModal = false">
+              Cancel
+            </v-button>
+            <v-button kind="warning" @click="handleConfirmUnlock">
+              <v-icon name="lock_open" left />
+              Unlock Flow
+            </v-button>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
     </div>
 
     <!-- 2. Category Selected -->
@@ -586,6 +730,18 @@ const scheduleInfo = computed(() => {
     .status-dot {
       background-color: #94a3b8;
     }
+  }
+
+  &.locked-chip {
+    background-color: rgba(239, 68, 68, 0.12);
+    color: #dc2626;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+  }
+
+  &.archived-chip {
+    background-color: rgba(100, 116, 139, 0.15);
+    color: #475569;
+    border: 1px solid rgba(100, 116, 139, 0.25);
   }
 }
 
@@ -1052,5 +1208,112 @@ const scheduleInfo = computed(() => {
 
 .mr-1 {
   margin-right: 4px;
+}
+
+.safety-lock-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background-color: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 6px;
+
+  .safety-lock-content {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+
+    .lock-banner-icon {
+      color: #dc2626;
+      font-size: 16px;
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
+
+    .lock-banner-text {
+      strong {
+        font-size: 12px;
+        color: #991b1b;
+      }
+
+      p {
+        font-size: 11px;
+        color: #b91c1c;
+        margin: 2px 0 0 0;
+        line-height: 1.3;
+      }
+    }
+  }
+
+  .unlock-btn {
+    flex-shrink: 0;
+  }
+}
+
+.archived-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background-color: rgba(100, 116, 139, 0.08);
+  border: 1px solid rgba(100, 116, 139, 0.25);
+  border-radius: 6px;
+
+  .archived-content {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+
+    .archive-banner-icon {
+      color: #64748b;
+      font-size: 16px;
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
+
+    .archive-banner-text {
+      strong {
+        font-size: 12px;
+        color: #334155;
+      }
+
+      p {
+        font-size: 11px;
+        color: #64748b;
+        margin: 2px 0 0 0;
+        line-height: 1.3;
+      }
+    }
+  }
+
+  .restore-btn {
+    flex-shrink: 0;
+  }
+}
+
+.unlock-dialog-card {
+  max-width: 480px;
+
+  .dialog-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .unlock-subtext {
+    font-size: 12px;
+    color: var(--theme--foreground-subdued, #64748b);
+    margin-top: 6px;
+  }
+
+  .dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 16px 24px;
+  }
 }
 </style>

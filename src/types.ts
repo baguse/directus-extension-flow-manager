@@ -49,6 +49,10 @@ export interface IFlowOptions extends Record<string, unknown> {
   fields?: Field[];
   method?: string;
   cron?: string;
+  locked?: boolean;
+  archived?: boolean;
+  archived_from_category?: string | null;
+  archived_at?: string;
   [key: string]: unknown;
 }
 
@@ -358,6 +362,11 @@ export interface FlowManagerUtilsContext {
   reload?: () => Promise<void>;
   viewMode?: Ref<FlowViewMode>;
   setViewMode?: (mode: FlowViewMode) => void;
+  toggleSafetyLock?: (flow: IFlow, targetState?: boolean) => Promise<void>;
+  archiveFlow?: (flow: IFlow) => Promise<void>;
+  batchArchiveFlows?: (flows: IFlow[]) => Promise<void>;
+  restoreFlow?: (flow: IFlow) => Promise<void>;
+  batchRestoreFlows?: (flows: IFlow[]) => Promise<void>;
 }
 
 /* ==========================================================================

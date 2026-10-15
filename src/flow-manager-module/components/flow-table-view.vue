@@ -56,7 +56,23 @@ const emit = defineEmits<{
   (e: 'setStatusFilter', status: string): void;
   (e: 'setTriggerFilter', trigger: string): void;
   (e: 'setCategoryFilter', category: string): void;
+  (e: 'toggleSafetyLock', item: IFlow, targetState?: boolean): void;
+  (e: 'archiveFlow', item: IFlow): void;
+  (e: 'restoreFlow', item: IFlow): void;
 }>();
+
+const unlockFlowTarget = ref<IFlow | null>(null);
+
+function confirmUnlockFlow(item: IFlow) {
+  unlockFlowTarget.value = item;
+}
+
+function handleUnlockProceed() {
+  if (unlockFlowTarget.value) {
+    emit('toggleSafetyLock', unlockFlowTarget.value, false);
+    unlockFlowTarget.value = null;
+  }
+}
 
 const headers = defineModel<Header[]>('headers', { default: () => [] });
 const selectedItems = defineModel<string[]>('modelValue', { default: () => [] });
@@ -181,6 +197,20 @@ async function copySelectedTextToClipboard() {
           </v-chip>
         </template>
 
+        <template #[`item.name`]="{ item }">
+          <div class="name-cell">
+            <span class="flow-name-text">{{ item.name }}</span>
+            <v-chip v-if="item.options?.locked" x-small class="badge-chip locked-chip" title="Safety Lock Active">
+              <v-icon name="lock" x-small class="mr-1" />
+              Locked
+            </v-chip>
+            <v-chip v-if="item.options?.archived" x-small class="badge-chip archived-chip" title="Archived Flow">
+              <v-icon name="archive" x-small class="mr-1" />
+              Archived
+            </v-chip>
+          </div>
+        </template>
+
         <template #[`item.flow_manager_last_run_at`]="{ item }">
           {{ formatDateLong(item.flow_manager_metadata_id?.flow_manager_last_run_at) }}
         </template>
@@ -267,11 +297,58 @@ async function copySelectedTextToClipboard() {
                 <v-list-item-content> Export for Git </v-list-item-content>
               </v-list-item>
 
-              <v-list-item clickable @click="emit('editFlow', item)">
+              <v-list-item
+                :disabled="item.options?.locked"
+                clickable
+                @click="emit('editFlow', item)"
+              >
                 <v-list-item-icon>
                   <v-icon name="edit" />
                 </v-list-item-icon>
                 <v-list-item-content> Edit Flow </v-list-item-content>
+              </v-list-item>
+
+              <v-list-item
+                v-if="!item.options?.locked"
+                clickable
+                @click="emit('toggleSafetyLock', item, true)"
+              >
+                <v-list-item-icon>
+                  <v-icon name="lock" />
+                </v-list-item-icon>
+                <v-list-item-content> Enable Safety Lock </v-list-item-content>
+              </v-list-item>
+              <v-list-item
+                v-else
+                clickable
+                @click="confirmUnlockFlow(item)"
+              >
+                <v-list-item-icon>
+                  <v-icon name="lock_open" />
+                </v-list-item-icon>
+                <v-list-item-content> Unlock Flow </v-list-item-content>
+              </v-list-item>
+
+              <v-list-item
+                v-if="!item.options?.archived"
+                :disabled="item.options?.locked"
+                clickable
+                @click="emit('archiveFlow', item)"
+              >
+                <v-list-item-icon>
+                  <v-icon name="archive" />
+                </v-list-item-icon>
+                <v-list-item-content> Archive Flow </v-list-item-content>
+              </v-list-item>
+              <v-list-item
+                v-else
+                clickable
+                @click="emit('restoreFlow', item)"
+              >
+                <v-list-item-icon>
+                  <v-icon name="unarchive" />
+                </v-list-item-icon>
+                <v-list-item-content> Restore to Workspace </v-list-item-content>
               </v-list-item>
 
               <v-list-item clickable @click="emit('duplicate', item)">
@@ -433,6 +510,33 @@ async function copySelectedTextToClipboard() {
         class="pagination-controls"
       />
     </div>
+
+    <!-- Unlock Confirmation Dialog -->
+    <v-dialog :model-value="!!unlockFlowTarget" @update:model-value="!$event && (unlockFlowTarget = null)">
+      <v-card v-if="unlockFlowTarget" class="unlock-dialog-card">
+        <v-card-title class="dialog-title">
+          <v-icon name="lock_open" left />
+          <span>Unlock Flow</span>
+        </v-card-title>
+        <v-card-text>
+          <p>
+            Are you sure you want to disable Safety Lock for <strong>{{ unlockFlowTarget.name }}</strong>?
+          </p>
+          <p class="unlock-subtext">
+            Unlocking will allow changes, status updates, and deletions on this flow.
+          </p>
+        </v-card-text>
+        <v-card-actions class="dialog-actions">
+          <v-button secondary @click="unlockFlowTarget = null">
+            Cancel
+          </v-button>
+          <v-button kind="warning" @click="handleUnlockProceed">
+            <v-icon name="lock_open" left />
+            Unlock Flow
+          </v-button>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
@@ -508,5 +612,61 @@ async function copySelectedTextToClipboard() {
   display: flex;
   align-items: center;
   margin: 0;
+}
+
+.name-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.flow-name-text {
+  font-weight: 500;
+}
+
+.badge-chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 4px;
+
+  &.locked-chip {
+    background-color: rgba(239, 68, 68, 0.12);
+    color: #dc2626;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+  }
+
+  &.archived-chip {
+    background-color: rgba(100, 116, 139, 0.15);
+    color: #475569;
+    border: 1px solid rgba(100, 116, 139, 0.25);
+  }
+}
+
+.unlock-dialog-card {
+  max-width: 480px;
+
+  .dialog-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .unlock-subtext {
+    font-size: 12px;
+    color: var(--theme--foreground-subdued, #64748b);
+    margin-top: 6px;
+  }
+
+  .dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 16px 24px;
+  }
 }
 </style>

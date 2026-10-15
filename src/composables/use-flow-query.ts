@@ -162,10 +162,14 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
 
     for (let i = 0; i < flows.value.length; i++) {
       const flow = flows.value[i];
-      if (!flow) continue;
+      if (!flow || flow.options?.archived) continue;
 
       const category = flow?.flow_manager_metadata_id?.flow_manager_category;
       if (category) {
+        const parentFlow = flowIdMap.value[category];
+        if (parentFlow?.options?.archived) {
+          continue;
+        }
         let list = result[category];
         if (!list) {
           list = [];
@@ -182,6 +186,10 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
 
       const category = folder?.flow_manager_metadata_id?.flow_manager_category;
       if (category) {
+        const parentFlow = flowIdMap.value[category];
+        if (parentFlow?.options?.archived) {
+          continue;
+        }
         let list = result[category];
         if (!list) {
           list = [];

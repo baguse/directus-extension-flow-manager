@@ -38,7 +38,7 @@
         </div>
       </div>
 
-      <!-- Quick Navigation: All Flows & Analytics Dashboard -->
+      <!-- Quick Navigation: All Flows, Analytics Dashboard & Archive -->
       <div class="quick-nav-group">
         <button
           type="button"
@@ -50,7 +50,7 @@
             <v-icon name="bolt" small class="quick-nav-icon" />
             <span class="quick-nav-label">All Flows</span>
           </div>
-          <span v-if="allFlowsCount > 0" class="quick-nav-counter">{{ allFlowsCount }}</span>
+          <span v-if="activeFlowsCount > 0" class="quick-nav-counter">{{ activeFlowsCount }}</span>
         </button>
 
         <button
@@ -64,6 +64,19 @@
             <span class="quick-nav-label">Dashboard</span>
           </div>
           <span class="quick-nav-tag">Analytics</span>
+        </button>
+
+        <button
+          type="button"
+          class="quick-nav-btn"
+          :class="{ 'is-active': isArchiveRoute }"
+          @click="navigateToArchive"
+        >
+          <div class="quick-nav-left">
+            <v-icon name="archive" small class="quick-nav-icon" />
+            <span class="quick-nav-label">Archive</span>
+          </div>
+          <span v-if="archivedFlowsCount > 0" class="quick-nav-counter archive-counter">{{ archivedFlowsCount }}</span>
         </button>
       </div>
 
@@ -139,9 +152,10 @@
     </div>
 
     <!-- Footer Summary Strip -->
-    <div v-if="!hideFlows && allFlowsCount > 0" class="sidebar-footer">
+    <div v-if="!hideFlows && (activeFlowsCount > 0 || archivedFlowsCount > 0)" class="sidebar-footer">
       <span class="footer-count">
-        {{ allFlowsCount }} {{ allFlowsCount === 1 ? 'flow' : 'flows' }}
+        {{ activeFlowsCount }} {{ activeFlowsCount === 1 ? 'flow' : 'flows' }}
+        <template v-if="archivedFlowsCount > 0"> ({{ archivedFlowsCount }} archived)</template>
       </span>
       <span class="footer-badge">
         {{ isLocalInstance ? 'Local' : activeCredentialLabel }}
@@ -221,6 +235,20 @@ const activeInstanceName = computed(() => {
   return c ? `Connected: ${c.name}` : 'Connected';
 });
 
+const flowsOnly = computed(() => {
+  return (allFlows.value || []).filter((item): item is IFlow => {
+    return (item as IFolder)?.type !== 'category';
+  });
+});
+
+const archivedFlowsCount = computed(() => {
+  return flowsOnly.value.filter((f) => f.options?.archived === true).length;
+});
+
+const activeFlowsCount = computed(() => {
+  return flowsOnly.value.filter((f) => !f.options?.archived).length;
+});
+
 const allFlowsCount = computed(() => allFlows.value?.length || 0);
 
 const isAllFlowsRoute = computed(() => {
@@ -231,6 +259,10 @@ const isAllFlowsRoute = computed(() => {
 
 const isDashboardRoute = computed(() => {
   return route.path.startsWith('/flow-manager/dashboard');
+});
+
+const isArchiveRoute = computed(() => {
+  return route.params.parentId === '__archive__';
 });
 
 function navigateToHome() {
@@ -252,6 +284,17 @@ function navigateToDashboard() {
     });
   } else {
     router.push('/flow-manager/dashboard');
+  }
+}
+
+function navigateToArchive() {
+  if (selectedCredential.value && selectedCredential.value !== 'local') {
+    router.push({
+      path: '/flow-manager/__archive__',
+      query: { credential: selectedCredential.value },
+    });
+  } else {
+    router.push('/flow-manager/__archive__');
   }
 }
 
@@ -291,8 +334,9 @@ const filteredItemFlag = computed(() => {
 
 const filteredRootFlows = computed(() => {
   if (hideFlows.value) return [];
-  if (!search.value) return rootFlows.value;
-  return rootFlows.value.filter((flow) => {
+  const activeRoot = rootFlows.value.filter((flow) => !(flow as IFlow).options?.archived);
+  if (!search.value) return activeRoot;
+  return activeRoot.filter((flow) => {
     if (!flow.id) return false;
     return filteredItemFlag.value[flow.id] ?? false;
   });
@@ -529,6 +573,10 @@ function onNavigationAction() {
   border-radius: 10px;
   background-color: var(--theme--primary);
   color: var(--foreground-inverted, var(--theme--foreground-inverted, #ffffff));
+
+  &.archive-counter {
+    background-color: var(--theme--foreground-subdued, #64748b);
+  }
 }
 
 .quick-nav-tag {

@@ -628,7 +628,473 @@ export function useFlowActions(options: UseFlowActionsOptions) {
     });
   }
 
-  async function deleteItem() {
+  async function moveChildrenToRoot(parentIds: string[]) {
+    if (!parentIds.length) return;
+    const parentIdSet = new Set(parentIds);
+
+    // 1. Move child categories to root
+    const childCategories = flowCategories.value.filter(
+      (cat) =>
+        cat.flow_manager_metadata_id?.flow_manager_category &&
+        parentIdSet.has(cat.flow_manager_metadata_id.flow_manager_category),
+    );
+
+    if (childCategories.length > 0) {
+      for (const cat of childCategories) {
+        if (cat.flow_manager_metadata_id) {
+          cat.flow_manager_metadata_id.flow_manager_category = undefined;
+        }
+      }
+      if (saveCategories) {
+        try {
+          await saveCategories();
+        } catch (err) {
+          console.error('[FLOW MANAGER] Failed to save categories when moving children to root:', err);
+        }
+      }
+    }
+
+    // 2. Move child flows to root
+    const childFlows = flows.value.filter(
+      (f) =>
+        !parentIdSet.has(f.id) &&
+        f.flow_manager_metadata_id?.flow_manager_category &&
+        parentIdSet.has(f.flow_manager_metadata_id.flow_manager_category),
+    );
+
+    if (childFlows.length > 0) {
+      const payload: {
+        id: string;
+        flow_manager_metadata_id: {
+          id?: string;
+          flow_manager_category: string | null;
+        };
+      }[] = [];
+
+      for (const child of childFlows) {
+        const metaId =
+          typeof child.flow_manager_metadata_id === 'object' && child.flow_manager_metadata_id !== null
+            ? (child.flow_manager_metadata_id as { id?: string }).id
+            : typeof child.flow_manager_metadata_id === 'string'
+              ? child.flow_manager_metadata_id
+              : undefined;
+
+        const metaPayload: {
+          id?: string;
+          flow_manager_category: string | null;
+        } = {
+          flow_manager_category: null,
+        };
+
+        if (metaId) {
+          metaPayload.id = metaId;
+        }
+
+        payload.push({
+          id: child.id,
+          flow_manager_metadata_id: metaPayload,
+        });
+
+        // Update in local state
+        const target = flows.value.find((f) => f.id === child.id);
+        if (target) {
+          if (!target.flow_manager_metadata_id || typeof target.flow_manager_metadata_id !== 'object') {
+            target.flow_manager_metadata_id = {
+              id: metaId,
+              flow_manager_category: undefined,
+              flow_manager_order: 0,
+            };
+          } else {
+            target.flow_manager_metadata_id.flow_manager_category = undefined;
+          }
+        }
+
+        if (tabularFlows?.value) {
+          const tabTarget = tabularFlows.value.find((f) => f.id === child.id);
+          if (tabTarget) {
+            if (!tabTarget.flow_manager_metadata_id || typeof tabTarget.flow_manager_metadata_id !== 'object') {
+              tabTarget.flow_manager_metadata_id = {
+                id: metaId,
+                flow_manager_category: undefined,
+                flow_manager_order: 0,
+              };
+            } else {
+              tabTarget.flow_manager_metadata_id.flow_manager_category = undefined;
+            }
+          }
+        }
+      }
+
+      try {
+        if (selectedCredential.value === 'local') {
+          await api.patch('/flows', payload);
+        } else {
+          const cred = credentials.value.find((c) => c.id === selectedCredential.value);
+          if (cred) {
+            await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+              url: `${cred.url}/flows`,
+              staticToken: cred.staticToken,
+              method: 'PATCH',
+              payload,
+            });
+          }
+        }
+      } catch (err) {
+        console.error('[FLOW MANAGER] Failed to update child flows to root in database:', err);
+      }
+
+      flows.value = [...flows.value];
+      if (tabularFlows?.value) {
+        tabularFlows.value = [...tabularFlows.value];
+      }
+    }
+  }
+
+  async function archiveFlow(flow: IFlow) {
+    try {
+      loadingDeleteItem.value = true;
+      await moveChildrenToRoot([flow.id]);
+      const originalCategory = flow.flow_manager_metadata_id?.flow_manager_category || null;
+      const updatedOptions = {
+        ...(flow.options || {}),
+        archived: true,
+        archived_from_category: originalCategory,
+        archived_at: new Date().toISOString(),
+      };
+
+      if (selectedCredential.value === 'local') {
+        await api.patch(`/flows/${flow.id}`, {
+          status: 'inactive',
+          options: updatedOptions,
+        });
+      } else {
+        const cred = credentials.value.find((c) => c.id === selectedCredential.value);
+        if (cred) {
+          await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+            url: `${cred.url}/flows/${flow.id}`,
+            staticToken: cred.staticToken,
+            method: 'PATCH',
+            payload: {
+              status: 'inactive',
+              options: updatedOptions,
+            },
+          });
+        }
+      }
+
+      // Update in local state
+      const targetIndex = flows.value.findIndex((f) => f.id === flow.id);
+      if (targetIndex !== -1) {
+        flows.value[targetIndex] = {
+          ...flows.value[targetIndex]!,
+          status: 'inactive',
+          options: updatedOptions,
+        };
+        flows.value = [...flows.value];
+      }
+      if (tabularFlows?.value) {
+        const tabIndex = tabularFlows.value.findIndex((f) => f.id === flow.id);
+        if (tabIndex !== -1) {
+          tabularFlows.value[tabIndex] = {
+            ...tabularFlows.value[tabIndex]!,
+            status: 'inactive',
+            options: updatedOptions,
+          };
+          tabularFlows.value = [...tabularFlows.value];
+        }
+      }
+      if (selectedItem.value?.id === flow.id) {
+        (selectedItem.value as IFlow).status = 'inactive';
+        (selectedItem.value as IFlow).options = updatedOptions;
+      }
+
+      notificationsStore.add({
+        type: 'info',
+        title: `Flow "${flow.name}" moved to Archive`,
+        closeable: true,
+      });
+    } catch (err: unknown) {
+      notificationsStore.add({
+        type: 'error',
+        title: `Failed to archive flow: ${(err as Error)?.message || err}`,
+        closeable: true,
+      });
+    } finally {
+      loadingDeleteItem.value = false;
+    }
+  }
+
+  async function batchArchiveFlows(flowsToArchive: IFlow[]) {
+    try {
+      loadingDeleteItem.value = true;
+      await moveChildrenToRoot(flowsToArchive.map((f) => f.id));
+      let count = 0;
+      for (const flow of flowsToArchive) {
+        const originalCategory = flow.flow_manager_metadata_id?.flow_manager_category || null;
+        const updatedOptions = {
+          ...(flow.options || {}),
+          archived: true,
+          archived_from_category: originalCategory,
+          archived_at: new Date().toISOString(),
+        };
+
+        try {
+          if (selectedCredential.value === 'local') {
+            await api.patch(`/flows/${flow.id}`, {
+              status: 'inactive',
+              options: updatedOptions,
+            });
+          } else {
+            const cred = credentials.value.find((c) => c.id === selectedCredential.value);
+            if (cred) {
+              await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+                url: `${cred.url}/flows/${flow.id}`,
+                staticToken: cred.staticToken,
+                method: 'PATCH',
+                payload: { status: 'inactive', options: updatedOptions },
+              });
+            }
+          }
+
+          const targetIndex = flows.value.findIndex((f) => f.id === flow.id);
+          if (targetIndex !== -1) {
+            flows.value[targetIndex] = {
+              ...flows.value[targetIndex]!,
+              status: 'inactive',
+              options: updatedOptions,
+            };
+          }
+          if (tabularFlows?.value) {
+            const tabIndex = tabularFlows.value.findIndex((f) => f.id === flow.id);
+            if (tabIndex !== -1) {
+              tabularFlows.value[tabIndex] = {
+                ...tabularFlows.value[tabIndex]!,
+                status: 'inactive',
+                options: updatedOptions,
+              };
+            }
+          }
+          count++;
+        } catch {}
+      }
+
+      flows.value = [...flows.value];
+      if (tabularFlows?.value) {
+        tabularFlows.value = [...tabularFlows.value];
+      }
+
+      notificationsStore.add({
+        type: 'info',
+        title: `${count} flow(s) moved to Archive`,
+        closeable: true,
+      });
+    } finally {
+      loadingDeleteItem.value = false;
+    }
+  }
+
+  async function restoreFlow(flow: IFlow) {
+    try {
+      const updatedOptions = {
+        ...(flow.options || {}),
+        archived: false,
+        archived_at: undefined,
+      };
+
+      if (selectedCredential.value === 'local') {
+        await api.patch(`/flows/${flow.id}`, {
+          options: updatedOptions,
+        });
+      } else {
+        const cred = credentials.value.find((c) => c.id === selectedCredential.value);
+        if (cred) {
+          await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+            url: `${cred.url}/flows/${flow.id}`,
+            staticToken: cred.staticToken,
+            method: 'PATCH',
+            payload: { options: updatedOptions },
+          });
+        }
+      }
+
+      const targetIndex = flows.value.findIndex((f) => f.id === flow.id);
+      if (targetIndex !== -1) {
+        flows.value[targetIndex] = {
+          ...flows.value[targetIndex]!,
+          options: updatedOptions,
+        };
+        flows.value = [...flows.value];
+      }
+      if (tabularFlows?.value) {
+        const tabIndex = tabularFlows.value.findIndex((f) => f.id === flow.id);
+        if (tabIndex !== -1) {
+          tabularFlows.value[tabIndex] = {
+            ...tabularFlows.value[tabIndex]!,
+            options: updatedOptions,
+          };
+          tabularFlows.value = [...tabularFlows.value];
+        }
+      }
+      if (selectedItem.value?.id === flow.id) {
+        (selectedItem.value as IFlow).options = updatedOptions;
+      }
+
+      notificationsStore.add({
+        type: 'success',
+        title: `Flow "${flow.name}" restored from Archive`,
+        closeable: true,
+      });
+    } catch (err: unknown) {
+      notificationsStore.add({
+        type: 'error',
+        title: `Failed to restore flow: ${(err as Error)?.message || err}`,
+        closeable: true,
+      });
+    }
+  }
+
+  async function batchRestoreFlows(flowsToRestore: IFlow[]) {
+    try {
+      loadingDeleteItem.value = true;
+      let count = 0;
+      const lockedFlows = flowsToRestore.filter((f) => f.options?.locked === true);
+      if (lockedFlows.length > 0) {
+        notificationsStore.add({
+          type: 'warning',
+          title: `${lockedFlows.length} locked flow(s) skipped from restore`,
+          closeable: true,
+        });
+      }
+      const eligible = flowsToRestore.filter((f) => f.options?.locked !== true);
+      for (const flow of eligible) {
+        const updatedOptions = {
+          ...(flow.options || {}),
+          archived: false,
+          archived_at: undefined,
+        };
+
+        try {
+          if (selectedCredential.value === 'local') {
+            await api.patch(`/flows/${flow.id}`, {
+              options: updatedOptions,
+            });
+          } else {
+            const cred = credentials.value.find((c) => c.id === selectedCredential.value);
+            if (cred) {
+              await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+                url: `${cred.url}/flows/${flow.id}`,
+                staticToken: cred.staticToken,
+                method: 'PATCH',
+                payload: { options: updatedOptions },
+              });
+            }
+          }
+
+          const targetIndex = flows.value.findIndex((f) => f.id === flow.id);
+          if (targetIndex !== -1) {
+            flows.value[targetIndex] = {
+              ...flows.value[targetIndex]!,
+              options: updatedOptions,
+            };
+          }
+          if (tabularFlows?.value) {
+            const tabIndex = tabularFlows.value.findIndex((f) => f.id === flow.id);
+            if (tabIndex !== -1) {
+              tabularFlows.value[tabIndex] = {
+                ...tabularFlows.value[tabIndex]!,
+                options: updatedOptions,
+              };
+            }
+          }
+          if (selectedItem.value?.id === flow.id) {
+            (selectedItem.value as IFlow).options = updatedOptions;
+          }
+          count++;
+        } catch {}
+      }
+
+      flows.value = [...flows.value];
+      if (tabularFlows?.value) {
+        tabularFlows.value = [...tabularFlows.value];
+      }
+
+      notificationsStore.add({
+        type: 'success',
+        title: `${count} flow(s) restored from Archive`,
+        closeable: true,
+      });
+    } finally {
+      loadingDeleteItem.value = false;
+    }
+  }
+
+  async function toggleSafetyLock(flow: IFlow, targetState?: boolean) {
+    const isCurrentlyLocked = flow.options?.locked === true;
+    const nextLockedState = targetState !== undefined ? targetState : !isCurrentlyLocked;
+
+    try {
+      const updatedOptions = {
+        ...(flow.options || {}),
+        locked: nextLockedState,
+      };
+
+      if (selectedCredential.value === 'local') {
+        await api.patch(`/flows/${flow.id}`, {
+          options: updatedOptions,
+        });
+      } else {
+        const cred = credentials.value.find((c) => c.id === selectedCredential.value);
+        if (cred) {
+          await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+            url: `${cred.url}/flows/${flow.id}`,
+            staticToken: cred.staticToken,
+            method: 'PATCH',
+            payload: { options: updatedOptions },
+          });
+        }
+      }
+
+      const targetIndex = flows.value.findIndex((f) => f.id === flow.id);
+      if (targetIndex !== -1) {
+        flows.value[targetIndex] = {
+          ...flows.value[targetIndex]!,
+          options: updatedOptions,
+        };
+        flows.value = [...flows.value];
+      }
+      if (tabularFlows?.value) {
+        const tabIndex = tabularFlows.value.findIndex((f) => f.id === flow.id);
+        if (tabIndex !== -1) {
+          tabularFlows.value[tabIndex] = {
+            ...tabularFlows.value[tabIndex]!,
+            options: updatedOptions,
+          };
+          tabularFlows.value = [...tabularFlows.value];
+        }
+      }
+      if (selectedItem.value?.id === flow.id) {
+        (selectedItem.value as IFlow).options = updatedOptions;
+      }
+
+      notificationsStore.add({
+        type: nextLockedState ? 'info' : 'success',
+        title: nextLockedState
+          ? `Flow "${flow.name}" is now locked (Safety Lock active)`
+          : `Flow "${flow.name}" is now unlocked`,
+        closeable: true,
+      });
+    } catch (err: unknown) {
+      notificationsStore.add({
+        type: 'error',
+        title: `Failed to update safety lock: ${(err as Error)?.message || err}`,
+        closeable: true,
+      });
+    }
+  }
+
+  async function deleteItem(payload?: { isPermanent?: boolean }) {
+    const isPermanent = payload?.isPermanent ?? false;
+
     if (pendingDelete.value) {
       await commitPermanentDelete();
     }
@@ -639,10 +1105,34 @@ export function useFlowActions(options: UseFlowActionsOptions) {
       if (!selectedItems.value.length) return;
       deleteItemDialog.value = false;
 
-      const flowsToDelete = [...selectedFlows.value];
-      if (!flowsToDelete.length) return;
+      const allSelected = [...selectedFlows.value];
+      const lockedFlows = allSelected.filter((f) => f.options?.locked === true);
+      const eligibleFlows = allSelected.filter((f) => f.options?.locked !== true);
 
-      const idsToDelete = new Set(flowsToDelete.map((f) => f.id));
+      if (lockedFlows.length > 0) {
+        notificationsStore.add({
+          type: 'warning',
+          title: `${lockedFlows.length} locked flow(s) were protected from deletion/archiving`,
+          closeable: true,
+        });
+      }
+
+      if (!eligibleFlows.length) {
+        selectedItems.value = [];
+        isSelectAll.value = false;
+        isBatchAction.value = false;
+        return;
+      }
+
+      if (!isPermanent) {
+        await batchArchiveFlows(eligibleFlows);
+        selectedItems.value = [];
+        isSelectAll.value = false;
+        isBatchAction.value = false;
+        return;
+      }
+
+      const idsToDelete = new Set(eligibleFlows.map((f) => f.id));
 
       flows.value = flows.value.filter((f) => !idsToDelete.has(f.id));
       if (tabularFlows?.value) {
@@ -673,12 +1163,12 @@ export function useFlowActions(options: UseFlowActionsOptions) {
       isSelectAll.value = false;
       isBatchAction.value = false;
 
-      const count = flowsToDelete.length;
+      const count = eligibleFlows.length;
       pendingDelete.value = {
         id: `batch-${Date.now()}`,
         type: 'batch',
-        flows: flowsToDelete,
-        message: `${count} ${count === 1 ? 'Flow' : 'Flows'} deleted`,
+        flows: eligibleFlows,
+        message: `${count} ${count === 1 ? 'Flow' : 'Flows'} permanently deleted`,
         duration,
       };
 
@@ -728,6 +1218,20 @@ export function useFlowActions(options: UseFlowActionsOptions) {
       } else {
         const flowToDelete = { ...selectedItem.value } as IFlow;
 
+        if (flowToDelete.options?.locked === true) {
+          notificationsStore.add({
+            type: 'warning',
+            title: `Flow "${flowToDelete.name}" is protected by Safety Lock. Unlock it first.`,
+            closeable: true,
+          });
+          return;
+        }
+
+        if (!isPermanent) {
+          await archiveFlow(flowToDelete);
+          return;
+        }
+
         flows.value = flows.value.filter((f) => f.id !== flowToDelete.id);
         if (tabularFlows?.value) {
           tabularFlows.value = tabularFlows.value.filter((f) => f.id !== flowToDelete.id);
@@ -759,7 +1263,7 @@ export function useFlowActions(options: UseFlowActionsOptions) {
           id: `flow-${flowToDelete.id}`,
           type: 'flow',
           flows: [flowToDelete],
-          message: `Flow "${flowToDelete.name}" deleted`,
+          message: `Flow "${flowToDelete.name}" permanently deleted`,
           duration,
         };
 
@@ -794,6 +1298,25 @@ export function useFlowActions(options: UseFlowActionsOptions) {
 
   async function changeFlowStatus(status: 'active' | 'inactive') {
     if (!selectedItems.value.length) return;
+
+    const lockedInSelection = selectedFlows.value.filter((flow) => flow.options?.locked === true);
+    if (lockedInSelection.length > 0) {
+      notificationsStore.add({
+        type: 'warning',
+        title: `${lockedInSelection.length} locked flow(s) skipped from status change`,
+        closeable: true,
+      });
+    }
+
+    const filtered = selectedFlows.value.filter(
+      (flow) => flow.status !== status && flow.options?.locked !== true,
+    );
+    if (!filtered.length) {
+      selectedItems.value = [];
+      isSelectAll.value = false;
+      return;
+    }
+
     processingDialogState.indeterminate.value = false;
     processingDialogState.title.value =
       status === 'active' ? 'Activating Flows' : 'Deactivating Flows';
@@ -823,7 +1346,6 @@ export function useFlowActions(options: UseFlowActionsOptions) {
             });
           };
     try {
-      const filtered = selectedFlows.value.filter((flow) => flow.status !== status);
       for (const item of filtered) {
         if (item) {
           try {
@@ -902,6 +1424,11 @@ export function useFlowActions(options: UseFlowActionsOptions) {
     backupSelectedItems,
     deleteItem,
     deleteSelectedItems,
+    archiveFlow,
+    batchArchiveFlows,
+    restoreFlow,
+    batchRestoreFlows,
+    toggleSafetyLock,
     pendingDelete,
     undoDelete,
     commitPermanentDelete,

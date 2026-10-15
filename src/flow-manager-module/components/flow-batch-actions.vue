@@ -5,6 +5,7 @@ const props = withDefaults(
     selectedItemsCount: number;
     selectedFlowsInactiveCount: number;
     selectedFlowsActiveCount: number;
+    selectedFlowsArchivedCount?: number;
     selectedCredential: string;
   }>(),
   {
@@ -12,6 +13,7 @@ const props = withDefaults(
     selectedItemsCount: 0,
     selectedFlowsInactiveCount: 0,
     selectedFlowsActiveCount: 0,
+    selectedFlowsArchivedCount: 0,
     selectedCredential: 'local',
   },
 );
@@ -20,6 +22,7 @@ const emit = defineEmits<{
   (e: 'selectAll'): void;
   (e: 'activateSelected'): void;
   (e: 'deactivateSelected'): void;
+  (e: 'unarchiveSelected'): void;
   (e: 'backupSelected'): void;
   (e: 'duplicateSelected'): void;
   (e: 'deleteSelected'): void;
@@ -66,6 +69,18 @@ const isSelectAll = defineModel<boolean>('isSelectAll', { default: false });
       @click="emit('deactivateSelected')"
     >
       <v-icon name="pause_circle" />
+    </v-button>
+
+    <v-button
+      v-if="showSelect"
+      v-tooltip.bottom="'Unarchive Selected'"
+      icon
+      rounded
+      small
+      :disabled="!props.selectedFlowsArchivedCount"
+      @click="emit('unarchiveSelected')"
+    >
+      <v-icon name="unarchive" />
     </v-button>
 
     <v-button

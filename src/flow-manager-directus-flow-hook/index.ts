@@ -2,7 +2,55 @@ import { defineHook } from '@directus/extensions-sdk';
 import { generateUUID } from '../utils/common.util';
 import type { FlowExecutionData, RevisionCreateActionData } from '../types';
 
-export default defineHook(({ action }, { services }) => {
+type ExceptionConstructor = new (message: string) => Error;
+
+export default defineHook(({ action, filter }, context) => {
+  const { services, env } = context;
+  const exceptions = (context as Record<string, unknown>).exceptions as
+    | Record<string, ExceptionConstructor>
+    | undefined;
+  // Safety Lock: Prevent deletion of locked flows if enforcement is enabled
+  filter('flows.delete', async (keys: string[], _meta, { database }) => {
+    const rawVal =
+      env?.FLOW_MANAGER_ENFORCE_SAFETY_LOCK ?? process.env.FLOW_MANAGER_ENFORCE_SAFETY_LOCK;
+    const isEnforced = rawVal === 'true' || rawVal === true;
+    if (!isEnforced || !keys || !keys.length) {
+      return keys;
+    }
+
+    try {
+      const flows = await database('directus_flows')
+        .whereIn('id', keys)
+        .select('id', 'name', 'options');
+
+      for (const flow of flows) {
+        let opts = flow.options;
+        if (typeof opts === 'string') {
+          try {
+            opts = JSON.parse(opts);
+          } catch {}
+        }
+        if (opts && typeof opts === 'object' && opts.locked === true) {
+          const flowName = flow.name || flow.id;
+          const msg = `Flow "${flowName}" is protected by Safety Lock. Unlock it before deleting.`;
+          if (exceptions?.ForbiddenException) {
+            throw new exceptions.ForbiddenException(msg);
+          }
+          throw new Error(msg);
+        }
+      }
+    } catch (err: unknown) {
+      // Re-throw if it's our lock error
+      if (err instanceof Error && err.message.includes('Safety Lock')) {
+        throw err;
+      }
+      // Otherwise log and allow delete to prevent breaking flows if DB query fails
+      console.warn('[flow-manager] Error checking flow safety lock in flows.delete hook:', err);
+    }
+
+    return keys;
+  });
+
   action('revisions.create', async (data: RevisionCreateActionData, { database, schema }) => {
     if (!data.payload) return;
     const { RevisionsService, ActivityService } = services;

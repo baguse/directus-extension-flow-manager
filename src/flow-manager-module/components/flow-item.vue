@@ -34,6 +34,7 @@ const nestedFlows = computed(() => {
   return (items.value || [])
     .filter((flow) => {
       if (!flow || flow.id === itemId) return false;
+      if ((flow as IFlow).options?.archived) return false;
       return flow.flow_manager_metadata_id?.flow_manager_category === props.item.id;
     })
     .sort(
@@ -138,6 +139,14 @@ function selectItem() {
           <v-chip x-small class="item-name text-gray mr-4 trigger-chip">{{ triggerType }}</v-chip>
         </v-badge>
         <span ref="itemName" class="item-name text-gray">{{ item.name }}</span>
+        <v-chip v-if="item.options?.locked" x-small class="badge-chip locked-chip" title="Safety Lock Active">
+          <v-icon name="lock" x-small class="mr-1" />
+          Locked
+        </v-chip>
+        <v-chip v-if="item.options?.archived" x-small class="badge-chip archived-chip" title="Archived Flow">
+          <v-icon name="archive" x-small class="mr-1" />
+          Archived
+        </v-chip>
         <span v-if="item.description" class="item-note text-gray">{{ item.description }}</span>
       </div>
       <div v-else class="item-detail">
@@ -149,6 +158,14 @@ function selectItem() {
           <v-chip x-small active class="item-name mr-4 trigger-chip">{{ triggerType }} </v-chip>
         </v-badge>
         <span ref="itemName" class="item-name">{{ item.name }}</span>
+        <v-chip v-if="item.options?.locked" x-small class="badge-chip locked-chip" title="Safety Lock Active">
+          <v-icon name="lock" x-small class="mr-1" />
+          Locked
+        </v-chip>
+        <v-chip v-if="item.options?.archived" x-small class="badge-chip archived-chip" title="Archived Flow">
+          <v-icon name="archive" x-small class="mr-1" />
+          Archived
+        </v-chip>
         <span v-if="!isCategory && item.description" class="item-note">{{ item.description }}</span>
       </div>
       <v-icon
@@ -165,7 +182,7 @@ function selectItem() {
         clickable
         @click.stop.prevent="toggleCollapse"
       />
-      <item-options :item="item" :is-local="isLocal" />
+      <item-options :item="item" :is-local="isLocal" @click.stop />
     </v-list-item>
 
 
@@ -295,5 +312,33 @@ body.is-dragging-flow {
 .trigger-chip {
   --v-chip-color: white;
   --v-chip-background-color: var(--theme--primary, var(--primary));
+}
+
+.mr-1 {
+  margin-right: 4px;
+}
+
+.badge-chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+  flex-shrink: 0;
+
+  &.locked-chip {
+    background-color: rgba(239, 68, 68, 0.12);
+    color: #dc2626;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+  }
+
+  &.archived-chip {
+    background-color: rgba(100, 116, 139, 0.15);
+    color: #475569;
+    border: 1px solid rgba(100, 116, 139, 0.25);
+  }
 }
 </style>
