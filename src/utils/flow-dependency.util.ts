@@ -249,6 +249,25 @@ export function buildFlowDependencyGraph(
         }
       }
     }
+
+    // If targetFlow is an individual flow (no child flows under it),
+    // also include directly connected upstream & downstream flows for a rich pipeline view
+    if (targetFlow && allowedCategoryFlowIds.size === 1) {
+      for (const f of flows) {
+        if (f.id === targetFlow.id) continue;
+        const triggersF = (targetFlow.operations || []).some((op) => {
+          const targetId = op.options?.flow;
+          return targetId && targetId === f.id;
+        });
+        const triggeredByF = (f.operations || []).some((op) => {
+          const targetId = op.options?.flow;
+          return targetId && targetId === targetFlow.id;
+        });
+        if (triggersF || triggeredByF) {
+          allowedCategoryFlowIds.add(f.id);
+        }
+      }
+    }
   }
 
   // Pre-filter flows based on options

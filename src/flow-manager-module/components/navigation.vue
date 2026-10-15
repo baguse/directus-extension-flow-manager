@@ -165,10 +165,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, toRefs, inject, type Ref } from 'vue';
+import { computed, ref, toRefs, inject } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import NavigationItem from './navigation-item.vue';
-import type { ICredential, IFlow, IFolder, IServerInfo } from '../../types';
+import type { FlowManagerUtilsContext, IFlow, IFolder, IServerInfo } from '../../types';
 import { useLocalStorage } from '../../composables/use-local-storage';
 
 export interface NavigationFlowItem {
@@ -208,11 +208,7 @@ const timeOutId = ref<NodeJS.Timeout | null>(null);
 const route = useRoute();
 const router = useRouter();
 
-const flowManagerUtils = inject<{
-  credentials: Ref<ICredential[]>;
-  selectedCredential: Ref<string>;
-  setCredential: (credential: string) => void;
-}>('flowManagerUtils');
+const flowManagerUtils = inject<FlowManagerUtilsContext>('flowManagerUtils');
 
 const selectedCredential = computed({
   get: () => flowManagerUtils?.selectedCredential.value,
@@ -266,6 +262,7 @@ const isArchiveRoute = computed(() => {
 });
 
 function navigateToHome() {
+  flowManagerUtils?.setCategoryFilter?.('all');
   if (selectedCredential.value && selectedCredential.value !== 'local') {
     router.push({
       path: '/flow-manager',
@@ -288,6 +285,7 @@ function navigateToDashboard() {
 }
 
 function navigateToArchive() {
+  flowManagerUtils?.setCategoryFilter?.('all');
   if (selectedCredential.value && selectedCredential.value !== 'local') {
     router.push({
       path: '/flow-manager/__archive__',

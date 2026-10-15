@@ -367,6 +367,7 @@ export interface FlowManagerUtilsContext {
   batchArchiveFlows?: (flows: IFlow[]) => Promise<void>;
   restoreFlow?: (flow: IFlow) => Promise<void>;
   batchRestoreFlows?: (flows: IFlow[]) => Promise<void>;
+  setCategoryFilter?: (category: string) => void;
 }
 
 /* ==========================================================================

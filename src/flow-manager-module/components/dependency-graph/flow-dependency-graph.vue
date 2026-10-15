@@ -23,11 +23,13 @@ const props = withDefaults(
     flows: IFlow[];
     flowCategories?: IFolder[];
     flowChildMap?: Record<string, (IFlow | IFolder)[]>;
+    parentId?: string | null;
     selectedFlowId?: string | null;
   }>(),
   {
     flowCategories: () => [],
     flowChildMap: () => ({}),
+    parentId: null,
     selectedFlowId: null,
   },
 );
@@ -88,6 +90,14 @@ function getChildrenCount(flowId: string): number {
   return count;
 }
 
+// Single flows without children
+const individualFlows = computed<IFlow[]>(() => {
+  const parentIdSet = new Set(flowsWithChildren.value.map((f) => f.id));
+  return props.flows
+    .filter((flow) => !parentIdSet.has(flow.id))
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+});
+
 // Graph Controls State
 const searchQuery = ref('');
 const statusFilter = ref<'all' | 'active' | 'inactive'>('all');
@@ -100,14 +110,38 @@ const activeSelectedNodeId = ref<string | null>(
 );
 const showCycleOnly = ref(false);
 
+let isInternalSelection = false;
+
+watch(
+  () => props.parentId,
+  (newParentId) => {
+    if (newParentId && newParentId !== '__archive__') {
+      categoryFilter.value = newParentId;
+    } else if (!newParentId) {
+      categoryFilter.value = 'all';
+    }
+  },
+  { immediate: true },
+);
+
 watch(
   () => props.selectedFlowId,
   (newId) => {
     if (newId) {
       activeSelectedNodeId.value = `flow:${newId}`;
+      if (!isInternalSelection && !props.parentId) {
+        categoryFilter.value = newId;
+      }
     }
   },
+  { immediate: true },
 );
+
+watch(categoryFilter, () => {
+  nextTick(() => {
+    fitView({ padding: 0.2 });
+  });
+});
 
 // Compute base dependency graph data
 const graphData = computed(() => {
@@ -250,6 +284,7 @@ const vueFlowEdges = computed<Edge[]>(() => {
 });
 
 function onNodeClick(event: { node: Node }) {
+  isInternalSelection = true;
   activeSelectedNodeId.value = event.node.id;
   showCycleOnly.value = false;
 
@@ -260,6 +295,9 @@ function onNodeClick(event: { node: Node }) {
       emit('selectFlow', flow);
     }
   }
+  setTimeout(() => {
+    isInternalSelection = false;
+  }, 100);
 }
 
 function onPaneClick() {
@@ -346,6 +384,12 @@ function resetView() {
           <optgroup v-if="flowsWithChildren.length" label="Flows with Children">
             <option v-for="flow in flowsWithChildren" :key="flow.id" :value="flow.id">
               ⚡ {{ flow.name }} ({{ getChildrenCount(flow.id) }})
+            </option>
+          </optgroup>
+
+          <optgroup v-if="individualFlows.length" label="Individual Flows">
+            <option v-for="flow in individualFlows" :key="flow.id" :value="flow.id">
+              🔗 {{ flow.name }}
             </option>
           </optgroup>
         </select>

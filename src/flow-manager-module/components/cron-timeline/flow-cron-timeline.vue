@@ -28,12 +28,16 @@ const props = withDefaults(
   defineProps<{
     flows: IFlow[];
     flowCategories?: IFolder[];
+    flowChildMap?: Record<string, (IFlow | IFolder)[]>;
+    parentId?: string | null;
     selectedFlowId?: string | null;
     selectedCredential?: string;
     credentials?: ICredential[];
   }>(),
   {
     flowCategories: () => [],
+    flowChildMap: () => ({}),
+    parentId: null,
     selectedFlowId: null,
     selectedCredential: 'local',
     credentials: () => [],
@@ -186,23 +190,88 @@ async function copyCron(cronText: string) {
   }
 }
 
+// Compute flows that have children (act as parent folders)
+const flowsWithChildren = computed<IFlow[]>(() => {
+  const parentIdSet = new Set<string>();
+
+  if (props.flowChildMap && Object.keys(props.flowChildMap).length > 0) {
+    for (const [parentId, children] of Object.entries(props.flowChildMap)) {
+      if (children && children.length > 0) {
+        parentIdSet.add(parentId);
+      }
+    }
+  }
+
+  for (const flow of props.flows) {
+    const parentId = flow.flow_manager_metadata_id?.flow_manager_category;
+    if (parentId) {
+      parentIdSet.add(parentId);
+    }
+  }
+  for (const cat of props.flowCategories || []) {
+    const parentId = cat.flow_manager_metadata_id?.flow_manager_category;
+    if (parentId) {
+      parentIdSet.add(parentId);
+    }
+  }
+
+  return props.flows
+    .filter((flow) => parentIdSet.has(flow.id))
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+});
+
+function getChildrenCount(flowId: string): number {
+  if (props.flowChildMap && props.flowChildMap[flowId]) {
+    return props.flowChildMap[flowId]!.length;
+  }
+  let count = 0;
+  for (const f of props.flows) {
+    if (f.flow_manager_metadata_id?.flow_manager_category === flowId) {
+      count++;
+    }
+  }
+  for (const c of props.flowCategories || []) {
+    if (c.flow_manager_metadata_id?.flow_manager_category === flowId) {
+      count++;
+    }
+  }
+  return count;
+}
+
+// Scheduled flows without children
+const individualScheduledFlows = computed<IFlow[]>(() => {
+  const parentIdSet = new Set(flowsWithChildren.value.map((f) => f.id));
+  return props.flows
+    .filter((flow) => flow.trigger === 'schedule' && !parentIdSet.has(flow.id))
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+});
+
+let isInternalSelection = false;
+
+watch(
+  () => props.parentId,
+  (newParentId) => {
+    if (newParentId && newParentId !== '__archive__') {
+      filterCategory.value = newParentId;
+    } else if (!newParentId) {
+      filterCategory.value = 'all';
+    }
+  },
+  { immediate: true },
+);
+
 watch(
   () => props.selectedFlowId,
   (newId) => {
     if (newId) {
       activeSelectedFlowId.value = newId;
+      if (!isInternalSelection && !props.parentId) {
+        filterCategory.value = newId;
+      }
     }
   },
+  { immediate: true },
 );
-
-// Category options for dropdown
-const categoryOptions = computed(() => {
-  const options = [{ text: 'All Categories', value: 'all' }];
-  for (const cat of props.flowCategories) {
-    options.push({ text: cat.name, value: cat.id });
-  }
-  return options;
-});
 
 // Parse scheduled flows and calculate occurrences
 const scheduleData = computed(() => {
@@ -339,8 +408,12 @@ function formatExactTime(date: Date): string {
 }
 
 function selectFlowRow(flowItem: ScheduledFlowItem) {
+  isInternalSelection = true;
   activeSelectedFlowId.value = flowItem.id;
   emit('selectFlow', flowItem.flow);
+  setTimeout(() => {
+    isInternalSelection = false;
+  }, 100);
 }
 
 function handleGoToFlow(flowItem: ScheduledFlowItem) {
@@ -457,11 +530,30 @@ function handleSimulateFlow(flowItem: ScheduledFlowItem) {
         </div>
 
         <!-- Category Dropdown -->
-        <div v-if="flowCategories.length > 0" class="category-select-wrapper">
+        <div
+          v-if="flowCategories.length > 0 || flowsWithChildren.length > 0 || individualScheduledFlows.length > 0"
+          class="category-select-wrapper"
+        >
           <select v-model="filterCategory" class="native-category-select">
-            <option v-for="opt in categoryOptions" :key="opt.value" :value="opt.value">
-              {{ opt.text }}
-            </option>
+            <option value="all">All Categories</option>
+
+            <optgroup v-if="flowCategories.length" label="Folders / Categories">
+              <option v-for="cat in flowCategories" :key="cat.id" :value="cat.id">
+                📁 {{ cat.name }}
+              </option>
+            </optgroup>
+
+            <optgroup v-if="flowsWithChildren.length" label="Flows with Children">
+              <option v-for="flow in flowsWithChildren" :key="flow.id" :value="flow.id">
+                ⚡ {{ flow.name }} ({{ getChildrenCount(flow.id) }})
+              </option>
+            </optgroup>
+
+            <optgroup v-if="individualScheduledFlows.length" label="Scheduled Flows">
+              <option v-for="flow in individualScheduledFlows" :key="flow.id" :value="flow.id">
+                ⏰ {{ flow.name }}
+              </option>
+            </optgroup>
           </select>
         </div>
 

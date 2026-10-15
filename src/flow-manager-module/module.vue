@@ -89,6 +89,7 @@
         :flows="activeFlowsList"
         :flow-categories="flowCategories"
         :flow-child-map="flowChildMap"
+        :parent-id="parentId"
         :selected-flow-id="selectedItem?.id"
         @select-flow="selectItem"
         @go-to-flow="goToFlow"
@@ -98,6 +99,8 @@
         v-else-if="viewMode === 'TIMELINE'"
         :flows="activeFlowsList"
         :flow-categories="flowCategories"
+        :flow-child-map="flowChildMap"
+        :parent-id="parentId"
         :selected-flow-id="selectedItem?.id"
         :selected-credential="selectedCredential"
         :credentials="credentials"
@@ -957,6 +960,23 @@ export default defineComponent({
         }
       }
 
+      if (
+        selectedShortcutFilter.value.flow_manager_category &&
+        selectedShortcutFilter.value.flow_manager_category !== 'all' &&
+        !categories.some((c) => c.id === selectedShortcutFilter.value.flow_manager_category)
+      ) {
+        const catId = selectedShortcutFilter.value.flow_manager_category;
+        const categoryData = folderMap.value[catId] || flowIdMap.value[catId];
+        if (categoryData) {
+          categories.push({
+            id: catId,
+            name: categoryData.name || catId,
+            icon: categoryData.icon || 'bolt',
+            color: categoryData.color || '',
+          });
+        }
+      }
+
       return categories.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     });
 
@@ -1187,6 +1207,11 @@ export default defineComponent({
 
     function selectItem(item: IFlow | IFolder) {
       selectedItem.value = item;
+      if (item && item.id && item.id !== '__archive__') {
+        if (viewMode.value === 'TABLE') {
+          setCategoryFilter(item.id);
+        }
+      }
     }
 
     async function reloadFlow() {
@@ -1551,6 +1576,18 @@ export default defineComponent({
       }
     });
 
+    watch(
+      () => parentId.value,
+      (newParentId) => {
+        if (newParentId && newParentId !== '__archive__') {
+          setCategoryFilter(newParentId);
+        } else if (!newParentId || newParentId === '__archive__') {
+          setCategoryFilter('all');
+        }
+      },
+      { immediate: true },
+    );
+
     const editFlowDialog = ref(false);
     const flowToEdit = ref<IFlow | null>(null);
     const isSavingFlow = ref(false);
@@ -1699,6 +1736,7 @@ export default defineComponent({
       batchArchiveFlows,
       restoreFlow,
       batchRestoreFlows,
+      setCategoryFilter,
     });
 
     function onViewInGraph(flow: IFlow) {

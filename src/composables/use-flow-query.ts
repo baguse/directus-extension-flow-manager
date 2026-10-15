@@ -102,6 +102,9 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
         if (rec.trigger && typeof rec.trigger === 'object' && rec.trigger._eq !== undefined) {
           trigger = String(rec.trigger._eq);
         }
+        if (rec.id && typeof rec.id === 'object' && rec.id._eq !== undefined) {
+          category = String(rec.id._eq);
+        }
         const metadata = rec.flow_manager_metadata_id;
         if (metadata && typeof metadata === 'object') {
           const categoryField = (metadata as Record<string, unknown>).flow_manager_category;
@@ -847,25 +850,53 @@ export function useFlowQuery(options: UseFlowQueryOptions) {
     const filteredAnd =
       currentFilter._and?.filter((item: Record<string, unknown>) => {
         if (!item || typeof item !== 'object') return false;
-        const key = Object.keys(item)[0];
-        if (key !== 'flow_manager_metadata_id') return true;
-        const meta = item.flow_manager_metadata_id;
-        return !(
-          meta &&
-          typeof meta === 'object' &&
-          (meta as Record<string, unknown>).flow_manager_category !== undefined
-        );
+        if (item.flow_manager_metadata_id) {
+          const meta = item.flow_manager_metadata_id;
+          if (
+            meta &&
+            typeof meta === 'object' &&
+            (meta as Record<string, unknown>).flow_manager_category !== undefined
+          ) {
+            return false;
+          }
+        }
+        if (
+          item.id &&
+          typeof item.id === 'object' &&
+          (item.id as Record<string, unknown>)._eq !== undefined
+        ) {
+          const prevId = String((item.id as Record<string, unknown>)._eq);
+          if (
+            prevId === selectedShortcutFilter.value.flow_manager_category ||
+            flows.value.some((f) => f.id === prevId)
+          ) {
+            return false;
+          }
+        }
+        return true;
       }) || [];
-    const { flow_manager_metadata_id: _meta, ...restFilter } = currentFilter;
+    const { flow_manager_metadata_id: _meta, id: _idRule, ...restFilter } = currentFilter;
 
     if (category !== 'all') {
-      filteredAnd.push({
-        flow_manager_metadata_id: {
-          flow_manager_category: {
+      const hasChildren =
+        flowChildMap.value[category] && flowChildMap.value[category]!.length > 0;
+      const isFolder = flowCategories.value.some((c) => c.id === category);
+
+      if (!isFolder && !hasChildren && flows.value.some((f) => f.id === category)) {
+        filteredAnd.push({
+          id: {
             _eq: category,
           },
-        },
-      });
+        });
+      } else {
+        filteredAnd.push({
+          flow_manager_metadata_id: {
+            flow_manager_category: {
+              _eq: category,
+            },
+          },
+        });
+      }
     }
 
     if (filteredAnd.length > 0) {

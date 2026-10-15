@@ -430,9 +430,56 @@ export function parseScheduledFlows(
   const windowEnd = new Date(windowStart.getTime() + windowHours * 60 * 60 * 1000);
 
   // Category map lookup
-  const categoryMap = new Map<string, IFolder>();
+  const categoryMap = new Map<string, Partial<IFolder>>();
   for (const cat of flowCategories) {
     categoryMap.set(cat.id, cat);
+  }
+  for (const f of flows) {
+    if (f.id && f.name && !categoryMap.has(f.id)) {
+      categoryMap.set(f.id, {
+        id: f.id,
+        name: f.name,
+        icon: f.icon || 'bolt',
+        color: f.color || '',
+      });
+    }
+  }
+
+  // Resolve category filter (handles folders, parent flows, and nested flows)
+  let allowedCategoryFlowIds: Set<string> | null = null;
+  if (filterCategory && filterCategory !== 'all') {
+    allowedCategoryFlowIds = new Set<string>();
+
+    // If filterCategory is a flow ID, include the flow itself
+    const targetFlow = flows.find((f) => f.id === filterCategory);
+    if (targetFlow) {
+      allowedCategoryFlowIds.add(targetFlow.id);
+    }
+
+    // Collect all descendant flows whose category is filterCategory (or nested under it)
+    const queue = [filterCategory];
+    const visited = new Set<string>([filterCategory]);
+
+    while (queue.length > 0) {
+      const currentParentId = queue.shift()!;
+      for (const flow of flows) {
+        const cat = flow.flow_manager_metadata_id?.flow_manager_category;
+        if (cat === currentParentId) {
+          allowedCategoryFlowIds.add(flow.id);
+          if (!visited.has(flow.id)) {
+            visited.add(flow.id);
+            queue.push(flow.id);
+          }
+        }
+      }
+      for (const folder of flowCategories) {
+        const cat = folder.flow_manager_metadata_id?.flow_manager_category;
+        if (cat === currentParentId && !visited.has(folder.id)) {
+          visited.add(folder.id);
+          queue.push(folder.id);
+        }
+      }
+    }
   }
 
   // Filter flows with trigger === 'schedule'
@@ -443,8 +490,7 @@ export function parseScheduledFlows(
     if (filterStatus !== 'all' && flow.status !== filterStatus) return false;
 
     // Category filter
-    const catId = flow.flow_manager_metadata_id?.flow_manager_category;
-    if (filterCategory !== 'all' && catId !== filterCategory) return false;
+    if (allowedCategoryFlowIds && !allowedCategoryFlowIds.has(flow.id)) return false;
 
     // Search query
     if (searchQuery.trim()) {
