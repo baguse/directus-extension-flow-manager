@@ -88,6 +88,7 @@
         v-else-if="viewMode === 'GRAPH'"
         :flows="activeFlowsList"
         :flow-categories="flowCategories"
+        :flow-child-map="flowChildMap"
         :selected-flow-id="selectedItem?.id"
         @select-flow="selectItem"
         @go-to-flow="goToFlow"

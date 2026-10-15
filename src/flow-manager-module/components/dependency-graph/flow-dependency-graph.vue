@@ -22,10 +22,12 @@ const props = withDefaults(
   defineProps<{
     flows: IFlow[];
     flowCategories?: IFolder[];
+    flowChildMap?: Record<string, (IFlow | IFolder)[]>;
     selectedFlowId?: string | null;
   }>(),
   {
     flowCategories: () => [],
+    flowChildMap: () => ({}),
     selectedFlowId: null,
   },
 );
@@ -37,6 +39,54 @@ const emit = defineEmits<{
 }>();
 
 const { fitView } = useVueFlow();
+
+// Compute flows that have children (act as parent folders)
+const flowsWithChildren = computed<IFlow[]>(() => {
+  const parentIdSet = new Set<string>();
+
+  if (props.flowChildMap && Object.keys(props.flowChildMap).length > 0) {
+    for (const [parentId, children] of Object.entries(props.flowChildMap)) {
+      if (children && children.length > 0) {
+        parentIdSet.add(parentId);
+      }
+    }
+  }
+
+  for (const flow of props.flows) {
+    const parentId = flow.flow_manager_metadata_id?.flow_manager_category;
+    if (parentId) {
+      parentIdSet.add(parentId);
+    }
+  }
+  for (const cat of props.flowCategories || []) {
+    const parentId = cat.flow_manager_metadata_id?.flow_manager_category;
+    if (parentId) {
+      parentIdSet.add(parentId);
+    }
+  }
+
+  return props.flows
+    .filter((flow) => parentIdSet.has(flow.id))
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+});
+
+function getChildrenCount(flowId: string): number {
+  if (props.flowChildMap && props.flowChildMap[flowId]) {
+    return props.flowChildMap[flowId]!.length;
+  }
+  let count = 0;
+  for (const f of props.flows) {
+    if (f.flow_manager_metadata_id?.flow_manager_category === flowId) {
+      count++;
+    }
+  }
+  for (const c of props.flowCategories || []) {
+    if (c.flow_manager_metadata_id?.flow_manager_category === flowId) {
+      count++;
+    }
+  }
+  return count;
+}
 
 // Graph Controls State
 const searchQuery = ref('');
@@ -286,9 +336,18 @@ function resetView() {
         <!-- Category Dropdown -->
         <select v-model="categoryFilter" class="toolbar-select">
           <option value="all">All Categories</option>
-          <option v-for="cat in flowCategories" :key="cat.id" :value="cat.id">
-            {{ cat.name }}
-          </option>
+
+          <optgroup v-if="flowCategories.length" label="Folders / Categories">
+            <option v-for="cat in flowCategories" :key="cat.id" :value="cat.id">
+              📁 {{ cat.name }}
+            </option>
+          </optgroup>
+
+          <optgroup v-if="flowsWithChildren.length" label="Flows with Children">
+            <option v-for="flow in flowsWithChildren" :key="flow.id" :value="flow.id">
+              ⚡ {{ flow.name }} ({{ getChildrenCount(flow.id) }})
+            </option>
+          </optgroup>
         </select>
 
         <!-- Status Filter -->
