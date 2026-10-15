@@ -69,6 +69,19 @@
         <button
           type="button"
           class="quick-nav-btn"
+          :class="{ 'is-active': isRecipesRoute }"
+          @click="navigateToRecipes"
+        >
+          <div class="quick-nav-left">
+            <v-icon name="auto_stories" small class="quick-nav-icon" />
+            <span class="quick-nav-label">Recipes</span>
+          </div>
+          <span class="quick-nav-tag recipes-tag">Marketplace</span>
+        </button>
+
+        <button
+          type="button"
+          class="quick-nav-btn"
           :class="{ 'is-active': isArchiveRoute }"
           @click="navigateToArchive"
         >
@@ -262,6 +275,10 @@ const isDashboardRoute = computed(() => {
   return route.path.startsWith('/flow-manager/dashboard');
 });
 
+const isRecipesRoute = computed(() => {
+  return route.path.startsWith('/flow-manager/recipes');
+});
+
 const isArchiveRoute = computed(() => {
   return route.params.parentId === '__archive__';
 });
@@ -286,6 +303,17 @@ function navigateToDashboard() {
     });
   } else {
     router.push('/flow-manager/dashboard');
+  }
+}
+
+function navigateToRecipes() {
+  if (selectedCredential.value && selectedCredential.value !== 'local') {
+    router.push({
+      path: '/flow-manager/recipes',
+      query: { credential: selectedCredential.value },
+    });
+  } else {
+    router.push('/flow-manager/recipes');
   }
 }
 
@@ -601,6 +629,11 @@ function onNavigationAction() {
   border-radius: 4px;
   background-color: var(--theme--primary-subdued, rgba(102, 68, 255, 0.12));
   color: var(--theme--primary);
+
+  &.recipes-tag {
+    background-color: rgba(249, 115, 22, 0.12);
+    color: #f97316;
+  }
 }
 
 /* Explorer Toolbar */

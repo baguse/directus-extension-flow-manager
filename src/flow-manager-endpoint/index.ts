@@ -16,16 +16,17 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
       });
       return;
     }
-    const { url, staticToken, method, payload } = _req.body;
+    const { url, staticToken, method, payload, headers: customHeaders } = _req.body;
 
     try {
       const { data } = await axios.request({
         url,
-        method,
+        method: method || 'GET',
         timeout: 15000,
         headers: {
           'Content-Type': 'application/json',
           ...(staticToken ? { Authorization: `Bearer ${staticToken}` } : {}),
+          ...(customHeaders || {}),
         },
         data: payload,
       });

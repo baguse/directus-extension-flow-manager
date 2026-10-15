@@ -24,6 +24,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: 'openVersionDialog', flow: IFlow): void;
   (e: 'openGitExportDialog', flow: IFlow): void;
+  (e: 'openRecipeExportDialog', flow: IFlow): void;
   (e: 'viewInGraph', flow: IFlow): void;
   (e: 'viewInTimeline', flow: IFlow): void;
   (e: 'simulateFlow', flow: IFlow): void;
@@ -553,6 +554,17 @@ const scheduleInfo = computed(() => {
         >
           <v-icon name="terminal" class="mr-1" />
           Export for Git
+        </v-button>
+
+        <v-button
+          v-if="selectedFlow"
+          small
+          secondary
+          class="sidebar-btn"
+          @click="emit('openRecipeExportDialog', selectedFlow)"
+        >
+          <v-icon name="auto_stories" class="mr-1" />
+          Export as Recipe
         </v-button>
 
         <v-button

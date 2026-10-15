@@ -71,6 +71,7 @@
         @open-dashboard="openDashboardDetail"
         @open-version-dialog="openVersionDialog"
         @open-git-export-dialog="openGitExportDialog"
+        @open-recipe-export-dialog="openRecipeExportDialog"
         @edit-flow="showEditFlowDialog"
         @duplicate="duplicate"
         @backup="backup"
@@ -266,6 +267,7 @@
         :get-operation-name-by-id="getOperationNameById"
         @open-version-dialog="openVersionDialog"
         @open-git-export-dialog="openGitExportDialog"
+        @open-recipe-export-dialog="openRecipeExportDialog"
         @view-in-graph="onViewInGraph"
         @view-in-timeline="onViewInTimeline"
         @simulate-flow="openSimulationDialog"
@@ -429,6 +431,12 @@
       @update:model-value="simulationDialog = $event"
     />
 
+    <RecipeExportModal
+      :flow="selectedFlowForRecipe"
+      :active="recipeExportDialog"
+      @close="recipeExportDialog = false"
+    />
+
     <v-overlay :value="true" />
   </private-view>
 </template>
@@ -485,6 +493,7 @@ import FlowEditDialog from './components/flow-edit-dialog.vue';
 import FlowDependencyGraph from './components/dependency-graph/flow-dependency-graph.vue';
 import FlowCronTimeline from './components/cron-timeline/flow-cron-timeline.vue';
 import FlowSimulationDialog from './components/simulation/flow-simulation-dialog.vue';
+import RecipeExportModal from './components/recipes/recipe-export-modal.vue';
 import { useFlowRestore } from '../composables/use-flow-restore';
 import { useFlowCategories } from '../composables/use-flow-categories';
 import { useFlowDatabase } from '../composables/use-flow-database';
@@ -517,6 +526,7 @@ export default defineComponent({
     FlowDependencyGraph,
     FlowCronTimeline,
     FlowSimulationDialog,
+    RecipeExportModal,
   },
 
   props: {
@@ -1506,6 +1516,14 @@ export default defineComponent({
       simulationDialog.value = true;
     }
 
+    const recipeExportDialog = ref(false);
+    const selectedFlowForRecipe = ref<IFlow | null>(null);
+
+    function openRecipeExportDialog(flow: IFlow) {
+      selectedFlowForRecipe.value = flow;
+      recipeExportDialog.value = true;
+    }
+
     async function onFlowRestoredFromSnapshot(flowId?: string) {
       await reloadFlow();
       await reloadTabularFlow();
@@ -1731,6 +1749,7 @@ export default defineComponent({
       selectedCredential,
       openVersionDialog,
       openGitExportDialog,
+      openRecipeExportDialog,
       openSimulationDialog,
       goToFlow,
       hydrateLocalFlow,
@@ -1907,6 +1926,9 @@ export default defineComponent({
       simulationDialog,
       selectedFlowForSimulation,
       openSimulationDialog,
+      recipeExportDialog,
+      selectedFlowForRecipe,
+      openRecipeExportDialog,
       activeFlowsList,
       activeAllFlows,
       displayedTabularFlows,

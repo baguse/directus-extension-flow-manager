@@ -2,6 +2,7 @@ import { defineModule } from '@directus/extensions-sdk';
 import ModuleComponent from './module.vue';
 import DashboardComponent from './dashboard.vue';
 import FlowDashboardDetailComponent from './flow-dashboard-detail.vue';
+import RecipesComponent from './recipes.vue';
 import type { ExtendedUser } from '../types';
 
 interface PolicyAccessItem {
@@ -26,6 +27,10 @@ export default defineModule({
       path: 'dashboard/:flowId',
       component: FlowDashboardDetailComponent,
       props: (route) => ({ flowId: route.params.flowId }),
+    },
+    {
+      path: 'recipes',
+      component: RecipesComponent,
     },
     {
       path: ':parentId',

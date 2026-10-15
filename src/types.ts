@@ -356,6 +356,7 @@ export interface FlowManagerUtilsContext {
   reloadTabularFlow: () => Promise<void> | void;
   openVersionDialog?: (item: IFlow) => void;
   openGitExportDialog?: (item?: IFlow) => void;
+  openRecipeExportDialog?: (item: IFlow) => void;
   openSimulationDialog?: (item: IFlow) => void;
   goToFlow({ item }: { item: IFlow }): Promise<void>;
   hydrateLocalFlow: () => Promise<void>;
@@ -441,4 +442,103 @@ export interface ActivityHistory {
 export interface FlowsStore {
   hydrate: () => Promise<void>;
   flows: IFlow[];
+}
+
+/* ==========================================================================
+   8. Flow Recipes & Marketplace Domain Models
+   ========================================================================== */
+
+export type RecipeCategory =
+  'Communication' | 'Maintenance' | 'AI & LLM' | 'E-Commerce' | 'DevOps' | 'Security' | 'General';
+
+export type RecipeSourceType = 'builtin' | 'github' | 'local' | 'cloud';
+
+export interface IRecipeParameter {
+  key: string;
+  label: string;
+  description?: string;
+  type: 'string' | 'secret' | 'number' | 'boolean' | 'cron' | 'select';
+  required: boolean;
+  default?: unknown;
+  placeholder?: string;
+  options?: { text: string; value: string }[];
+}
+
+export interface IRecipeCollectionRequirement {
+  key: string;
+  label: string;
+  suggested?: string;
+  description?: string;
+}
+
+export interface IRecipeOperation {
+  key: string;
+  name: string;
+  type: string;
+  position_x?: number;
+  position_y?: number;
+  options?: Record<string, unknown>;
+  resolve?: string | null;
+  reject?: string | null;
+}
+
+export interface IRecipeFlow {
+  name: string;
+  icon?: string;
+  color?: string;
+  status?: 'active' | 'inactive';
+  trigger: string;
+  collections?: string[];
+  options?: Record<string, unknown>;
+  operations: IRecipeOperation[];
+}
+
+export interface IFlowRecipe {
+  $schema?: string;
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  category: RecipeCategory;
+  icon: string;
+  color: string;
+  author: {
+    name: string;
+    url?: string;
+    avatar?: string;
+  };
+  tags: string[];
+  isPro?: boolean;
+  documentation?: string;
+  parameters: IRecipeParameter[];
+  collections?: IRecipeCollectionRequirement[];
+  flows: IRecipeFlow[];
+}
+
+export interface FlowRecipeSummary {
+  id: string;
+  source: RecipeSourceType;
+  name: string;
+  version: string;
+  description: string;
+  category: RecipeCategory;
+  icon: string;
+  color: string;
+  author: {
+    name: string;
+    url?: string;
+  };
+  tags: string[];
+  isPro?: boolean;
+  flowCount: number;
+}
+
+export interface IRecipeSourceAdapter {
+  id: string;
+  name: string;
+  sourceType: RecipeSourceType;
+  listRecipes: () => Promise<FlowRecipeSummary[]>;
+  getRecipe: (id: string) => Promise<IFlowRecipe>;
+  saveRecipe?: (recipe: IFlowRecipe) => Promise<void>;
+  deleteRecipe?: (id: string) => Promise<void>;
 }

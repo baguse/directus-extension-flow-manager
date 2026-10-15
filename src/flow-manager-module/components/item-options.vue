@@ -53,6 +53,12 @@
           </v-list-item-icon>
           <v-list-item-content> Export for Git </v-list-item-content>
         </v-list-item>
+        <v-list-item clickable @click="openRecipeExportDialog(flowItem)">
+          <v-list-item-icon>
+            <v-icon name="auto_stories" />
+          </v-list-item-icon>
+          <v-list-item-content> Export as Recipe </v-list-item-content>
+        </v-list-item>
         <v-list-item
           :disabled="flowItem.options?.locked"
           clickable
@@ -230,6 +236,7 @@ export default defineComponent({
       openSimulationDialog,
       openVersionDialog,
       openGitExportDialog,
+      openRecipeExportDialog,
       showUnlockModal,
       handleToggleLock,
       handleConfirmUnlock,
@@ -294,6 +301,10 @@ export default defineComponent({
 
     function openGitExportDialog(item: IFlow) {
       flowManagerUtils?.openGitExportDialog?.(item);
+    }
+
+    function openRecipeExportDialog(item: IFlow) {
+      flowManagerUtils?.openRecipeExportDialog?.(item);
     }
   },
 });
