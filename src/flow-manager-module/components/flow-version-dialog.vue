@@ -13,6 +13,7 @@ import { useFlowDiff } from '../../composables/use-flow-diff';
 import { useFlowCanonical } from '../../composables/use-flow-canonical';
 import { formatRelativeTime } from '../../flow-manager-panels/shared/time.util';
 import { slugify } from '../../utils/string.util';
+import { notify } from '../../utils/notification.util';
 import FlowCreateSnapshotModal from './flow-create-snapshot-modal.vue';
 import FlowDiffDialog from './flow-diff-dialog.vue';
 import FlowGitExportModal from './flow-git-export-modal.vue';
@@ -238,18 +239,14 @@ function downloadSnapshotJson(snapshot: IFlowSnapshot) {
     const jsonStr = toCanonicalJson(snapData, catName);
     const filename = `${slugify(flowName)}-${slugify(versionStr)}.json`;
     downloadBlob(jsonStr, filename);
-    notificationsStore.add({
-      type: 'success',
-      title: 'Snapshot Exported',
-      text: `Downloaded ${filename}.`,
-    });
+    notify.success(notificationsStore, 'Snapshot Exported', `Downloaded ${filename}.`);
   } catch (err: unknown) {
     console.error('Failed to export snapshot JSON:', err);
-    notificationsStore.add({
-      type: 'error',
-      title: 'Export Failed',
-      text: err instanceof Error ? err.message : String(err),
-    });
+    notify.error(
+      notificationsStore,
+      'Export Failed',
+      err instanceof Error ? err.message : String(err),
+    );
   }
 }
 

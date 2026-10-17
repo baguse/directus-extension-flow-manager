@@ -297,6 +297,7 @@ import RecipeInstallModal from './components/recipes/recipe-install-modal.vue';
 import { useFlowCredentials } from '../composables/use-flow-credentials';
 import { RecipeSourceService } from '../services/recipe-source.service';
 import type { FlowRecipeSummary, IFlowRecipe, RecipeCategory, RecipeSourceType } from '../types';
+import { notify } from '../utils/notification.util';
 
 const api = useApi();
 const router = useRouter();
@@ -426,21 +427,17 @@ async function openInstallModal(
     selectedRecipeForInstall.value = full;
     isInstallModalOpen.value = true;
   } else {
-    notificationsStore.add({
-      type: 'error',
-      title: 'Recipe Not Found',
-      text: 'Could not fetch the full recipe specification.',
-    });
+    notify.error(
+      notificationsStore,
+      'Recipe Not Found',
+      'Could not fetch the full recipe specification.',
+    );
   }
 }
 
 function deleteLocalRecipe(id: string) {
   RecipeSourceService.deleteLocalRecipe(id);
-  notificationsStore.add({
-    type: 'info',
-    title: 'Recipe Removed',
-    text: 'Deleted custom local recipe template.',
-  });
+  notify.info(notificationsStore, 'Recipe Removed', 'Deleted custom local recipe template.');
   loadCatalog();
 }
 
@@ -456,22 +453,22 @@ async function parseAndImportRecipeFile(file: File) {
       throw new Error('Invalid recipe file structure.');
     }
     RecipeSourceService.saveLocalRecipe(recipe);
-    notificationsStore.add({
-      type: 'success',
-      title: 'Recipe Imported',
-      text: `Added "${recipe.name}" to your local templates.`,
-    });
+    notify.success(
+      notificationsStore,
+      'Recipe Imported',
+      `Added "${recipe.name}" to your local templates.`,
+    );
     await loadCatalog();
     // Open install modal in preview mode immediately
     selectedRecipeForInstall.value = recipe;
     installModalTab.value = 'preview';
     isInstallModalOpen.value = true;
   } catch (err) {
-    notificationsStore.add({
-      type: 'error',
-      title: 'Invalid Recipe File',
-      text: err instanceof Error ? err.message : 'Failed to parse .recipe.json file.',
-    });
+    notify.error(
+      notificationsStore,
+      'Invalid Recipe File',
+      err instanceof Error ? err.message : 'Failed to parse .recipe.json file.',
+    );
   }
 }
 
@@ -502,24 +499,24 @@ async function saveHubConfig() {
   if (url && token) {
     try {
       const health = await RecipeSourceService.testHubConnection(url, token, api);
-      notificationsStore.add({
-        type: 'success',
-        title: 'Hub Connected via /process',
-        text: `Connected to Private Go Hub v${health.version || '1.0.0'} (CSP bypassed).`,
-      });
+      notify.success(
+        notificationsStore,
+        'Hub Connected via /process',
+        `Connected to Private Go Hub v${health.version || '1.0.0'} (CSP bypassed).`,
+      );
     } catch {
-      notificationsStore.add({
-        type: 'warning',
-        title: 'Hub Saved with Warning',
-        text: 'Hub credentials saved, but the server could not be reached via /process proxy. Verify URL and port.',
-      });
+      notify.warning(
+        notificationsStore,
+        'Hub Saved with Warning',
+        'Hub credentials saved, but the server could not be reached via /process proxy. Verify URL and port.',
+      );
     }
   } else {
-    notificationsStore.add({
-      type: 'info',
-      title: 'Hub Configuration Cleared',
-      text: 'Disconnected from private cloud hub.',
-    });
+    notify.info(
+      notificationsStore,
+      'Hub Configuration Cleared',
+      'Disconnected from private cloud hub.',
+    );
   }
 
   loadCatalog();

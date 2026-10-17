@@ -6,6 +6,7 @@ import { Chart, type ChartConfiguration } from 'chart.js/auto';
 import { ENDPOINT_EXTENSION_NAME } from '../constants';
 import { useFlowCredentials } from '../composables/use-flow-credentials';
 import { formatConnectionError } from '../utils/error.util';
+import { notify } from '../utils/notification.util';
 import ContentNavigation from './components/navigation.vue';
 import CredentialDialog from './components/credential-dialog.vue';
 
@@ -486,12 +487,7 @@ async function loadFlows(): Promise<void> {
     } catch (err: unknown) {
       flows.value = [];
       const errorMsg = formatConnectionError(err, 'Failed to load flow analytics.');
-      notificationsStore.add({
-        type: 'error',
-        title: 'Analytics Load Failed',
-        text: errorMsg,
-        closeable: true,
-      });
+      notify.error(notificationsStore, 'Analytics Load Failed', errorMsg);
     } finally {
       loading.value = false;
     }
@@ -523,20 +519,15 @@ async function syncCounters() {
         staticToken: cred.staticToken,
       });
     }
-    notificationsStore.add({
-      type: 'success',
-      title: 'Counters Synchronized',
-      text: `Execution counters successfully recalculated for ${activeCredentialName.value}.`,
-    });
+    notify.success(
+      notificationsStore,
+      'Counters Synchronized',
+      `Execution counters successfully recalculated for ${activeCredentialName.value}.`,
+    );
     await loadFlows();
   } catch (err: unknown) {
     const errorMsg = formatConnectionError(err, 'Failed to synchronize flow counters.');
-    notificationsStore.add({
-      type: 'error',
-      title: 'Sync Failed',
-      text: errorMsg,
-      closeable: true,
-    });
+    notify.error(notificationsStore, 'Sync Failed', errorMsg);
   } finally {
     isSyncingCounters.value = false;
   }

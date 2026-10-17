@@ -6,6 +6,7 @@ import type { Preset, AppCollection, Field } from '@directus/types';
 import debounce from 'lodash/debounce';
 import formatTitle from '@directus/format-title';
 import { cleanFilter } from '../../utils/filter.util';
+import { notify } from '../../utils/notification.util';
 
 const props = defineProps<{
   selectedItem: Partial<IFlow>;
@@ -242,19 +243,12 @@ async function runFlow() {
       ...confirmValues.value,
     });
 
-    notificationsStore.add({
-      type: 'success',
-      title: `Flow "${selectedItem.value.name}" has been run successfully`,
-      closeable: true,
-      persist: true,
-    });
+    notify.success(
+      notificationsStore,
+      `Flow "${selectedItem.value.name}" has been run successfully`,
+    );
   } catch {
-    notificationsStore.add({
-      type: 'error',
-      title: `Failed to run Flow "${selectedItem.value.name}"`,
-      closeable: true,
-      persist: true,
-    });
+    notify.error(notificationsStore, `Failed to run Flow "${selectedItem.value.name}"`);
   } finally {
     emit('reload:flow');
     emit('reload:tabularFlow');

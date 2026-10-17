@@ -112,6 +112,7 @@ import {
   type DetectedSecret,
 } from '../../../utils/recipe.util';
 import { RecipeSourceService } from '../../../services/recipe-source.service';
+import { notify } from '../../../utils/notification.util';
 
 const props = defineProps<{
   flow: IFlow | null;
@@ -202,11 +203,11 @@ function handleDownloadJson() {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 
-  notificationsStore.add({
-    type: 'success',
-    title: 'Recipe Exported',
-    text: `Saved "${recipe.name}" as ${recipe.id}.recipe.json`,
-  });
+  notify.success(
+    notificationsStore,
+    'Recipe Exported',
+    `Saved "${recipe.name}" as ${recipe.id}.recipe.json`,
+  );
 
   onClose();
 }
@@ -234,11 +235,11 @@ async function handlePublishToHub() {
   const hubToken = localStorage.getItem('fm_hub_token') || '';
 
   if (!hubUrl || !hubToken) {
-    notificationsStore.add({
-      type: 'warning',
-      title: 'Hub Not Configured',
-      text: 'Please configure your Go Cloud Hub URL and token in the Recipes tab.',
-    });
+    notify.warning(
+      notificationsStore,
+      'Hub Not Configured',
+      'Please configure your Go Cloud Hub URL and token in the Recipes tab.',
+    );
     return;
   }
 
@@ -250,19 +251,19 @@ async function handlePublishToHub() {
       api,
     });
 
-    notificationsStore.add({
-      type: 'success',
-      title: 'Published to Hub',
-      text: `Recipe "${recipe.name}" published to Private Go Hub via /process proxy.`,
-    });
+    notify.success(
+      notificationsStore,
+      'Published to Hub',
+      `Recipe "${recipe.name}" published to Private Go Hub via /process proxy.`,
+    );
     onClose();
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : String(err);
-    notificationsStore.add({
-      type: 'error',
-      title: 'Publish Failed',
-      text: `Could not publish recipe to Hub: ${errMsg}`,
-    });
+    notify.error(
+      notificationsStore,
+      'Publish Failed',
+      `Could not publish recipe to Hub: ${errMsg}`,
+    );
   } finally {
     isPublishingToHub.value = false;
   }

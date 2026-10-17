@@ -13,6 +13,7 @@ import { ENDPOINT_EXTENSION_NAME } from '../constants';
 import { getTimestamp } from '../utils/date.util';
 import { sleep } from '../utils/common.util';
 import { transformData } from '../utils/flow.util';
+import { notify, type NotificationsStoreLike } from '../utils/notification.util';
 
 export interface UseFlowActionsOptions {
   api: ReturnType<typeof useApi>;
@@ -30,14 +31,7 @@ export interface UseFlowActionsOptions {
   flows: Ref<IFlow[]>;
   flowCategories: Ref<IFolder[]>;
   tabularFlows?: Ref<IFlow[]>;
-  notificationsStore: {
-    add: (notification: {
-      type: string;
-      title: string;
-      closeable?: boolean;
-      persist?: boolean;
-    }) => void;
-  };
+  notificationsStore: NotificationsStoreLike;
   processingDialogState: {
     dialog: Ref<boolean>;
     title: Ref<string>;
@@ -174,19 +168,9 @@ export function useFlowActions(options: UseFlowActionsOptions) {
       await reloadFlow();
       await reloadTabularFlow();
 
-      notificationsStore.add({
-        type: 'success',
-        title: 'Flow Duplicated successfully',
-        closeable: true,
-        persist: true,
-      });
+      notify.success(notificationsStore, 'Flow Duplicated successfully');
     } catch {
-      notificationsStore.add({
-        type: 'error',
-        title: 'Flow Duplication failed',
-        closeable: true,
-        persist: true,
-      });
+      notify.error(notificationsStore, 'Flow Duplication failed');
     }
   }
 
@@ -241,12 +225,10 @@ export function useFlowActions(options: UseFlowActionsOptions) {
           (processingDialogState.list.value.length / selectedFlows.value.length) * 100,
         );
       }
-      notificationsStore.add({
-        type: 'success',
-        title: `${totalSuccess} Flows pushed successfully. ${totalError} Flows failed`,
-        closeable: true,
-        persist: true,
-      });
+      notify.success(
+        notificationsStore,
+        `${totalSuccess} Flows pushed successfully. ${totalError} Flows failed`,
+      );
       selectedItems.value = [];
       isSelectAll.value = false;
       sleep(3000).then(() => {
@@ -270,24 +252,14 @@ export function useFlowActions(options: UseFlowActionsOptions) {
       const message =
         res.data?.message || `The flow has been pushed to "${credential?.name}" successfully`;
 
-      notificationsStore.add({
-        type: 'success',
-        title: message,
-        closeable: true,
-        persist: true,
-      });
+      notify.success(notificationsStore, message);
     } catch (e: unknown) {
       const errObj = e as
         { response?: { data?: { error?: string; message?: string } } } | undefined;
       const errRes = errObj?.response?.data?.error || errObj?.response?.data?.message;
       const errorMsg =
         errRes || 'Push to cloud failed. Please check credentials and remote permissions.';
-      notificationsStore.add({
-        type: 'error',
-        title: errorMsg,
-        closeable: true,
-        persist: true,
-      });
+      notify.error(notificationsStore, errorMsg);
     } finally {
       pushToCloudDialog.value = false;
       selectedCredentialId.value = '';
@@ -428,12 +400,10 @@ export function useFlowActions(options: UseFlowActionsOptions) {
           );
         }
       }
-      notificationsStore.add({
-        type: 'success',
-        title: `Successfully duplicated ${totalSuccess} Flows. Failed to duplicate ${totalError} Flows`,
-        closeable: true,
-        persist: true,
-      });
+      notify.success(
+        notificationsStore,
+        `Successfully duplicated ${totalSuccess} Flows. Failed to duplicate ${totalError} Flows`,
+      );
     } catch {
     } finally {
       reloadFlow();
@@ -528,12 +498,7 @@ export function useFlowActions(options: UseFlowActionsOptions) {
         } else {
           flowCategories.value.push(current.category);
         }
-        notificationsStore.add({
-          type: 'error',
-          title: `Folder "${current.category.name}" deletion failed`,
-          closeable: true,
-          persist: true,
-        });
+        notify.error(notificationsStore, `Folder "${current.category.name}" deletion failed`);
       }
     } else if (
       current.type === 'flow' &&
@@ -547,12 +512,7 @@ export function useFlowActions(options: UseFlowActionsOptions) {
       } catch {
         flows.value.push(flow);
         if (tabularFlows?.value) tabularFlows.value.push(flow);
-        notificationsStore.add({
-          type: 'error',
-          title: `Flow "${flow.name}" deletion failed`,
-          closeable: true,
-          persist: true,
-        });
+        notify.error(notificationsStore, `Flow "${flow.name}" deletion failed`);
       }
     } else if (current.type === 'batch' && current.flows && current.flows.length > 0) {
       let totalSuccess = 0;
@@ -572,18 +532,12 @@ export function useFlowActions(options: UseFlowActionsOptions) {
       if (failedFlows.length > 0) {
         flows.value.push(...failedFlows);
         if (tabularFlows?.value) tabularFlows.value.push(...failedFlows);
-        notificationsStore.add({
-          type: 'error',
-          title: `${totalError} Flows deletion failed and were restored`,
-          closeable: true,
-          persist: true,
-        });
+        notify.error(notificationsStore, `${totalError} Flows deletion failed and were restored`);
       } else {
-        notificationsStore.add({
-          type: 'success',
-          title: `${totalSuccess} ${totalSuccess === 1 ? 'Flow' : 'Flows'} permanently deleted`,
-          closeable: true,
-        });
+        notify.success(
+          notificationsStore,
+          `${totalSuccess} ${totalSuccess === 1 ? 'Flow' : 'Flows'} permanently deleted`,
+        );
       }
     }
   }
@@ -621,11 +575,7 @@ export function useFlowActions(options: UseFlowActionsOptions) {
       if (tabularFlows?.value) tabularFlows.value.push(...current.flows);
     }
 
-    notificationsStore.add({
-      type: 'info',
-      title: 'Deletion undone',
-      closeable: true,
-    });
+    notify.info(notificationsStore, 'Deletion undone');
   }
 
   async function moveChildrenToRoot(parentIds: string[]) {
@@ -818,17 +768,9 @@ export function useFlowActions(options: UseFlowActionsOptions) {
         (selectedItem.value as IFlow).options = updatedOptions;
       }
 
-      notificationsStore.add({
-        type: 'info',
-        title: `Flow "${flow.name}" moved to Archive`,
-        closeable: true,
-      });
+      notify.info(notificationsStore, `Flow "${flow.name}" moved to Archive`);
     } catch (err: unknown) {
-      notificationsStore.add({
-        type: 'error',
-        title: `Failed to archive flow: ${(err as Error)?.message || err}`,
-        closeable: true,
-      });
+      notify.error(notificationsStore, `Failed to archive flow: ${(err as Error)?.message || err}`);
     } finally {
       loadingDeleteItem.value = false;
     }
@@ -893,11 +835,7 @@ export function useFlowActions(options: UseFlowActionsOptions) {
         tabularFlows.value = [...tabularFlows.value];
       }
 
-      notificationsStore.add({
-        type: 'info',
-        title: `${count} flow(s) moved to Archive`,
-        closeable: true,
-      });
+      notify.info(notificationsStore, `${count} flow(s) moved to Archive`);
     } finally {
       loadingDeleteItem.value = false;
     }
@@ -949,17 +887,9 @@ export function useFlowActions(options: UseFlowActionsOptions) {
         (selectedItem.value as IFlow).options = updatedOptions;
       }
 
-      notificationsStore.add({
-        type: 'success',
-        title: `Flow "${flow.name}" restored from Archive`,
-        closeable: true,
-      });
+      notify.success(notificationsStore, `Flow "${flow.name}" restored from Archive`);
     } catch (err: unknown) {
-      notificationsStore.add({
-        type: 'error',
-        title: `Failed to restore flow: ${(err as Error)?.message || err}`,
-        closeable: true,
-      });
+      notify.error(notificationsStore, `Failed to restore flow: ${(err as Error)?.message || err}`);
     }
   }
 
@@ -969,11 +899,10 @@ export function useFlowActions(options: UseFlowActionsOptions) {
       let count = 0;
       const lockedFlows = flowsToRestore.filter((f) => f.options?.locked === true);
       if (lockedFlows.length > 0) {
-        notificationsStore.add({
-          type: 'warning',
-          title: `${lockedFlows.length} locked flow(s) skipped from restore`,
-          closeable: true,
-        });
+        notify.warning(
+          notificationsStore,
+          `${lockedFlows.length} locked flow(s) skipped from restore`,
+        );
       }
       const eligible = flowsToRestore.filter((f) => f.options?.locked !== true);
       for (const flow of eligible) {
@@ -1028,11 +957,7 @@ export function useFlowActions(options: UseFlowActionsOptions) {
         tabularFlows.value = [...tabularFlows.value];
       }
 
-      notificationsStore.add({
-        type: 'success',
-        title: `${count} flow(s) restored from Archive`,
-        closeable: true,
-      });
+      notify.success(notificationsStore, `${count} flow(s) restored from Archive`);
     } finally {
       loadingDeleteItem.value = false;
     }
@@ -1086,19 +1011,17 @@ export function useFlowActions(options: UseFlowActionsOptions) {
         (selectedItem.value as IFlow).options = updatedOptions;
       }
 
-      notificationsStore.add({
+      notify(notificationsStore, {
         type: nextLockedState ? 'info' : 'success',
         title: nextLockedState
           ? `Flow "${flow.name}" is now locked (Safety Lock active)`
           : `Flow "${flow.name}" is now unlocked`,
-        closeable: true,
       });
     } catch (err: unknown) {
-      notificationsStore.add({
-        type: 'error',
-        title: `Failed to update safety lock: ${(err as Error)?.message || err}`,
-        closeable: true,
-      });
+      notify.error(
+        notificationsStore,
+        `Failed to update safety lock: ${(err as Error)?.message || err}`,
+      );
     }
   }
 
@@ -1120,11 +1043,10 @@ export function useFlowActions(options: UseFlowActionsOptions) {
       const eligibleFlows = allSelected.filter((f) => f.options?.locked !== true);
 
       if (lockedFlows.length > 0) {
-        notificationsStore.add({
-          type: 'warning',
-          title: `${lockedFlows.length} locked flow(s) were protected from deletion/archiving`,
-          closeable: true,
-        });
+        notify.warning(
+          notificationsStore,
+          `${lockedFlows.length} locked flow(s) were protected from deletion/archiving`,
+        );
       }
 
       if (!eligibleFlows.length) {
@@ -1229,11 +1151,10 @@ export function useFlowActions(options: UseFlowActionsOptions) {
         const flowToDelete = { ...selectedItem.value } as IFlow;
 
         if (flowToDelete.options?.locked === true) {
-          notificationsStore.add({
-            type: 'warning',
-            title: `Flow "${flowToDelete.name}" is protected by Safety Lock. Unlock it first.`,
-            closeable: true,
-          });
+          notify.warning(
+            notificationsStore,
+            `Flow "${flowToDelete.name}" is protected by Safety Lock. Unlock it first.`,
+          );
           return;
         }
 
@@ -1311,11 +1232,10 @@ export function useFlowActions(options: UseFlowActionsOptions) {
 
     const lockedInSelection = selectedFlows.value.filter((flow) => flow.options?.locked === true);
     if (lockedInSelection.length > 0) {
-      notificationsStore.add({
-        type: 'warning',
-        title: `${lockedInSelection.length} locked flow(s) skipped from status change`,
-        closeable: true,
-      });
+      notify.warning(
+        notificationsStore,
+        `${lockedInSelection.length} locked flow(s) skipped from status change`,
+      );
     }
 
     const filtered = selectedFlows.value.filter(
@@ -1377,15 +1297,12 @@ export function useFlowActions(options: UseFlowActionsOptions) {
           );
         }
       }
-      notificationsStore.add({
-        type: 'success',
-        title:
-          status === 'active'
-            ? `Successfully activated ${totalSuccess} Flows. Failed to activate ${totalError} Flows`
-            : `Successfully deactivated ${totalSuccess} Flows. Failed to deactivate ${totalError} Flows`,
-        closeable: true,
-        persist: true,
-      });
+      notify.success(
+        notificationsStore,
+        status === 'active'
+          ? `Successfully activated ${totalSuccess} Flows. Failed to activate ${totalError} Flows`
+          : `Successfully deactivated ${totalSuccess} Flows. Failed to deactivate ${totalError} Flows`,
+      );
     } catch {
     } finally {
       reloadFlow();

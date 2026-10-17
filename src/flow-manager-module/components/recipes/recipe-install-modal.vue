@@ -371,6 +371,7 @@ import type {
 import { compileRecipe } from '../../../utils/recipe.util';
 import { formatConnectionError } from '../../../utils/error.util';
 import { ENDPOINT_EXTENSION_NAME } from '../../../constants';
+import { notify } from '../../../utils/notification.util';
 
 const props = withDefaults(
   defineProps<{
@@ -598,11 +599,7 @@ async function copyCompiledJson() {
   if (!compiledJsonPreview.value) return;
   try {
     await navigator.clipboard.writeText(compiledJsonPreview.value);
-    notificationsStore.add({
-      type: 'info',
-      title: 'Copied to Clipboard',
-      text: 'Compiled flow JSON is ready to paste.',
-    });
+    notify.info(notificationsStore, 'Copied to Clipboard', 'Compiled flow JSON is ready to paste.');
   } catch {
     // Ignore clipboard errors
   }
@@ -652,12 +649,11 @@ async function handleInstall() {
       }
     }
 
-    notificationsStore.add({
-      type: 'success',
-      title: 'Recipe Installed!',
-      text: `Successfully installed "${props.recipe.name}" (${compiled.flows.length} flow created).`,
-      closeable: true,
-    });
+    notify.success(
+      notificationsStore,
+      'Recipe Installed!',
+      `Successfully installed "${props.recipe.name}" (${compiled.flows.length} flow created).`,
+    );
 
     emit('installed', { flowIds: compiled.flows.map((f) => f.id) });
     onClose();

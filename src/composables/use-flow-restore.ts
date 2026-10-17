@@ -1,6 +1,7 @@
 import { ref, unref, type Ref } from 'vue';
 import type { IFlow, ProcessingItem } from '../types';
 import { sleep, generateUUID } from '../utils/common.util';
+import { notify, type NotificationsStoreLike } from '../utils/notification.util';
 
 interface CanonicalFlowItem {
   $schema?: string;
@@ -98,14 +99,7 @@ export interface UseFlowRestoreOptions {
   reloadFlow: () => Promise<void>;
   reloadTabularFlow: () => Promise<void>;
   hydrateLocalFlow: () => Promise<void>;
-  notificationsStore: {
-    add: (notification: {
-      type: string;
-      title: string;
-      closeable?: boolean;
-      persist?: boolean;
-    }) => void;
-  };
+  notificationsStore: NotificationsStoreLike;
   processingDialogState: {
     dialog: Ref<boolean>;
     title: Ref<string>;
@@ -296,12 +290,10 @@ export function useFlowRestore(options: UseFlowRestoreOptions) {
       await reloadTabularFlow();
       await hydrateLocalFlow();
       isPreviousIdPersisted.value = false;
-      notificationsStore.add({
-        type: 'success',
-        title: `${totalSuccess} Flows restored successfully. ${totalError} Flows restoration failed`,
-        closeable: true,
-        persist: true,
-      });
+      notify.success(
+        notificationsStore,
+        `${totalSuccess} Flows restored successfully. ${totalError} Flows restoration failed`,
+      );
       sleep(3000).then(() => {
         processingDialogState.dialog.value = false;
       });
@@ -336,19 +328,9 @@ export function useFlowRestore(options: UseFlowRestoreOptions) {
         await hydrateLocalFlow();
         isPreviousIdPersisted.value = false;
 
-        notificationsStore.add({
-          type: 'success',
-          title: `Flow "${item.name}" restored successfully`,
-          closeable: true,
-          persist: true,
-        });
+        notify.success(notificationsStore, `Flow "${item.name}" restored successfully`);
       } catch {
-        notificationsStore.add({
-          type: 'error',
-          title: `Failed to restore Flow "${item.name}"`,
-          closeable: true,
-          persist: true,
-        });
+        notify.error(notificationsStore, `Failed to restore Flow "${item.name}"`);
       } finally {
         resetRestoredFile();
       }

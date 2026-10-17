@@ -3,6 +3,7 @@ import { ref, toRefs, inject, computed } from 'vue';
 import type { FlowManagerUtilsContext, IFlow } from '../../types';
 import { useStores, useApi } from '@directus/extensions-sdk';
 import { ENDPOINT_EXTENSION_NAME } from '../../constants';
+import { notify } from '../../utils/notification.util';
 
 const props = defineProps<{
   selectedItem: Partial<IFlow>;
@@ -35,13 +36,7 @@ async function runFlow() {
   try {
     parsedPayload = JSON.parse(payload.value || '{}');
   } catch {
-    notificationsStore.add({
-      type: 'error',
-      title: 'Invalid JSON',
-      message: 'Please provide a valid JSON payload',
-      closeable: true,
-      persist: true,
-    });
+    notify.error(notificationsStore, 'Invalid JSON', 'Please provide a valid JSON payload');
     loadingRunFlow.value = false;
     return;
   }
@@ -69,19 +64,12 @@ async function runFlow() {
 
     emit('reload:flow');
     emit('reload:tabularFlow');
-    notificationsStore.add({
-      type: 'success',
-      title: `Flow "${selectedItem.value?.name || ''}" has been run successfully`,
-      closeable: true,
-      persist: true,
-    });
+    notify.success(
+      notificationsStore,
+      `Flow "${selectedItem.value?.name || ''}" has been run successfully`,
+    );
   } catch {
-    notificationsStore.add({
-      type: 'error',
-      title: `Failed to run Flow "${selectedItem.value?.name || ''}"`,
-      closeable: true,
-      persist: true,
-    });
+    notify.error(notificationsStore, `Failed to run Flow "${selectedItem.value?.name || ''}"`);
   } finally {
     loadingRunFlow.value = false;
   }

@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 import { useStores } from '@directus/extensions-sdk';
 import type { IFlow } from '../../types';
 import { useFlowCanonical } from '../../composables/use-flow-canonical';
+import { notify } from '../../utils/notification.util';
 
 const props = withDefaults(
   defineProps<{
@@ -48,18 +49,18 @@ function handleExportSingle() {
         ? props.categoriesMap.get(rawCatId)
         : undefined;
     exportFlowAsGitJson(props.flow, catName);
-    notificationsStore.add({
-      type: 'success',
-      title: 'Export Download Started',
-      text: `Exported canonical schema for "${props.flow.name}".`,
-    });
+    notify.success(
+      notificationsStore,
+      'Export Download Started',
+      `Exported canonical schema for "${props.flow.name}".`,
+    );
   } catch (err: unknown) {
     console.error('Failed to export single flow:', err);
-    notificationsStore.add({
-      type: 'error',
-      title: 'Export Failed',
-      text: err instanceof Error ? err.message : String(err),
-    });
+    notify.error(
+      notificationsStore,
+      'Export Failed',
+      err instanceof Error ? err.message : String(err),
+    );
   }
 }
 
@@ -68,18 +69,18 @@ async function handleExportZip() {
   isZipping.value = true;
   try {
     await exportAllFlowsAsGitZip(props.flows, props.categoriesMap);
-    notificationsStore.add({
-      type: 'success',
-      title: 'Repository Bundle Exported',
-      text: `Downloaded Git repository bundle with ${props.flows.length} flows.`,
-    });
+    notify.success(
+      notificationsStore,
+      'Repository Bundle Exported',
+      `Downloaded Git repository bundle with ${props.flows.length} flows.`,
+    );
   } catch (err: unknown) {
     console.error('Failed to export zip bundle:', err);
-    notificationsStore.add({
-      type: 'error',
-      title: 'Export Bundle Failed',
-      text: err instanceof Error ? err.message : String(err),
-    });
+    notify.error(
+      notificationsStore,
+      'Export Bundle Failed',
+      err instanceof Error ? err.message : String(err),
+    );
   } finally {
     isZipping.value = false;
   }

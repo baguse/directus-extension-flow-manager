@@ -470,6 +470,7 @@ import { ENDPOINT_EXTENSION_NAME, TRIGGER_TYPES } from '../constants';
 import { formatDate, formatDateLong } from '../utils/date.util';
 import { maskingText } from '../utils/string.util';
 import { formatConnectionError } from '../utils/error.util';
+import { notify } from '../utils/notification.util';
 
 import FlowListView from './components/flow-list-view.vue';
 import ContentNavigation from './components/navigation.vue';
@@ -1213,12 +1214,7 @@ export default defineComponent({
       } catch (err: unknown) {
         console.error('[FLOW MANAGER] Failed to update flow order:', err);
         const errorMsg = formatConnectionError(err, 'Failed to update flow order.');
-        notificationsStore.add({
-          type: 'error',
-          title: 'Sort Failed',
-          text: errorMsg,
-          closeable: true,
-        });
+        notify.error(notificationsStore, 'Sort Failed', errorMsg);
         await reloadFlow();
       }
     }
@@ -1257,13 +1253,7 @@ export default defineComponent({
           }
         } catch (err: unknown) {
           const errorMsg = formatConnectionError(err, 'Please check your credentials.');
-          notificationsStore.add({
-            type: 'error',
-            title: `Failed to fetch Flows: ${errorMsg}`,
-            text: errorMsg,
-            closeable: true,
-            persist: true,
-          });
+          notify.error(notificationsStore, `Failed to fetch Flows: ${errorMsg}`, errorMsg);
         }
       }
 
@@ -1350,13 +1340,7 @@ export default defineComponent({
           flowCategories.value = folders;
         } catch (err: unknown) {
           const errorMsg = formatConnectionError(err, 'Failed to switch to local instance.');
-          notificationsStore.add({
-            type: 'error',
-            title: `Error switching to Local: ${errorMsg}`,
-            text: errorMsg,
-            closeable: true,
-            persist: true,
-          });
+          notify.error(notificationsStore, `Error switching to Local: ${errorMsg}`, errorMsg);
         } finally {
           processingDialog.value = false;
           indeterminateProcess.value = false;
@@ -1367,12 +1351,7 @@ export default defineComponent({
 
       const targetCred = credentials.value.find((c) => c.id === credential);
       if (!targetCred) {
-        notificationsStore.add({
-          type: 'error',
-          title: 'Selected credential was not found',
-          closeable: true,
-          persist: true,
-        });
+        notify.error(notificationsStore, 'Selected credential was not found');
         selectedCredential.value = '';
         await nextTick();
         selectedCredential.value = oldCredential;
@@ -1387,13 +1366,11 @@ export default defineComponent({
       const checkResult = await checkCredentialConnection(targetCred);
       if (!checkResult.success) {
         const errorDetails = checkResult.error || 'Failed to connect to the remote instance.';
-        notificationsStore.add({
-          type: 'error',
-          title: `Failed to connect to "${targetCred.name}": ${errorDetails}`,
-          text: errorDetails,
-          closeable: true,
-          persist: true,
-        });
+        notify.error(
+          notificationsStore,
+          `Failed to connect to "${targetCred.name}": ${errorDetails}`,
+          errorDetails,
+        );
 
         // Revert selectedCredential and ensure Vue reactivity syncs the dropdown back to oldCredential
         selectedCredential.value = '';
@@ -1432,13 +1409,11 @@ export default defineComponent({
           err,
           'Failed to load flows from the remote instance.',
         );
-        notificationsStore.add({
-          type: 'error',
-          title: `Error loading flows from "${targetCred.name}": ${errorMsg}`,
-          text: errorMsg,
-          closeable: true,
-          persist: true,
-        });
+        notify.error(
+          notificationsStore,
+          `Error loading flows from "${targetCred.name}": ${errorMsg}`,
+          errorMsg,
+        );
 
         // Restore old credential state
         selectedCredential.value = oldCredential;
@@ -1533,11 +1508,11 @@ export default defineComponent({
           selectedFlowForVersion.value = fresh;
         }
       }
-      notificationsStore.add({
-        type: 'success',
-        title: 'Flow Reverted',
-        text: 'Successfully rolled back flow to snapshot state.',
-      });
+      notify.success(
+        notificationsStore,
+        'Flow Reverted',
+        'Successfully rolled back flow to snapshot state.',
+      );
     }
 
     async function hydrateLocalFlow() {
@@ -1564,19 +1539,14 @@ export default defineComponent({
           flowCategories.value = folders;
         }
         await hydrateLocalFlow();
-        notificationsStore.add({
-          type: 'success',
-          title: 'Reloaded',
-          text: 'Flows and categories reloaded successfully.',
-        });
+        notify.success(
+          notificationsStore,
+          'Reloaded',
+          'Flows and categories reloaded successfully.',
+        );
       } catch (err: unknown) {
         const errorMsg = formatConnectionError(err, 'Failed to reload flows.');
-        notificationsStore.add({
-          type: 'error',
-          title: 'Reload Failed',
-          text: errorMsg,
-          closeable: true,
-        });
+        notify.error(notificationsStore, 'Reload Failed', errorMsg);
       } finally {
         isReloading.value = false;
       }
@@ -1698,24 +1668,18 @@ export default defineComponent({
         await reloadFlow();
         await reloadTabularFlow();
 
-        notificationsStore.add({
-          type: 'success',
-          title: 'Flow Updated',
-          text: `Flow "${flowData.name}" has been updated successfully.`,
-          closeable: true,
-        });
+        notify.success(
+          notificationsStore,
+          'Flow Updated',
+          `Flow "${flowData.name}" has been updated successfully.`,
+        );
 
         editFlowDialog.value = false;
         flowToEdit.value = null;
       } catch (err: unknown) {
         console.error('[FLOW MANAGER] Failed to update flow:', err);
         const errorMsg = formatConnectionError(err, 'Failed to update flow.');
-        notificationsStore.add({
-          type: 'error',
-          title: 'Update Failed',
-          text: errorMsg,
-          closeable: true,
-        });
+        notify.error(notificationsStore, 'Update Failed', errorMsg);
       } finally {
         isSavingFlow.value = false;
       }

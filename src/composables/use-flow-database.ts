@@ -13,6 +13,7 @@ import type {
 import { ENDPOINT_EXTENSION_NAME } from '../constants';
 import useFields from '../utils/field.util';
 import useCollections from '../utils/collection.util';
+import { notify, type NotificationsStoreLike } from '../utils/notification.util';
 
 export interface UseFlowDatabaseOptions {
   api: ReturnType<typeof useApi>;
@@ -25,14 +26,7 @@ export interface UseFlowDatabaseOptions {
   settingsStore: {
     updateSettings: (data: Record<string, unknown>, notify?: boolean) => void;
   };
-  notificationsStore: {
-    add: (notification: {
-      type: string;
-      title: string;
-      closeable?: boolean;
-      persist?: boolean;
-    }) => void;
-  };
+  notificationsStore: NotificationsStoreLike;
   credentials: Ref<ICredential[]>;
   selectedCredential: Ref<string>;
   flows: Ref<IFlow[]>;
@@ -482,12 +476,7 @@ export function useFlowDatabase(options: UseFlowDatabaseOptions) {
       }
       flowCategories.value = categories;
     } catch {
-      notificationsStore.add({
-        type: 'error',
-        title: 'Failed to fetch Flows. Please check your credentials',
-        closeable: true,
-        persist: true,
-      });
+      notify.error(notificationsStore, 'Failed to fetch Flows. Please check your credentials');
     }
   }
 
@@ -508,22 +497,12 @@ export function useFlowDatabase(options: UseFlowDatabaseOptions) {
     }
     try {
       await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/sync-counters`, payload);
-      notificationsStore.add({
-        type: 'success',
-        title: 'Flow counters synced successfully',
-        closeable: true,
-        persist: true,
-      });
+      notify.success(notificationsStore, 'Flow counters synced successfully');
       reloadFlow();
       reloadTabularFlow();
       settingDialog.value = false;
     } catch {
-      notificationsStore.add({
-        type: 'error',
-        title: 'Failed to sync the Flow counters',
-        closeable: true,
-        persist: true,
-      });
+      notify.error(notificationsStore, 'Failed to sync the Flow counters');
     } finally {
       isSyncingFlowCountersLoading.value = false;
     }
