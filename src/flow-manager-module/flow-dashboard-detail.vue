@@ -366,6 +366,11 @@ async function loadActivityHistories() {
       activityHistories: ActivityHistory[];
       successCount: number;
       errorCount: number;
+      totalCount?: number;
+      meta?: {
+        total_count?: number;
+        filter_count?: number;
+      };
     };
     if (isLocalInstance.value) {
       const queries = [`page=${page.value}`, `limit=${LIMIT}`];
@@ -373,6 +378,11 @@ async function loadActivityHistories() {
         activityHistories: ActivityHistory[];
         successCount: number;
         errorCount: number;
+        totalCount?: number;
+        meta?: {
+          total_count?: number;
+          filter_count?: number;
+        };
       }>(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/dashboard/${flowId.value}?${queries.join('&')}`);
       resData = data;
     } else {
@@ -417,6 +427,11 @@ async function loadActivityHistories() {
         activityHistories: ActivityHistory[];
         successCount: number;
         errorCount: number;
+        totalCount?: number;
+        meta?: {
+          total_count?: number;
+          filter_count?: number;
+        };
       };
     }
     activityHistories.value = resData?.activityHistories ?? [];
@@ -426,10 +441,32 @@ async function loadActivityHistories() {
       0;
     const errorVal =
       resData?.errorCount ?? flow.value?.flow_manager_metadata_id?.flow_manager_error_counter ?? 0;
-    let count = successVal + errorVal;
-    if (count === 0 && activityHistories.value.length > 0) {
-      count = activityHistories.value.length;
+
+    const reportedTotal =
+      resData?.totalCount ?? resData?.meta?.filter_count ?? resData?.meta?.total_count;
+
+    let count: number;
+    if (
+      reportedTotal !== undefined &&
+      reportedTotal !== null &&
+      !Number.isNaN(Number(reportedTotal))
+    ) {
+      count = Number(reportedTotal);
+    } else {
+      const runCounter = flow.value?.flow_manager_metadata_id?.flow_manager_run_counter;
+      if (runCounter != null && !Number.isNaN(Number(runCounter)) && Number(runCounter) > 0) {
+        count = Number(runCounter);
+      } else {
+        count = successVal + errorVal;
+        if (count === 0 && activityHistories.value.length > 0) {
+          count =
+            (page.value - 1) * LIMIT +
+            activityHistories.value.length +
+            (activityHistories.value.length === LIMIT ? 1 : 0);
+        }
+      }
     }
+
     totalCount.value = count;
     successCount.value = successVal;
     errorCount.value = errorVal;

@@ -490,7 +490,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
         const remoteUrl = urlValidation.url;
 
         const { data: flowRes } = await axios.get(
-          `${remoteUrl}/flows/${_req.params.flowId}?fields[]=id&fields[]=name&fields[]=operations.id&fields[]=operations.name&fields[]=flow_manager_metadata_id.flow_manager_success_counter&fields[]=flow_manager_metadata_id.flow_manager_error_counter`,
+          `${remoteUrl}/flows/${_req.params.flowId}?fields[]=id&fields[]=name&fields[]=operations.id&fields[]=operations.name&fields[]=flow_manager_metadata_id.flow_manager_success_counter&fields[]=flow_manager_metadata_id.flow_manager_error_counter&fields[]=flow_manager_metadata_id.flow_manager_run_counter`,
           {
             headers: { Authorization: `Bearer ${staticToken}` },
           },
@@ -510,7 +510,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
         );
 
         const { data: actRes } = await axios.get(
-          `${remoteUrl}/activity?filter[_and][0][item][_eq]=${_req.params.flowId}&filter[_and][1][action][_eq]=run&filter[_and][2][collection][_eq]=directus_flows&fields[]=id&fields[]=timestamp&sort=-timestamp&limit=${limit}&page=${page}`,
+          `${remoteUrl}/activity?filter[_and][0][item][_eq]=${_req.params.flowId}&filter[_and][1][action][_eq]=run&filter[_and][2][collection][_eq]=directus_flows&fields[]=id&fields[]=timestamp&sort=-timestamp&limit=${limit}&page=${page}&meta=*`,
           {
             headers: { Authorization: `Bearer ${staticToken}` },
           },
@@ -590,10 +590,59 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
         const successCount = flow.flow_manager_metadata_id?.flow_manager_success_counter ?? 0;
         const errorCount = flow.flow_manager_metadata_id?.flow_manager_error_counter ?? 0;
 
+        let totalCount = successCount + errorCount;
+        const remoteMeta =
+          actRes && typeof actRes === 'object' && 'meta' in actRes
+            ? (actRes as { meta?: { filter_count?: number; total_count?: number } }).meta
+            : null;
+        const remoteCount = remoteMeta?.filter_count ?? remoteMeta?.total_count;
+        if (
+          remoteCount !== undefined &&
+          remoteCount !== null &&
+          !Number.isNaN(Number(remoteCount))
+        ) {
+          totalCount = Number(remoteCount);
+        } else {
+          // Fallback: Query remote aggregation endpoint (?aggregate[count]=*) if meta is not supported or deprecated
+          try {
+            const { data: aggRes } = await axios.get(
+              `${remoteUrl}/activity?filter[_and][0][item][_eq]=${_req.params.flowId}&filter[_and][1][action][_eq]=run&filter[_and][2][collection][_eq]=directus_flows&aggregate[count]=*`,
+              {
+                headers: { Authorization: `Bearer ${staticToken}` },
+                timeout: 5000,
+              },
+            );
+            const countRows = aggRes?.data ?? aggRes;
+            const countVal = Array.isArray(countRows) ? countRows[0]?.count : countRows?.count;
+            const parsedCount =
+              typeof countVal === 'object' && countVal !== null
+                ? ((countVal as Record<string, unknown>).id ?? Object.values(countVal)[0])
+                : countVal;
+            if (
+              parsedCount !== undefined &&
+              parsedCount !== null &&
+              !Number.isNaN(Number(parsedCount))
+            ) {
+              totalCount = Number(parsedCount);
+            } else if (flow.flow_manager_metadata_id?.flow_manager_run_counter != null) {
+              totalCount = Number(flow.flow_manager_metadata_id.flow_manager_run_counter);
+            }
+          } catch {
+            if (flow.flow_manager_metadata_id?.flow_manager_run_counter != null) {
+              totalCount = Number(flow.flow_manager_metadata_id.flow_manager_run_counter);
+            }
+          }
+        }
+
         res.status(200).send({
+          totalCount,
           successCount,
           errorCount,
           activityHistories,
+          meta: {
+            total_count: totalCount,
+            filter_count: totalCount,
+          },
         });
         return;
       }
@@ -626,6 +675,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
           'id',
           'flow_manager_metadata_id.flow_manager_success_counter',
           'flow_manager_metadata_id.flow_manager_error_counter',
+          'flow_manager_metadata_id.flow_manager_run_counter',
           'operations.id',
           'operations.name',
         ],
@@ -634,6 +684,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
         flow_manager_metadata_id?: {
           flow_manager_success_counter?: number;
           flow_manager_error_counter?: number;
+          flow_manager_run_counter?: number;
         } | null;
         operations: { id: string; name: string }[];
       }[];
@@ -731,10 +782,33 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
       const successCount = flow.flow_manager_metadata_id?.flow_manager_success_counter ?? 0;
       const errorCount = flow.flow_manager_metadata_id?.flow_manager_error_counter ?? 0;
 
+      let totalCount = successCount + errorCount;
+      try {
+        const [countResult] = await database('directus_activity').count('id as total').where({
+          item: flow.id,
+          action: 'run',
+          collection: 'directus_flows',
+        });
+        const rawTotal =
+          countResult?.total ?? (countResult ? (Object.values(countResult)[0] as unknown) : null);
+        if (rawTotal !== undefined && rawTotal !== null && !Number.isNaN(Number(rawTotal))) {
+          totalCount = Number(rawTotal);
+        }
+      } catch {
+        if (flow.flow_manager_metadata_id?.flow_manager_run_counter != null) {
+          totalCount = Number(flow.flow_manager_metadata_id.flow_manager_run_counter);
+        }
+      }
+
       res.status(200).send({
+        totalCount,
         successCount,
         errorCount,
         activityHistories,
+        meta: {
+          total_count: totalCount,
+          filter_count: totalCount,
+        },
       });
     } catch (e: unknown) {
       if (axios.isAxiosError(e)) {
