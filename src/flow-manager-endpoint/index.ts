@@ -7,6 +7,35 @@ import { generateUUID } from '../utils/common.util';
 import { extendedFormatDate } from '../utils/date.util';
 import { simulateFlow, type SimulationReaderService } from '../utils/flow-simulator.util';
 
+function validateRemoteUrl(rawUrl: unknown): { valid: true; url: string } | { valid: false; error: string } {
+  if (typeof rawUrl !== 'string' || !rawUrl.trim()) {
+    return { valid: false, error: 'Remote URL is required and must be a valid string.' };
+  }
+  const trimmed = rawUrl.trim();
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return { valid: false, error: 'Invalid URL format.' };
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return { valid: false, error: 'Invalid URL protocol: only http: and https: are allowed.' };
+  }
+  const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '').trim();
+  if (
+    host === '169.254.169.254' ||
+    host === '169.254.170.2' ||
+    host.startsWith('169.254.') ||
+    host === 'metadata.google.internal' ||
+    host === 'metadata.titus.netflix.com' ||
+    host === 'fd00:ec2::254' ||
+    host.startsWith('fe80:')
+  ) {
+    return { valid: false, error: 'Access to cloud metadata and link-local endpoints is prohibited.' };
+  }
+  return { valid: true, url: trimmed.replace(/\/+$/, '') };
+}
+
 export default defineEndpoint((router, { database, services, getSchema, logger }) => {
   router.post('/flow-manager/process', async (_req, res) => {
     // @ts-expect-error this is the internal directus accountability data
@@ -17,6 +46,14 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
       return;
     }
     const { url, staticToken, method, payload, headers: customHeaders } = _req.body;
+
+    if (url) {
+      const urlValidation = validateRemoteUrl(url);
+      if (!urlValidation.valid) {
+        res.status(400).json({ error: urlValidation.error });
+        return;
+      }
+    }
 
     try {
       const { data } = await axios.request({
@@ -49,15 +86,15 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
   });
 
   router.post('/flow-manager/sync-counters', async (_req, res) => {
+    // @ts-expect-error this is the internal directus accountability data
+    if (!_req.accountability?.admin) {
+      res.status(401).send({
+        error: 'Unauthorized',
+      });
+      return;
+    }
     const { staticToken, url, type } = _req.body as ISyncFlowCounter;
     if (type === 'local') {
-      // @ts-expect-error this is the internal directus accountability data
-      if (!_req.accountability?.admin) {
-        res.status(401).send({
-          error: 'Unauthorized',
-        });
-        return;
-      }
       try {
         const { ActivityService } = services;
         const schema = await getSchema({ database });
@@ -190,11 +227,17 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
         }
       }
     } else if (type === 'remote' && staticToken && url) {
+      const urlValidation = validateRemoteUrl(url);
+      if (!urlValidation.valid) {
+        res.status(400).json({ error: urlValidation.error });
+        return;
+      }
+      const remoteUrl = urlValidation.url;
       try {
         const {
           data: { data: currentUser },
         } = await axios.get(
-          `${url}/users/me?fields[]=role.policies.policy.admin_access&fields[]=policies.policy.admin_access`,
+          `${remoteUrl}/users/me?fields[]=role.policies.policy.admin_access&fields[]=policies.policy.admin_access`,
           {
             headers: {
               Authorization: `Bearer ${staticToken}`,
@@ -219,7 +262,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
         const {
           data: { data: flows },
         } = await axios.get(
-          `${url}/flows?fields[]=*&fields[]=flow_manager_metadata_id.*&limit=-1`,
+          `${remoteUrl}/flows?fields[]=*&fields[]=flow_manager_metadata_id.*&limit=-1`,
           {
             headers: {
               Authorization: `Bearer ${staticToken}`,
@@ -236,7 +279,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
           const {
             data: { data: activities },
           } = await axios.get(
-            `${url}/activity?fields[]=id&fields[]=timestamp&filter[_and][0][item][_eq]=${flow.id}&filter[_and][1][action][_eq]=run&filter[_and][2][collection][_eq]=directus_flows&limit=-1`,
+            `${remoteUrl}/activity?fields[]=id&fields[]=timestamp&filter[_and][0][item][_eq]=${flow.id}&filter[_and][1][action][_eq]=run&filter[_and][2][collection][_eq]=directus_flows&limit=-1`,
             {
               headers: {
                 Authorization: `Bearer ${staticToken}`,
@@ -251,7 +294,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
               const {
                 data: { data: revisions },
               } = await axios.get(
-                `${url}/revisions?fields[]=data&filter[activity][_eq]=${activity.id}&limit=-1&sort=-id`,
+                `${remoteUrl}/revisions?fields[]=data&filter[activity][_eq]=${activity.id}&limit=-1&sort=-id`,
                 {
                   headers: {
                     Authorization: `Bearer ${staticToken}`,
@@ -310,7 +353,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
           };
           if (flow.flow_manager_metadata_id?.id) {
             await axios.patch(
-              `${url}/items/flow_manager_metadata/${flow.flow_manager_metadata_id.id}`,
+              `${remoteUrl}/items/flow_manager_metadata/${flow.flow_manager_metadata_id.id}`,
               payload,
               {
                 headers: {
@@ -320,7 +363,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
             );
           } else {
             const { data: createdMetadata } = await axios.post(
-              `${url}/items/flow_manager_metadata`,
+              `${remoteUrl}/items/flow_manager_metadata`,
               payload,
               {
                 headers: {
@@ -329,7 +372,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
               },
             );
             await axios.patch(
-              `${url}/flows/${flow.id}`,
+              `${remoteUrl}/flows/${flow.id}`,
               {
                 flow_manager_metadata_id: createdMetadata.id,
               },
@@ -380,8 +423,15 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
       const staticToken = (_req.query.staticToken || _req.body?.staticToken) as string | undefined;
 
       if (url && staticToken) {
+        const urlValidation = validateRemoteUrl(url);
+        if (!urlValidation.valid) {
+          res.status(400).json({ error: urlValidation.error });
+          return;
+        }
+        const remoteUrl = urlValidation.url;
+
         const { data: flowRes } = await axios.get(
-          `${url}/flows/${_req.params.flowId}?fields[]=id&fields[]=name&fields[]=operations.id&fields[]=operations.name&fields[]=flow_manager_metadata_id.flow_manager_success_counter&fields[]=flow_manager_metadata_id.flow_manager_error_counter`,
+          `${remoteUrl}/flows/${_req.params.flowId}?fields[]=id&fields[]=name&fields[]=operations.id&fields[]=operations.name&fields[]=flow_manager_metadata_id.flow_manager_success_counter&fields[]=flow_manager_metadata_id.flow_manager_error_counter`,
           {
             headers: { Authorization: `Bearer ${staticToken}` },
           },
@@ -401,7 +451,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
         );
 
         const { data: actRes } = await axios.get(
-          `${url}/activity?filter[_and][0][item][_eq]=${_req.params.flowId}&filter[_and][1][action][_eq]=run&filter[_and][2][collection][_eq]=directus_flows&fields[]=id&fields[]=timestamp&sort=-timestamp&limit=${limit}&page=${page}`,
+          `${remoteUrl}/activity?filter[_and][0][item][_eq]=${_req.params.flowId}&filter[_and][1][action][_eq]=run&filter[_and][2][collection][_eq]=directus_flows&fields[]=id&fields[]=timestamp&sort=-timestamp&limit=${limit}&page=${page}`,
           {
             headers: { Authorization: `Bearer ${staticToken}` },
           },
@@ -421,7 +471,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
           const activity = activities[j];
           if (activity) {
             const { data: revRes } = await axios.get(
-              `${url}/revisions?fields[]=data&filter[activity][_eq]=${activity.id}&limit=-1&sort=-id`,
+              `${remoteUrl}/revisions?fields[]=data&filter[activity][_eq]=${activity.id}&limit=-1&sort=-id`,
               {
                 headers: { Authorization: `Bearer ${staticToken}` },
               },
@@ -681,6 +731,13 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
         flowId,
       } = _req.body;
 
+      const urlValidation = validateRemoteUrl(url);
+      if (!urlValidation.valid) {
+        res.status(400).json({ error: urlValidation.error });
+        return;
+      }
+      const remoteUrl = urlValidation.url;
+
       const [localFlow] = await flowsService.readByQuery({
         filter: {
           id: {
@@ -695,7 +752,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
       }
 
       const axiosInstance = axios.create({
-        baseURL: url,
+        baseURL: remoteUrl,
         headers: {
           'Content-Type': 'application/json',
           ...(staticToken ? { Authorization: `Bearer ${staticToken}` } : {}),
@@ -761,6 +818,13 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
         mergePlan,
       } = _req.body;
 
+      const urlValidation = validateRemoteUrl(url);
+      if (!urlValidation.valid) {
+        res.status(400).json({ error: urlValidation.error });
+        return;
+      }
+      const remoteUrl = urlValidation.url;
+
       const [flow] = await flowsService.readByQuery({
         filter: {
           id: {
@@ -785,7 +849,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
       ];
 
       const axiosInstance = axios.create({
-        baseURL: url,
+        baseURL: remoteUrl,
         headers: {
           'Content-Type': 'application/json',
           ...(staticToken ? { Authorization: `Bearer ${staticToken}` } : {}),
@@ -1224,6 +1288,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
   ) => {
     try {
       const req = _req as {
+        accountability?: { admin?: boolean; user?: string; role?: string };
         body?: { url?: string; staticToken?: string; timezone?: string };
         query?: { url?: string; staticToken?: string; timezone?: string };
       };
@@ -1232,7 +1297,20 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
       const configuredTimezone = req.body?.timezone || req.query?.timezone;
 
       if (rawUrl && typeof rawUrl === 'string') {
-        const remoteUrl = rawUrl.trim().replace(/\/+$/, '');
+        // SSRF protection: Probing remote instance requires admin accountability
+        if (!req.accountability?.admin) {
+          res.status(401).json({
+            error: 'Unauthorized: Admin privileges required to probe remote instance server time.',
+          });
+          return;
+        }
+
+        const urlValidation = validateRemoteUrl(rawUrl);
+        if (!urlValidation.valid) {
+          res.status(400).json({ error: urlValidation.error });
+          return;
+        }
+        const remoteUrl = urlValidation.url;
 
         // 1. Try remote flow-manager extension endpoint first
         try {
@@ -1375,7 +1453,12 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
       let readerService: SimulationReaderService | undefined;
 
       if (url && typeof url === 'string') {
-        const remoteUrl = url.trim().replace(/\/+$/, '');
+        const urlValidation = validateRemoteUrl(url);
+        if (!urlValidation.valid) {
+          res.status(400).json({ error: urlValidation.error });
+          return;
+        }
+        const remoteUrl = urlValidation.url;
         readerService = {
           async readItem(
             collection: string,
