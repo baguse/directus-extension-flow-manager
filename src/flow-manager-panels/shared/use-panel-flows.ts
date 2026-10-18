@@ -67,6 +67,40 @@ export function usePanelFlows() {
     }
   }
 
+  function isLastRunFailed(meta: FlowWithMetadata['flow_manager_metadata']): {
+    isError: boolean;
+    message: string;
+  } {
+    if (!meta) return { isError: false, message: '' };
+
+    const rawMessage = (meta.flow_manager_last_run_message || '').trim();
+    const failedOp = (meta.flow_manager_last_run_operation || '').trim();
+
+    // If there's an explicit error message, it definitely failed
+    if (rawMessage) {
+      return { isError: true, message: rawMessage };
+    }
+
+    // If an operation is recorded as the failed step, it failed on that operation
+    if (failedOp) {
+      return {
+        isError: true,
+        message: `Operation "${failedOp}" failed`,
+      };
+    }
+
+    // If the flow has recorded errors and no successes, every run was an error
+    const runs = meta.flow_manager_run_counter || 0;
+    const successes = meta.flow_manager_success_counter || 0;
+    const errors = meta.flow_manager_error_counter || 0;
+
+    if (runs > 0 && errors > 0 && successes === 0) {
+      return { isError: true, message: 'Last execution failed' };
+    }
+
+    return { isError: false, message: '' };
+  }
+
   function getHealthStats(options: {
     scope?: 'all' | 'single';
     flowId?: string | null;
@@ -105,17 +139,19 @@ export function usePanelFlows() {
         const currentLatest = latestRunAt ? parseDirectusDate(latestRunAt) : null;
         if (flowDate && (!currentLatest || flowDate.getTime() > currentLatest.getTime())) {
           latestRunAt = meta.flow_manager_last_run_at;
-          latestRunMessage = meta.flow_manager_last_run_message || '';
-          latestRunStatus = meta.flow_manager_last_run_message ? 'error' : 'success';
+          const { isError, message } = isLastRunFailed(meta);
+          latestRunStatus = isError ? 'error' : 'success';
+          latestRunMessage = message;
         }
       }
 
       if (errors > 0) {
+        const { message } = isLastRunFailed(meta);
         failingList.push({
           id: flow.id,
           name: flow.name,
           errorCount: errors,
-          lastMessage: meta.flow_manager_last_run_message,
+          lastMessage: message || 'Last execution failed',
         });
       }
     }

@@ -204,12 +204,11 @@ watch(
       </div>
 
       <!-- Failing Flows Alert / Message -->
-      <div
-        v-if="scope === 'single' && stats.lastRunMessage && stats.lastRunStatus === 'error'"
-        class="error-banner"
-      >
+      <div v-if="scope === 'single' && stats.lastRunStatus === 'error'" class="error-banner">
         <v-icon name="error" small class="mr-1" color="var(--theme--danger)" />
-        <span class="error-msg" :title="stats.lastRunMessage">{{ stats.lastRunMessage }}</span>
+        <span class="error-msg" :title="stats.lastRunMessage || 'Last execution failed'">
+          {{ stats.lastRunMessage || 'Last execution failed' }}
+        </span>
       </div>
 
       <div
