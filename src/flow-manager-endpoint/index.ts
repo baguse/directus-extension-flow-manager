@@ -4,7 +4,7 @@ import { transformData } from '../utils/flow.util';
 import type { IFlow, IOperation, ISyncFlowCounter } from '../types';
 import isEqual from 'lodash/isEqual';
 import { generateUUID } from '../utils/common.util';
-import { extendedFormatDate } from '../utils/date.util';
+import { formatDirectusDateTime, parseDirectusDate } from '../utils/date.util';
 import { simulateFlow, type SimulationReaderService } from '../utils/flow-simulator.util';
 
 function validateRemoteUrl(
@@ -243,9 +243,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
           }
 
           const payload = {
-            flow_manager_last_run_at: lastRunAt
-              ? extendedFormatDate(lastRunAt, 'YYYY-MM-DD HH:mm:ss')
-              : null,
+            flow_manager_last_run_at: formatDirectusDateTime(lastRunAt),
             flow_manager_success_counter: successCounter,
             flow_manager_error_counter: errorCounter,
             flow_manager_run_counter: successCounter + errorCounter,
@@ -405,9 +403,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
           }
 
           const payload = {
-            flow_manager_last_run_at: lastRunAt
-              ? extendedFormatDate(lastRunAt, 'YYYY-MM-DD HH:mm:ss')
-              : null,
+            flow_manager_last_run_at: formatDirectusDateTime(lastRunAt),
             flow_manager_success_counter: successCounter,
             flow_manager_error_counter: errorCounter,
             flow_manager_run_counter: successCounter + errorCounter,
@@ -572,7 +568,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
                 activityHistories.push({
                   id: activity.id,
                   type: 'error',
-                  date: new Date(activity.timestamp),
+                  date: parseDirectusDate(activity.timestamp) ?? new Date(),
                   operation: lastStepOperationName,
                   message: lastStepErrorMessage,
                   data: lastExecutionData,
@@ -581,7 +577,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
                 activityHistories.push({
                   id: activity.id,
                   type: 'success',
-                  date: new Date(activity.timestamp),
+                  date: parseDirectusDate(activity.timestamp) ?? new Date(),
                   operation: lastStepOperationName,
                   message: lastStepErrorMessage,
                   data: lastExecutionData,
@@ -714,7 +710,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
               activityHistories.push({
                 id: activity.id,
                 type: 'error',
-                date: new Date(activity.timestamp),
+                date: parseDirectusDate(activity.timestamp) ?? new Date(),
                 operation: lastStepOperationName,
                 message: lastStepErrorMessage,
                 data: lastExecutionData,
@@ -723,7 +719,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
               activityHistories.push({
                 id: activity.id,
                 type: 'success',
-                date: new Date(activity.timestamp),
+                date: parseDirectusDate(activity.timestamp) ?? new Date(),
                 operation: lastStepOperationName,
                 message: lastStepErrorMessage,
                 data: lastExecutionData,

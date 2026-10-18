@@ -7,6 +7,7 @@ import { ENDPOINT_EXTENSION_NAME } from '../constants';
 import { useFlowCredentials } from '../composables/use-flow-credentials';
 import { formatConnectionError } from '../utils/error.util';
 import { notify } from '../utils/notification.util';
+import { parseDirectusDate } from '../utils/date.util';
 import ContentNavigation from './components/navigation.vue';
 import CredentialDialog from './components/credential-dialog.vue';
 
@@ -214,10 +215,10 @@ const filteredFlows = computed(() => {
   return list;
 });
 
-function timeAgo(dateInput?: string | null): string {
+function timeAgo(dateInput?: string | Date | null): string {
   if (!dateInput) return 'Never';
-  const date = new Date(dateInput);
-  if (isNaN(date.getTime())) return 'Never';
+  const date = parseDirectusDate(dateInput);
+  if (!date || isNaN(date.getTime())) return 'Never';
   const now = new Date();
   const diffSec = Math.floor((now.getTime() - date.getTime()) / 1000);
   if (diffSec < 60) return 'Just now';

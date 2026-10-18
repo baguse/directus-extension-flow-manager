@@ -1,5 +1,6 @@
 import { defineHook } from '@directus/extensions-sdk';
 import { generateUUID } from '../utils/common.util';
+import { formatDirectusDateTime } from '../utils/date.util';
 import type { FlowExecutionData, RevisionCreateActionData } from '../types';
 
 type ExceptionConstructor = new (message: string) => Error;
@@ -173,7 +174,7 @@ export default defineHook(({ action, filter }, context) => {
       );
 
       const payload = {
-        flow_manager_last_run_at: new Date(),
+        flow_manager_last_run_at: formatDirectusDateTime(activity?.timestamp ?? new Date()),
         flow_manager_run_counter: newRunCounter,
         flow_manager_last_run_message: lastStepErrorMessage,
         flow_manager_last_run_operation: lastStepOperation,

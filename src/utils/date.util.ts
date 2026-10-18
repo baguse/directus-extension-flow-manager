@@ -11,12 +11,20 @@ export function parseDirectusDate(input?: string | number | Date | null): Date |
   if (input === null || input === undefined || input === '') return null;
   if (input instanceof Date) return isNaN(input.getTime()) ? null : input;
   if (typeof input === 'number') {
-    const d = new Date(input);
+    const num = input < 10000000000 ? input * 1000 : input;
+    const d = new Date(num);
     return isNaN(d.getTime()) ? null : d;
   }
 
   const str = String(input).trim();
   if (!str) return null;
+
+  // Numeric timestamp strings (e.g. SQLite integer milliseconds or unix epoch seconds)
+  if (/^\d+$/.test(str)) {
+    const num = Number(str);
+    const d = new Date(str.length <= 10 ? num * 1000 : num);
+    return isNaN(d.getTime()) ? null : d;
+  }
 
   // Check if it already has UTC indicator (Z) or timezone offset (+HH:MM or -HH:MM after time)
   const hasTimezone =
@@ -38,7 +46,7 @@ export function parseDirectusDate(input?: string | number | Date | null): Date |
   return isNaN(d.getTime()) ? null : d;
 }
 
-export const formatDate = (date?: Date | string | null): string => {
+export const formatDate = (date?: Date | string | number | null): string => {
   if (!date) return '';
   const toDate = parseDirectusDate(date);
   if (!toDate || isNaN(toDate.getTime())) return '';
@@ -51,7 +59,7 @@ export const formatDate = (date?: Date | string | null): string => {
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 };
 
-export const formatDateLong = (date?: Date | string | null): string => {
+export const formatDateLong = (date?: Date | string | number | null): string => {
   if (!date) return '';
   const toDate = parseDirectusDate(date);
   if (!toDate || isNaN(toDate.getTime())) return '';
@@ -110,4 +118,17 @@ export function extendedFormatDate(
   };
 
   return format.replace(/YYYY|YY|MM|DD|HH|mm|ss/g, (match) => tokens[match] || '');
+}
+
+/**
+ * Standard canonical date serialization for Directus `dateTime` database columns and API payloads.
+ * Formats dates into canonical UTC string ("YYYY-MM-DD HH:mm:ss") compatible across all database
+ * engines (PostgreSQL, MySQL, SQLite) without timezone ambiguity or driver-specific serialization discrepancies.
+ * Safely returns null if the input is null, undefined, or an invalid date (never throws).
+ */
+export function formatDirectusDateTime(inputDate?: Date | string | number | null): string | null {
+  if (inputDate === null || inputDate === undefined || inputDate === '') return null;
+  const date = parseDirectusDate(inputDate);
+  if (!date || isNaN(date.getTime())) return null;
+  return extendedFormatDate(date, 'YYYY-MM-DD HH:mm:ss', true);
 }

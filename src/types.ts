@@ -61,7 +61,7 @@ export interface IFlowMetadata {
   flow_manager_category?: string;
   flow_manager_order?: number;
   flow_manager_run_counter?: number;
-  flow_manager_last_run_at?: Date;
+  flow_manager_last_run_at?: Date | string | null;
   flow_manager_last_run_message?: string;
   flow_manager_last_run_operation?: string;
   flow_manager_error_counter?: number;
@@ -170,7 +170,7 @@ export interface IFlow {
   /**
    * @deprecated moved to flow_manager_metadata_id
    */
-  flow_manager_last_run_at?: Date;
+  flow_manager_last_run_at?: Date | string | null;
   /**
    * @deprecated moved to flow_manager_metadata_id
    */
