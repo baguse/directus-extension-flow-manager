@@ -852,12 +852,25 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
         const selectedMeta = mergePlan.metadataFields || [];
         const flowRecord = flow as unknown as Record<string, unknown>;
         for (const f of selectedMeta) {
-          if (flowRecord[f] !== undefined) {
+          if (f !== 'operation' && flowRecord[f] !== undefined) {
             patchData[f] = flowRecord[f];
           }
         }
         if (mergePlan.remoteStatus && mergePlan.remoteStatus !== 'keep') {
           patchData.status = mergePlan.remoteStatus;
+        }
+
+        const localOps = flow.operations || [];
+        const remoteOps: IOperation[] = flowResponse[0]?.operations || [];
+        const createIds: string[] = mergePlan.createOperationIds || [];
+        const updateIds: string[] = mergePlan.updateOperationIds || [];
+        const deleteIds: string[] = mergePlan.deleteOperationIds || [];
+        const deleteIdSet = new Set(deleteIds);
+
+        // If remote root operation is about to be deleted, nullify it immediately so flow FK doesn't block deletion
+        const remoteRootOp = flowResponse[0]?.operation;
+        if (remoteRootOp && deleteIdSet.has(remoteRootOp)) {
+          patchData.operation = null;
         }
 
         if (Object.keys(patchData).length > 0) {
@@ -869,12 +882,52 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
           logger.info(`[FLOW MANAGER] Flow ${flowId} metadata updated via merge plan`);
         }
 
-        const localOps = flow.operations || [];
-        const createIds: string[] = mergePlan.createOperationIds || [];
-        const updateIds: string[] = mergePlan.updateOperationIds || [];
-        const deleteIds: string[] = mergePlan.deleteOperationIds || [];
+        // 1. Sever FK links (resolve/reject) on remote operations pointing to deleteIds
+        // and on the operations being deleted themselves so they don't block each other
+        if (deleteIds.length > 0) {
+          for (const rop of remoteOps) {
+            const pointsToDeleted =
+              deleteIdSet.has(rop.resolve || '') || deleteIdSet.has(rop.reject || '');
+            const isBeingDeleted = deleteIdSet.has(rop.id);
 
-        // 1. Create selected operations (first without resolve/reject to avoid FK errors)
+            if (pointsToDeleted || (isBeingDeleted && (rop.resolve || rop.reject))) {
+              const severPayload: Record<string, null> = {};
+              if (deleteIdSet.has(rop.resolve || '') || (isBeingDeleted && rop.resolve)) {
+                severPayload.resolve = null;
+              }
+              if (deleteIdSet.has(rop.reject || '') || (isBeingDeleted && rop.reject)) {
+                severPayload.reject = null;
+              }
+              if (Object.keys(severPayload).length > 0) {
+                try {
+                  await axiosInstance.request({
+                    url: `/operations/${rop.id}`,
+                    method: 'PATCH',
+                    data: severPayload,
+                  });
+                } catch (e) {
+                  logger.warn(`[FLOW MANAGER] Failed to sever FK on remote operation ${rop.id}:`, e);
+                }
+              }
+            }
+          }
+
+          // 2. Safe deletion of remote operations
+          for (const id of deleteIds) {
+            try {
+              await axiosInstance.request({
+                url: `/operations/${id}`,
+                method: 'DELETE',
+              });
+              logger.info(`[FLOW MANAGER] Operation ${id} deleted on remote`);
+            } catch (e) {
+              logger.error(`[FLOW MANAGER] Failed to delete Operation ${id} on remote:`, e);
+              throw e;
+            }
+          }
+        }
+
+        // 3. Create selected operations (first without resolve/reject to avoid FK errors)
         for (const id of createIds) {
           const op = localOps.find((o) => o.id === id);
           if (!op) continue;
@@ -902,7 +955,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
           }
         }
 
-        // 2. Update selected operations
+        // 4. Update selected operations
         for (const id of updateIds) {
           const op = localOps.find((o) => o.id === id);
           if (!op) continue;
@@ -917,8 +970,8 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
                 position_x: op.position_x,
                 position_y: op.position_y,
                 options: op.options,
-                resolve: op.resolve,
-                reject: op.reject,
+                resolve: op.resolve || null,
+                reject: op.reject || null,
               },
             });
             logger.info(`[FLOW MANAGER] Operation ${id} updated on remote`);
@@ -928,7 +981,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
           }
         }
 
-        // 3. Patch resolve/reject for newly created operations
+        // 5. Patch resolve/reject for newly created operations
         for (const id of createIds) {
           const op = localOps.find((o) => o.id === id);
           if (!op || (!op.resolve && !op.reject)) continue;
@@ -937,8 +990,8 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
               url: `/operations/${id}`,
               method: 'PATCH',
               data: {
-                resolve: op.resolve,
-                reject: op.reject,
+                resolve: op.resolve || null,
+                reject: op.reject || null,
               },
             });
           } catch (e) {
@@ -946,21 +999,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
           }
         }
 
-        // 4. Delete selected remote operations
-        for (const id of deleteIds) {
-          try {
-            await axiosInstance.request({
-              url: `/operations/${id}`,
-              method: 'DELETE',
-            });
-            logger.info(`[FLOW MANAGER] Operation ${id} deleted on remote`);
-          } catch (e) {
-            logger.error(`[FLOW MANAGER] Failed to delete Operation ${id} on remote:`, e);
-            throw e;
-          }
-        }
-
-        // 5. Ensure root operation on flow is updated if needed
+        // 6. Ensure root operation on flow is updated if needed
         if (flow.operation) {
           try {
             await axiosInstance.request({
@@ -970,8 +1009,8 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
                 operation: flow.operation,
               },
             });
-          } catch {
-            // Ignore if root operation pointer already set
+          } catch (e) {
+            logger.error(`[FLOW MANAGER] Failed to update root operation pointer on flow ${flowId}:`, e);
           }
         }
 
@@ -987,23 +1026,15 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
       }
 
       // Legacy overwrite fallback if mergePlan is omitted
-      const newFlow: Partial<IFlow> = {};
-      const oldFlow: Partial<IFlow> = {};
+      const newFlow: Record<string, unknown> = {};
+      const oldFlow: Record<string, unknown> = {};
 
       for (let i = 0; i < flowFields.length; i += 1) {
         const field = flowFields[i] as keyof IFlow;
-        newFlow[field] = (flow as unknown as Partial<IFlow>)[field] as undefined;
-        oldFlow[field] = flowResponse[0][field];
-      }
-
-      if (!isEqual(newFlow, oldFlow)) {
-        await axiosInstance.request({
-          url: `/flows/${flowId}`,
-          method: 'PATCH',
-          data: newFlow,
-        });
-
-        logger.info(`[FLOW MANAGER] Flow ${flowId} Updated`);
+        if (field !== 'operation') {
+          newFlow[field] = (flow as unknown as Record<string, unknown>)[field];
+          oldFlow[field] = (flowResponse[0] as unknown as Record<string, unknown>)[field];
+        }
       }
 
       const newOperations = flow.operations.reduce(
@@ -1025,6 +1056,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
       const oldOperationIds = Object.keys(oldOperations);
 
       const removedOperationIds = oldOperationIds.filter((id) => !newOperationIds.includes(id));
+      const removedIdSet = new Set(removedOperationIds);
       const needUpdateIds: string[] = [];
       const needCreatedIds: string[] = [];
 
@@ -1042,32 +1074,128 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
         }
       }
 
+      // If remote root operation is being deleted, nullify it immediately
+      const remoteRootOp = flowResponse[0]?.operation;
+      if (remoteRootOp && removedIdSet.has(remoteRootOp)) {
+        newFlow.operation = null;
+      }
+
+      if (!isEqual(newFlow, oldFlow)) {
+        await axiosInstance.request({
+          url: `/flows/${flowId}`,
+          method: 'PATCH',
+          data: newFlow,
+        });
+
+        logger.info(`[FLOW MANAGER] Flow ${flowId} Updated`);
+      }
+
+      // 1. Sever FK links on remote operations pointing to removedOperationIds
+      // and on removed operations themselves before deleting
+      if (removedOperationIds.length > 0) {
+        const remoteOps: IOperation[] = flowResponse[0].operations || [];
+        for (const rop of remoteOps) {
+          const pointsToDeleted =
+            removedIdSet.has(rop.resolve || '') || removedIdSet.has(rop.reject || '');
+          const isBeingDeleted = removedIdSet.has(rop.id);
+
+          if (pointsToDeleted || (isBeingDeleted && (rop.resolve || rop.reject))) {
+            const severPayload: Record<string, null> = {};
+            if (removedIdSet.has(rop.resolve || '') || (isBeingDeleted && rop.resolve)) {
+              severPayload.resolve = null;
+            }
+            if (removedIdSet.has(rop.reject || '') || (isBeingDeleted && rop.reject)) {
+              severPayload.reject = null;
+            }
+            if (Object.keys(severPayload).length > 0) {
+              try {
+                await axiosInstance.request({
+                  url: `/operations/${rop.id}`,
+                  method: 'PATCH',
+                  data: severPayload,
+                });
+              } catch (e) {
+                logger.warn(`[FLOW MANAGER] Failed to sever FK on remote operation ${rop.id}:`, e);
+              }
+            }
+          }
+        }
+
+        // 2. Safe deletion of removed operations
+        for (let i = 0; i < removedOperationIds.length; i += 1) {
+          const id = String(removedOperationIds[i]);
+          try {
+            await axiosInstance.request({
+              url: `/operations/${id}`,
+              method: 'DELETE',
+            });
+            logger.info(`[FLOW MANAGER] Operation ${id} deleted on remote`);
+          } catch (e) {
+            logger.error(`[FLOW MANAGER] Failed to delete Operation ${id} on remote:`, e);
+            throw e;
+          }
+        }
+      }
+
+      // 3. Create new operations with null resolve/reject first
       for (let i = 0; i < needCreatedIds.length; i += 1) {
         const id = String(needCreatedIds[i]);
         const data = newOperations[id];
         await axiosInstance.request({
           url: `/operations`,
           method: 'POST',
-          data,
+          data: {
+            ...data,
+            resolve: null,
+            reject: null,
+          },
         });
       }
 
+      // 4. Update existing operations
       for (let i = 0; i < needUpdateIds.length; i += 1) {
         const id = String(needUpdateIds[i]);
         const data = newOperations[id];
         await axiosInstance.request({
           url: `/operations/${id}`,
           method: 'PATCH',
-          data,
+          data: {
+            ...data,
+            resolve: data?.resolve || null,
+            reject: data?.reject || null,
+          },
         });
       }
 
-      for (let i = 0; i < removedOperationIds.length; i += 1) {
-        const id = String(removedOperationIds[i]);
-        await axiosInstance.request({
-          url: `/operations/${id}`,
-          method: 'DELETE',
-        });
+      // 5. Patch resolve/reject for newly created operations
+      for (let i = 0; i < needCreatedIds.length; i += 1) {
+        const id = String(needCreatedIds[i]);
+        const data = newOperations[id];
+        if (data && (data.resolve || data.reject)) {
+          await axiosInstance.request({
+            url: `/operations/${id}`,
+            method: 'PATCH',
+            data: {
+              resolve: data.resolve || null,
+              reject: data.reject || null,
+            },
+          });
+        }
+      }
+
+      // 6. Ensure root operation on flow is updated if needed
+      if (flow.operation) {
+        try {
+          await axiosInstance.request({
+            url: `/flows/${flowId}`,
+            method: 'PATCH',
+            data: {
+              operation: flow.operation,
+            },
+          });
+        } catch (e) {
+          logger.error(`[FLOW MANAGER] Failed to update root operation pointer on flow ${flowId}:`, e);
+        }
       }
 
       res.json({
