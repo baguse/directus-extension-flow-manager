@@ -587,19 +587,12 @@ onMounted(() => {
             ? 'Vault Locked — Click to Unlock or Manage Credentials'
             : 'Remote Directus Credentials'
         "
+        icon
         rounded
         secondary
-        class="credential-action-btn mr-1"
-        :class="{ 'vault-locked-btn': vaultStatus === 'locked' }"
         @click="credentialDialog = true"
       >
-        <v-icon
-          :name="vaultStatus === 'locked' ? 'lock' : 'database'"
-          small
-          class="mr-1"
-          :class="{ 'locked-icon': vaultStatus === 'locked' }"
-        />
-        <span>{{ vaultStatus === 'locked' ? 'Unlock Vault' : 'Credentials' }}</span>
+        <v-icon :name="vaultStatus === 'locked' ? 'lock' : 'database'" />
       </v-button>
 
       <v-button
@@ -1929,23 +1922,6 @@ onMounted(() => {
   to {
     opacity: 1;
     transform: translateY(0);
-  }
-}
-.credential-action-btn {
-  font-weight: 600;
-
-  &.vault-locked-btn {
-    --v-button-color: var(--theme--warning, #f59e0b);
-    border-color: rgba(245, 158, 11, 0.4);
-    background-color: rgba(245, 158, 11, 0.08);
-
-    &:hover {
-      background-color: rgba(245, 158, 11, 0.15);
-    }
-  }
-
-  .locked-icon {
-    color: var(--theme--warning, #f59e0b);
   }
 }
 
