@@ -222,7 +222,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
                     // .message off null and throw inside the action handler.
                     const lastError = lastExecutionData.data?.$last;
                     // last activity because we sorted it desc(id)
-                    if (j === 0) {
+                    if (j === 0 && k === 0) {
                       if (Array.isArray(lastError)) {
                         lastStepErrorMessage = lastError[0]?.message ?? '';
                       } else {
@@ -235,7 +235,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
 
                 if (lastStepStatus === 'reject') {
                   errorCounter += 1;
-                } else {
+                } else if (lastStepStatus === 'resolve') {
                   successCounter += 1;
                 }
               }
@@ -397,7 +397,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
 
                 if (lastStepStatus === 'reject') {
                   errorCounter += 1;
-                } else {
+                } else if (lastStepStatus === 'resolve') {
                   successCounter += 1;
                 }
               }

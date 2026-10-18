@@ -110,6 +110,7 @@ export default defineHook(({ action, filter }, context) => {
         .select(
           'directus_flows.id as id',
           'flow_manager_metadata.id as metadata_id',
+          'flow_manager_metadata.flow_manager_run_counter',
           'flow_manager_metadata.flow_manager_success_counter',
           'flow_manager_metadata.flow_manager_error_counter',
         )
@@ -125,8 +126,9 @@ export default defineHook(({ action, filter }, context) => {
         return;
       }
 
-      const successCounter = flow.flow_manager_success_counter || 0;
-      const errorCounter = flow.flow_manager_error_counter || 0;
+      const successCounter = Number(flow.flow_manager_success_counter || 0);
+      const errorCounter = Number(flow.flow_manager_error_counter || 0);
+      const currentRunCounter = Number(flow.flow_manager_run_counter || 0);
 
       let lastExecutionData: FlowExecutionData | null = null;
       if (typeof data.payload.data === 'string') {
@@ -157,14 +159,26 @@ export default defineHook(({ action, filter }, context) => {
         }
       }
 
+      const newSuccessCounter = lastStepStatus === 'resolve' ? successCounter + 1 : successCounter;
+      const newErrorCounter = lastStepStatus === 'reject' ? errorCounter + 1 : errorCounter;
+
+      const rawCount = countResult?.countDistinct?.id ?? countResult?.countDistinct;
+      const parsedDistinctCount =
+        rawCount !== undefined && rawCount !== null ? Number(rawCount) : 0;
+      const calculatedRuns = newSuccessCounter + newErrorCounter;
+      const newRunCounter = Math.max(
+        !Number.isNaN(parsedDistinctCount) ? parsedDistinctCount : 0,
+        calculatedRuns,
+        currentRunCounter + 1,
+      );
+
       const payload = {
         flow_manager_last_run_at: new Date(),
-        flow_manager_run_counter: countResult?.countDistinct.id || 0,
+        flow_manager_run_counter: newRunCounter,
         flow_manager_last_run_message: lastStepErrorMessage,
         flow_manager_last_run_operation: lastStepOperation,
-        flow_manager_success_counter:
-          lastStepStatus === 'resolve' ? successCounter + 1 : successCounter,
-        flow_manager_error_counter: lastStepStatus === 'reject' ? errorCounter + 1 : errorCounter,
+        flow_manager_success_counter: newSuccessCounter,
+        flow_manager_error_counter: newErrorCounter,
       };
 
       if (flow.metadata_id) {
