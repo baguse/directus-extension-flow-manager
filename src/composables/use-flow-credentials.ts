@@ -424,16 +424,21 @@ export function useFlowCredentials(options: UseFlowCredentialsOptions) {
     const permissionFields = (await reloadFields('directus_permissions')) as Field[];
     const permissionHasPolicy = permissionFields.some((f: Field) => f.field === 'policy');
     await getUser(permissionHasPolicy);
+    if (currentUser.value?.admin_access) {
+      return true;
+    }
     if (permissionHasPolicy) {
       const policies: ExtendedPolicy[] = [
         ...(currentUser.value?.policies || []),
         ...(currentUser.value?.role?.policies || []),
       ];
 
-      return policies.some((policy) => policy.admin_access || policy.policy.admin_access);
-    } else {
-      return currentUser.value?.role?.admin_access;
+      const hasPolicyAdmin = policies.some(
+        (policy) => policy?.admin_access || policy?.policy?.admin_access,
+      );
+      if (hasPolicyAdmin) return true;
     }
+    return Boolean(currentUser.value?.role?.admin_access);
   }
 
   async function checkCredentialConnection(cred: ICredential): Promise<CredentialConnectionResult> {
@@ -488,12 +493,17 @@ export function useFlowCredentials(options: UseFlowCredentialsOptions) {
       }
 
       let isAdmin = false;
-      if (hasPolicyField) {
+      if (userData.admin_access) {
+        isAdmin = true;
+      } else if (hasPolicyField) {
         const policies: ExtendedPolicy[] = [
           ...(userData.policies || []),
           ...(userData.role?.policies || []),
         ];
         isAdmin = policies.some((policy) => policy?.admin_access || policy?.policy?.admin_access);
+        if (!isAdmin && userData.role?.admin_access) {
+          isAdmin = true;
+        }
       } else {
         isAdmin = Boolean(userData.role?.admin_access);
       }

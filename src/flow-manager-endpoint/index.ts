@@ -7,7 +7,9 @@ import { generateUUID } from '../utils/common.util';
 import { extendedFormatDate } from '../utils/date.util';
 import { simulateFlow, type SimulationReaderService } from '../utils/flow-simulator.util';
 
-function validateRemoteUrl(rawUrl: unknown): { valid: true; url: string } | { valid: false; error: string } {
+function validateRemoteUrl(
+  rawUrl: unknown,
+): { valid: true; url: string } | { valid: false; error: string } {
   if (typeof rawUrl !== 'string' || !rawUrl.trim()) {
     return { valid: false, error: 'Remote URL is required and must be a valid string.' };
   }
@@ -21,7 +23,10 @@ function validateRemoteUrl(rawUrl: unknown): { valid: true; url: string } | { va
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     return { valid: false, error: 'Invalid URL protocol: only http: and https: are allowed.' };
   }
-  const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '').trim();
+  const host = parsed.hostname
+    .toLowerCase()
+    .replace(/^\[|\]$/g, '')
+    .trim();
   if (
     host === '169.254.169.254' ||
     host === '169.254.170.2' ||
@@ -31,9 +36,59 @@ function validateRemoteUrl(rawUrl: unknown): { valid: true; url: string } | { va
     host === 'fd00:ec2::254' ||
     host.startsWith('fe80:')
   ) {
-    return { valid: false, error: 'Access to cloud metadata and link-local endpoints is prohibited.' };
+    return {
+      valid: false,
+      error: 'Access to cloud metadata and link-local endpoints is prohibited.',
+    };
   }
   return { valid: true, url: trimmed.replace(/\/+$/, '') };
+}
+
+interface PolicyAccessItem {
+  admin_access?: boolean | number | string;
+  policy?: { admin_access?: boolean | number | string };
+}
+
+function checkAdminAccess(userData: Record<string, unknown> | null | undefined): boolean {
+  if (!userData) return false;
+
+  const hasAdmin = (val: unknown): boolean =>
+    val === true || val === 1 || val === 'true' || val === '1';
+
+  // 1. Direct admin_access flag on user (Directus 11+)
+  if (hasAdmin(userData.admin_access)) return true;
+
+  // 2. Direct admin_access flag or admin role name on role object (Directus 9/10)
+  if (typeof userData.role === 'object' && userData.role !== null) {
+    const role = userData.role as Record<string, unknown> & { policies?: PolicyAccessItem[] };
+    if (hasAdmin(role.admin_access)) return true;
+
+    // Admin role by standard name
+    if (typeof role.name === 'string') {
+      const roleName = role.name.toLowerCase();
+      if (roleName === 'administrator' || roleName === 'admin') return true;
+    }
+
+    // 3. Policies on role (Directus 10.10+)
+    const rolePolicies = role.policies;
+    if (Array.isArray(rolePolicies)) {
+      if (
+        rolePolicies.some((p) => hasAdmin(p?.admin_access) || hasAdmin(p?.policy?.admin_access))
+      ) {
+        return true;
+      }
+    }
+  }
+
+  // 4. Direct policies on user (Directus 10.10+)
+  const userPolicies = userData.policies as PolicyAccessItem[] | undefined;
+  if (Array.isArray(userPolicies)) {
+    if (userPolicies.some((p) => hasAdmin(p?.admin_access) || hasAdmin(p?.policy?.admin_access))) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 export default defineEndpoint((router, { database, services, getSchema, logger }) => {
@@ -234,24 +289,32 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
       }
       const remoteUrl = urlValidation.url;
       try {
-        const {
-          data: { data: currentUser },
-        } = await axios.get(
-          `${remoteUrl}/users/me?fields[]=role.policies.policy.admin_access&fields[]=policies.policy.admin_access`,
-          {
+        let currentUser: Record<string, unknown> | null = null;
+        try {
+          const { data } = await axios.get(
+            `${remoteUrl}/users/me?fields[]=*&fields[]=role.*&fields[]=policies.policy.admin_access&fields[]=role.policies.policy.admin_access`,
+            {
+              headers: {
+                Authorization: `Bearer ${staticToken}`,
+              },
+            },
+          );
+          currentUser = data?.data || null;
+        } catch {
+          // If remote instance fails on relational policy fields (e.g. Directus < 10.10), fallback to standard user & role fields
+          const { data } = await axios.get(`${remoteUrl}/users/me?fields[]=*&fields[]=role.*`, {
             headers: {
               Authorization: `Bearer ${staticToken}`,
             },
-          },
-        );
+          });
+          currentUser = data?.data || null;
+        }
+
         if (!currentUser) {
           throw new Error('User not found');
         }
-        const policies = [];
-        policies.push(...currentUser.policies);
-        const rolePolicies = currentUser.role?.policies || [];
-        policies.push(...rolePolicies);
-        const isAdmin = policies.some((p) => p.policy.admin_access);
+
+        const isAdmin = checkAdminAccess(currentUser);
         if (!isAdmin) {
           res.status(401).send({
             error: 'Unauthorized',
@@ -970,7 +1033,10 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
                     data: severPayload,
                   });
                 } catch (e) {
-                  logger.warn(`[FLOW MANAGER] Failed to sever FK on remote operation ${rop.id}:`, e);
+                  logger.warn(
+                    `[FLOW MANAGER] Failed to sever FK on remote operation ${rop.id}:`,
+                    e,
+                  );
                 }
               }
             }
@@ -1074,7 +1140,10 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
               },
             });
           } catch (e) {
-            logger.error(`[FLOW MANAGER] Failed to update root operation pointer on flow ${flowId}:`, e);
+            logger.error(
+              `[FLOW MANAGER] Failed to update root operation pointer on flow ${flowId}:`,
+              e,
+            );
           }
         }
 
@@ -1258,7 +1327,10 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
             },
           });
         } catch (e) {
-          logger.error(`[FLOW MANAGER] Failed to update root operation pointer on flow ${flowId}:`, e);
+          logger.error(
+            `[FLOW MANAGER] Failed to update root operation pointer on flow ${flowId}:`,
+            e,
+          );
         }
       }
 
