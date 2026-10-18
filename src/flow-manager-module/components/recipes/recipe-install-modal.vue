@@ -615,49 +615,116 @@ async function handleInstall() {
   isInstalling.value = true;
   errorMessage.value = null;
 
+  const cred = isLocalTarget.value
+    ? null
+    : props.credentials?.find((c) => c.id === props.selectedCredential);
+  if (!isLocalTarget.value && !cred) {
+    errorMessage.value = 'Target remote credential not found.';
+    isInstalling.value = false;
+    return;
+  }
+
+  const postEndpoint = async (path: string, payload: unknown) => {
+    if (isLocalTarget.value) {
+      return await api.post(path, payload);
+    }
+    return await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+      url: `${cred!.url}${path}`,
+      staticToken: cred!.staticToken,
+      method: 'POST',
+      payload,
+    });
+  };
+
+  const patchEndpoint = async (path: string, payload: unknown) => {
+    if (isLocalTarget.value) {
+      return await api.patch(path, payload);
+    }
+    return await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+      url: `${cred!.url}${path}`,
+      staticToken: cred!.staticToken,
+      method: 'PATCH',
+      payload,
+    });
+  };
+
+  const deleteEndpoint = async (path: string) => {
+    if (isLocalTarget.value) {
+      return await api.delete(path);
+    }
+    return await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
+      url: `${cred!.url}${path}`,
+      staticToken: cred!.staticToken,
+      method: 'DELETE',
+    });
+  };
+
+  const createdFlowIds: string[] = [];
+
   try {
     const compiled = compileRecipe(props.recipe, paramValues.value, collectionMap.value);
 
-    // 1. Create Flows & Operations on Target Instance
-    if (isLocalTarget.value) {
-      for (const flowPayload of compiled.flows) {
-        await api.post('/flows', flowPayload);
-      }
-      for (const opPayload of compiled.operations) {
-        await api.post('/operations', opPayload);
-      }
-      await hydrateLocalFlow();
-    } else {
-      const cred = props.credentials?.find((c) => c.id === props.selectedCredential);
-      if (!cred) throw new Error('Target remote credential not found.');
+    // 1. Phase 1: Create Flows with operation: null to prevent Foreign Key constraint violation
+    for (const flowPayload of compiled.flows) {
+      const { operation: _rootOp, ...flowWithoutRootOp } = flowPayload;
+      await postEndpoint('/flows', {
+        ...flowWithoutRootOp,
+        operation: null,
+      });
+      createdFlowIds.push(flowPayload.id);
+    }
 
-      for (const flowPayload of compiled.flows) {
-        await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
-          url: `${cred.url}/flows`,
-          staticToken: cred.staticToken,
-          method: 'POST',
-          payload: flowPayload,
+    // 2. Phase 2: Create Operations with resolve: null, reject: null to prevent unresolved foreign key errors
+    for (const opPayload of compiled.operations) {
+      const { resolve: _res, reject: _rej, ...opWithoutLinks } = opPayload;
+      await postEndpoint('/operations', {
+        ...opWithoutLinks,
+        resolve: null,
+        reject: null,
+      });
+    }
+
+    // 3. Phase 3: Patch Operation branches (resolve & reject) now that all operations exist
+    for (const opPayload of compiled.operations) {
+      if (opPayload.resolve || opPayload.reject) {
+        await patchEndpoint(`/operations/${opPayload.id}`, {
+          resolve: opPayload.resolve || null,
+          reject: opPayload.reject || null,
         });
       }
-      for (const opPayload of compiled.operations) {
-        await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/process`, {
-          url: `${cred.url}/operations`,
-          staticToken: cred.staticToken,
-          method: 'POST',
-          payload: opPayload,
+    }
+
+    // 4. Phase 4: Patch Flow root operation pointer now that root operation exists
+    for (const flowPayload of compiled.flows) {
+      if (flowPayload.operation) {
+        await patchEndpoint(`/flows/${flowPayload.id}`, {
+          operation: flowPayload.operation,
         });
       }
+    }
+
+    // 5. Phase 5: Re-hydrate local flow store if installing locally
+    if (isLocalTarget.value) {
+      await hydrateLocalFlow();
     }
 
     notify.success(
       notificationsStore,
       'Recipe Installed!',
-      `Successfully installed "${props.recipe.name}" (${compiled.flows.length} flow created).`,
+      `Successfully installed "${props.recipe.name}" (${compiled.flows.length} ${compiled.flows.length === 1 ? 'flow' : 'flows'} created).`,
     );
 
     emit('installed', { flowIds: compiled.flows.map((f) => f.id) });
     onClose();
   } catch (err: unknown) {
+    // Best-effort cleanup of created flows if installation failed mid-way
+    for (const flowId of createdFlowIds) {
+      try {
+        await deleteEndpoint(`/flows/${flowId}`);
+      } catch {
+        // Ignore rollback cleanup errors
+      }
+    }
     errorMessage.value = formatConnectionError(err, 'Failed to install recipe.');
   } finally {
     isInstalling.value = false;
