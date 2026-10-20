@@ -143,7 +143,10 @@ function selectItem() {
         <v-badge
           v-if="triggerType"
           :value="item.flow_manager_metadata_id?.flow_manager_run_counter || 0"
-          class="notifications-badge"
+          :class="{
+            'badge-success': !item.flow_manager_metadata_id?.flow_manager_last_run_message,
+            'badge-error': !!item.flow_manager_metadata_id?.flow_manager_last_run_message,
+          }"
         >
           <v-chip x-small class="item-name text-gray mr-4 trigger-chip">{{ triggerType }}</v-chip>
         </v-badge>
@@ -172,7 +175,10 @@ function selectItem() {
         <v-badge
           v-if="triggerType"
           :value="item.flow_manager_metadata_id?.flow_manager_run_counter || 0"
-          class="notifications-badge"
+          :class="{
+            'badge-success': !item.flow_manager_metadata_id?.flow_manager_last_run_message,
+            'badge-error': !!item.flow_manager_metadata_id?.flow_manager_last_run_message,
+          }"
         >
           <v-chip x-small active class="item-name mr-4 trigger-chip">{{ triggerType }} </v-chip>
         </v-badge>
@@ -371,5 +377,13 @@ body.is-dragging-flow {
     color: #475569;
     border: 1px solid rgba(100, 116, 139, 0.25);
   }
+}
+
+.badge-error {
+  --v-badge-background-color: #fa284b;
+}
+
+.badge-success {
+  --v-badge-background-color: #4a9e35;
 }
 </style>
