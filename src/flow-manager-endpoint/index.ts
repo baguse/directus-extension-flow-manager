@@ -1,5 +1,5 @@
 import { defineEndpoint } from '@directus/extensions-sdk';
-import axios from 'axios';
+import axios, { type AxiosRequestConfig, type AxiosResponse } from 'axios';
 import { transformData } from '../utils/flow.util';
 import type { IFlow, IOperation, ISyncFlowCounter } from '../types';
 import isEqual from 'lodash/isEqual';
@@ -91,6 +91,51 @@ function checkAdminAccess(userData: Record<string, unknown> | null | undefined):
   return false;
 }
 
+function chunkArray<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
+interface SyncJobStatus {
+  id: string;
+  type: 'local' | 'remote';
+  targetFlowId?: string;
+  status: 'running' | 'completed' | 'failed' | 'cancelled';
+  startedAt: string;
+  finishedAt?: string;
+  totalFlows: number;
+  completedFlows: number;
+  currentFlowId?: string;
+  currentFlowName?: string;
+  processedActivities: number;
+  totalActivities: number;
+  evaluatedErrors: number;
+  evaluatedSuccesses: number;
+  error?: string;
+  cancelRequested?: boolean;
+}
+
+const activeSyncJobs = new Map<string, SyncJobStatus>();
+
+async function axiosWithRetry<T = unknown>(
+  config: AxiosRequestConfig,
+  retries = 3,
+  delayMs = 1000,
+): Promise<AxiosResponse<T>> {
+  try {
+    return await axios(config);
+  } catch (err: unknown) {
+    if (retries > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      return axiosWithRetry<T>(config, retries - 1, delayMs * 2);
+    }
+    throw err;
+  }
+}
+
 export default defineEndpoint((router, { database, services, getSchema, logger }) => {
   router.post('/flow-manager/process', async (_req, res) => {
     // @ts-expect-error this is the internal directus accountability data
@@ -140,6 +185,52 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
     }
   });
 
+  router.get('/flow-manager/sync-status', async (_req, res) => {
+    // @ts-expect-error this is the internal directus accountability data
+    if (!_req.accountability?.admin) {
+      res.status(401).send({
+        error: 'Unauthorized',
+      });
+      return;
+    }
+    const jobs = Array.from(activeSyncJobs.values());
+    res.status(200).send({
+      isSyncing: jobs.some((j) => j.status === 'running'),
+      jobs,
+    });
+  });
+
+  router.post('/flow-manager/cancel-sync', async (_req, res) => {
+    // @ts-expect-error this is the internal directus accountability data
+    if (!_req.accountability?.admin) {
+      res.status(401).send({
+        error: 'Unauthorized',
+      });
+      return;
+    }
+    const { jobId } = _req.body || {};
+
+    let cancelledAny = false;
+    for (const [key, job] of activeSyncJobs.entries()) {
+      if (job.status === 'running') {
+        if (!jobId || job.id === jobId || key === jobId) {
+          job.cancelRequested = true;
+          job.status = 'cancelled';
+          job.finishedAt = new Date().toISOString();
+          cancelledAny = true;
+        }
+      }
+    }
+
+    res.status(200).send({
+      success: true,
+      cancelled: cancelledAny,
+      message: cancelledAny
+        ? 'Synchronization cancelled successfully.'
+        : 'No running synchronization found to cancel.',
+    });
+  });
+
   router.post('/flow-manager/sync-counters', async (_req, res) => {
     // @ts-expect-error this is the internal directus accountability data
     if (!_req.accountability?.admin) {
@@ -149,136 +240,289 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
       return;
     }
     const { staticToken, url, type } = _req.body as ISyncFlowCounter;
+    const targetFlowId = (_req.body?.flowId || _req.query?.flowId) as string | undefined;
+
     if (type === 'local') {
-      try {
-        const { ActivityService } = services;
-        const schema = await getSchema({ database });
-        const activityService = new ActivityService({
-          knex: database,
-          schema,
+      const jobKey = `local:${targetFlowId || 'all'}`;
+      const existingJob = activeSyncJobs.get(jobKey);
+      if (existingJob && existingJob.status === 'running') {
+        res.status(200).send({
+          success: true,
+          syncing: true,
+          message: 'Synchronization is already running in background.',
+          job: existingJob,
         });
-        const flows = await database('directus_flows')
-          .select('directus_flows.id', 'flow_manager_metadata.id as metadata_id')
-          .leftJoin(
-            'flow_manager_metadata',
-            'directus_flows.flow_manager_metadata_id',
-            'flow_manager_metadata.id',
-          );
+        return;
+      }
 
-        for (let i = 0; i < flows.length; i++) {
-          const flow = flows[i];
-          let successCounter = 0;
-          let errorCounter = 0;
-          let lastStepErrorMessage = '';
-          let lastStepOperation = '';
-          const activities = await activityService.readByQuery({
-            filter: {
-              _and: [
-                {
-                  item: {
-                    _eq: flow.id,
-                  },
-                },
-                {
-                  action: {
-                    _eq: 'run',
-                  },
-                },
-                {
-                  collection: {
-                    _eq: 'directus_flows',
-                  },
-                },
-              ],
-            },
-            fields: ['id', 'revisions.data', 'timestamp'],
-            limit: -1,
-            sort: ['-id'],
-          });
-          const lastRunAt: string | null = activities[0]?.timestamp || null;
+      const job: SyncJobStatus = {
+        id: jobKey,
+        type: 'local',
+        targetFlowId,
+        status: 'running',
+        startedAt: new Date().toISOString(),
+        totalFlows: 0,
+        completedFlows: 0,
+        processedActivities: 0,
+        totalActivities: 0,
+        evaluatedErrors: 0,
+        evaluatedSuccesses: 0,
+      };
+      activeSyncJobs.set(jobKey, job);
 
-          for (let j = 0; j < activities.length; j++) {
-            const activity = activities[j];
-            if (activity) {
-              const revisions = activity.revisions;
-              for (let k = 0; k < revisions.length; k++) {
-                const revision = revisions[k];
+      // Return immediately so HTTP client does not timeout
+      res.status(200).send({
+        success: true,
+        syncing: true,
+        message: 'Synchronization started in background.',
+        jobId: jobKey,
+      });
 
-                let lastExecutionData = revision.data;
+      // Background worker to process all items chunk by chunk without limit
+      setImmediate(async () => {
+        try {
+          let flowsQuery = database('directus_flows')
+            .select(
+              'directus_flows.id',
+              'directus_flows.name',
+              'flow_manager_metadata.id as metadata_id',
+              'flow_manager_metadata.flow_manager_success_counter',
+              'flow_manager_metadata.flow_manager_error_counter',
+              'flow_manager_metadata.flow_manager_run_counter',
+            )
+            .leftJoin(
+              'flow_manager_metadata',
+              'directus_flows.flow_manager_metadata_id',
+              'flow_manager_metadata.id',
+            );
 
-                if (typeof lastExecutionData === 'string') {
-                  try {
-                    lastExecutionData = JSON.parse(lastExecutionData);
-                  } catch {}
+          if (targetFlowId) {
+            flowsQuery = flowsQuery.where('directus_flows.id', targetFlowId);
+          }
+          const flows = await flowsQuery;
+          const flowIds = flows.map((f: { id: string }) => f.id);
+
+          // Get total activity run count per flow in 1 fast SQL aggregate query
+          const countResults = (await database('directus_activity')
+            .select('item')
+            .count('id as total')
+            .where({ action: 'run', collection: 'directus_flows' })
+            .whereIn('item', flowIds)
+            .groupBy('item')) as unknown as Array<{ item: string; total: string | number }>;
+
+          const totalCountByFlow = new Map<string, number>();
+          for (const row of countResults) {
+            totalCountByFlow.set(row.item, Number(row.total || 0));
+          }
+
+          job.totalFlows = flows.length;
+
+          for (let i = 0; i < flows.length; i++) {
+            if (job.cancelRequested) {
+              job.status = 'cancelled';
+              job.finishedAt = new Date().toISOString();
+              return;
+            }
+            const flow = flows[i];
+            const totalCount = totalCountByFlow.get(flow.id) ?? 0;
+
+            job.currentFlowId = flow.id;
+            job.currentFlowName = (flow as { name?: string }).name || flow.id;
+            job.totalActivities = totalCount;
+            job.processedActivities = 0;
+            job.evaluatedErrors = 0;
+            job.evaluatedSuccesses = 0;
+
+            let lastRunAt: string | null = null;
+            let lastStepErrorMessage = '';
+            let lastStepOperation = '';
+            let evaluatedErrors = 0;
+            let evaluatedSuccesses = 0;
+            let isFirstActivity = true;
+            let lastSeenId: number | null = null;
+
+            const CHUNK_SIZE = 100;
+
+            while (true) {
+              if (job.cancelRequested) {
+                job.status = 'cancelled';
+                job.finishedAt = new Date().toISOString();
+                return;
+              }
+              let query = database('directus_activity')
+                .select('id', 'item', 'timestamp')
+                .where({ item: flow.id, action: 'run', collection: 'directus_flows' })
+                .orderBy('id', 'desc')
+                .limit(CHUNK_SIZE);
+
+              if (lastSeenId !== null) {
+                query = query.where('id', '<', lastSeenId);
+              }
+
+              const activities = (await query) as unknown as Array<{
+                id: number;
+                item: string;
+                timestamp?: string;
+              }>;
+
+              if (!activities || activities.length === 0) {
+                break;
+              }
+
+              const lastAct = activities[activities.length - 1];
+              if (lastAct?.id != null) {
+                lastSeenId = lastAct.id;
+              }
+
+              if (isFirstActivity) {
+                lastRunAt = activities[0]?.timestamp || null;
+              }
+
+              const actIds = activities.map((a) => a.id);
+              const revisions = (await database('directus_revisions')
+                .select('id', 'activity', 'data')
+                .whereIn('activity', actIds)
+                .orderBy('id', 'desc')) as unknown as Array<{
+                id: number;
+                activity: number | string;
+                data?: unknown;
+              }>;
+
+              const revisionsByActivity = new Map<number, typeof revisions>();
+              for (const rev of revisions) {
+                const actId = Number(rev.activity);
+                if (!isNaN(actId)) {
+                  if (!revisionsByActivity.has(actId)) {
+                    revisionsByActivity.set(actId, []);
+                  }
+                  revisionsByActivity.get(actId)!.push(rev);
                 }
+              }
 
-                let lastStepStatus = '';
-                if (lastExecutionData) {
-                  const lastStep = lastExecutionData.steps?.[lastExecutionData.steps?.length - 1];
-                  lastStepStatus = lastStep?.status;
-                  if (lastStepStatus === 'reject') {
-                    // A rejected step does not always carry a $last payload. When it is
-                    // null, Array.isArray(null) is false, so the else branch used to read
-                    // .message off null and throw inside the action handler.
-                    const lastError = lastExecutionData.data?.$last;
-                    // last activity because we sorted it desc(id)
-                    if (j === 0 && k === 0) {
-                      if (Array.isArray(lastError)) {
-                        lastStepErrorMessage = lastError[0]?.message ?? '';
-                      } else {
-                        lastStepErrorMessage = lastError?.message ?? '';
-                      }
-                      lastStepOperation = lastStep.operation;
+              for (let j = 0; j < activities.length; j++) {
+                const act = activities[j];
+                if (!act) continue;
+
+                const actRevs = revisionsByActivity.get(act.id) || [];
+                let isReject = false;
+                let stepErrorMessage = '';
+                let stepOperation = '';
+
+                for (let k = 0; k < actRevs.length; k++) {
+                  const revision = actRevs[k];
+                  if (!revision) continue;
+
+                  let lastExecutionData = revision.data;
+                  if (typeof lastExecutionData === 'string') {
+                    try {
+                      lastExecutionData = JSON.parse(lastExecutionData);
+                    } catch {}
+                  }
+
+                  if (lastExecutionData && typeof lastExecutionData === 'object') {
+                    const execObj = lastExecutionData as {
+                      steps?: Array<{ status?: string; operation?: string }>;
+                      data?: { $last?: { message?: string } | Array<{ message?: string }> };
+                    };
+                    const lastStep = execObj.steps?.[(execObj.steps?.length || 0) - 1];
+                    if (lastStep?.status === 'reject') {
+                      isReject = true;
+                      const lastError = execObj.data?.$last;
+                      stepErrorMessage = Array.isArray(lastError)
+                        ? (lastError[0]?.message ?? '')
+                        : (lastError?.message ?? '');
+                      stepOperation = lastStep?.operation || '';
+                      break;
                     }
                   }
                 }
 
-                if (lastStepStatus === 'reject') {
-                  errorCounter += 1;
-                } else if (lastStepStatus === 'resolve') {
-                  successCounter += 1;
+                if (isFirstActivity && j === 0) {
+                  if (isReject) {
+                    lastStepErrorMessage = stepErrorMessage;
+                    lastStepOperation = stepOperation;
+                  }
+                }
+
+                if (isReject) {
+                  evaluatedErrors += 1;
+                } else {
+                  evaluatedSuccesses += 1;
                 }
               }
+
+              isFirstActivity = false;
+              job.processedActivities += activities.length;
+              job.evaluatedErrors = evaluatedErrors;
+              job.evaluatedSuccesses = evaluatedSuccesses;
+
+              // Periodic progress persistence every 1000 activities
+              if (job.processedActivities % 1000 === 0) {
+                const interimPayload = {
+                  flow_manager_last_run_at: formatDirectusDateTime(lastRunAt),
+                  flow_manager_success_counter: evaluatedSuccesses,
+                  flow_manager_error_counter: evaluatedErrors,
+                  flow_manager_run_counter: evaluatedSuccesses + evaluatedErrors,
+                  flow_manager_last_run_message: lastStepErrorMessage,
+                  flow_manager_last_run_operation: lastStepOperation,
+                };
+                if (flow.metadata_id) {
+                  await database('flow_manager_metadata')
+                    .update(interimPayload)
+                    .where('id', flow.metadata_id);
+                }
+              }
+
+              // Cooperative event loop yield
+              await new Promise((resolve) => setTimeout(resolve, 5));
             }
+
+            if (job.cancelRequested) {
+              job.status = 'cancelled';
+              job.finishedAt = new Date().toISOString();
+              return;
+            }
+
+            // Final persistence for this flow
+            const finalPayload = {
+              flow_manager_last_run_at: formatDirectusDateTime(lastRunAt),
+              flow_manager_success_counter: evaluatedSuccesses,
+              flow_manager_error_counter: evaluatedErrors,
+              flow_manager_run_counter: Math.max(totalCount, evaluatedSuccesses + evaluatedErrors),
+              flow_manager_last_run_message: lastStepErrorMessage,
+              flow_manager_last_run_operation: lastStepOperation,
+            };
+
+            if (flow.metadata_id) {
+              await database('flow_manager_metadata')
+                .update(finalPayload)
+                .where('id', flow.metadata_id);
+            } else {
+              const metadataId = generateUUID();
+              await database('flow_manager_metadata').insert({
+                id: metadataId,
+                ...finalPayload,
+              });
+              await database('directus_flows')
+                .update({ flow_manager_metadata_id: metadataId })
+                .where('id', flow.id);
+              flow.metadata_id = metadataId;
+            }
+
+            job.completedFlows++;
           }
 
-          const payload = {
-            flow_manager_last_run_at: formatDirectusDateTime(lastRunAt),
-            flow_manager_success_counter: successCounter,
-            flow_manager_error_counter: errorCounter,
-            flow_manager_run_counter: successCounter + errorCounter,
-            flow_manager_last_run_message: lastStepErrorMessage,
-            flow_manager_last_run_operation: lastStepOperation,
-          };
-          if (flow.metadata_id) {
-            await database('flow_manager_metadata').update(payload).where('id', flow.metadata_id);
-          } else {
-            const metadataId = generateUUID();
-            await database('flow_manager_metadata').insert({
-              id: metadataId,
-              ...payload,
-            });
-            await database('directus_flows')
-              .update({ flow_manager_metadata_id: metadataId })
-              .where('id', flow.id);
-          }
+          job.status = 'completed';
+          job.finishedAt = new Date().toISOString();
+        } catch (err: unknown) {
+          logger.error(
+            `[flow-manager] Local sync error: ${err instanceof Error ? err.message : String(err)}`,
+          );
+          job.status = 'failed';
+          job.finishedAt = new Date().toISOString();
+          job.error = err instanceof Error ? err.message : String(err);
         }
-        res.status(200).send({
-          flows,
-        });
-      } catch (e: unknown) {
-        if (axios.isAxiosError(e)) {
-          res.status(500).send({
-            error: e.response?.data || e.message,
-            status: e.response?.status ?? e.status,
-          });
-        } else {
-          const error = e instanceof Error ? e.message : String(e);
-          res.status(500).send({
-            error,
-          });
-        }
-      }
+      });
     } else if (type === 'remote' && staticToken && url) {
       const urlValidation = validateRemoteUrl(url);
       if (!urlValidation.valid) {
@@ -286,6 +530,7 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
         return;
       }
       const remoteUrl = urlValidation.url;
+
       try {
         let currentUser: Record<string, unknown> | null = null;
         try {
@@ -299,7 +544,6 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
           );
           currentUser = data?.data || null;
         } catch {
-          // If remote instance fails on relational policy fields (e.g. Directus < 10.10), fallback to standard user & role fields
           const { data } = await axios.get(`${remoteUrl}/users/me?fields[]=*&fields[]=role.*`, {
             headers: {
               Authorization: `Bearer ${staticToken}`,
@@ -311,7 +555,6 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
         if (!currentUser) {
           throw new Error('User not found');
         }
-
         const isAdmin = checkAdminAccess(currentUser);
         if (!isAdmin) {
           res.status(401).send({
@@ -320,138 +563,460 @@ export default defineEndpoint((router, { database, services, getSchema, logger }
           return;
         }
 
-        const {
-          data: { data: flows },
-        } = await axios.get(
-          `${remoteUrl}/flows?fields[]=*&fields[]=flow_manager_metadata_id.*&limit=-1`,
-          {
-            headers: {
-              Authorization: `Bearer ${staticToken}`,
-            },
-          },
-        );
+        const jobKey = `remote:${remoteUrl}:${targetFlowId || 'all'}`;
+        const existingJob = activeSyncJobs.get(jobKey);
+        if (existingJob && existingJob.status === 'running') {
+          res.status(200).send({
+            success: true,
+            syncing: true,
+            message: 'Synchronization is already running in background.',
+            job: existingJob,
+          });
+          return;
+        }
 
-        for (let i = 0; i < flows.length; i++) {
-          const flow = flows[i];
-          let successCounter = 0;
-          let errorCounter = 0;
-          let lastStepErrorMessage = '';
-          let lastStepOperation = '';
-          const {
-            data: { data: activities },
-          } = await axios.get(
-            `${remoteUrl}/activity?fields[]=id&fields[]=timestamp&filter[_and][0][item][_eq]=${flow.id}&filter[_and][1][action][_eq]=run&filter[_and][2][collection][_eq]=directus_flows&limit=-1`,
-            {
-              headers: {
-                Authorization: `Bearer ${staticToken}`,
-              },
-            },
-          );
-          const lastRunAt: string | null = activities[0]?.timestamp || null;
+        const job: SyncJobStatus = {
+          id: jobKey,
+          type: 'remote',
+          targetFlowId,
+          status: 'running',
+          startedAt: new Date().toISOString(),
+          totalFlows: 0,
+          completedFlows: 0,
+          processedActivities: 0,
+          totalActivities: 0,
+          evaluatedErrors: 0,
+          evaluatedSuccesses: 0,
+        };
+        activeSyncJobs.set(jobKey, job);
 
-          for (let j = 0; j < activities.length; j++) {
-            const activity = activities[j];
-            if (activity) {
-              const {
-                data: { data: revisions },
-              } = await axios.get(
-                `${remoteUrl}/revisions?fields[]=data&filter[activity][_eq]=${activity.id}&limit=-1&sort=-id`,
-                {
-                  headers: {
-                    Authorization: `Bearer ${staticToken}`,
-                  },
+        // Return immediately so HTTP client does not timeout
+        res.status(200).send({
+          success: true,
+          syncing: true,
+          message: 'Synchronization started in background.',
+          jobId: jobKey,
+        });
+
+        // Background worker to process all items chunk by chunk without limit
+        setImmediate(async () => {
+          try {
+            const flowsFilter = targetFlowId ? `&filter[id][_eq]=${targetFlowId}` : '';
+            const {
+              data: { data: flows },
+            } = await axios.get(
+              `${remoteUrl}/flows?fields[]=*&fields[]=flow_manager_metadata_id.*&limit=-1${flowsFilter}`,
+              {
+                headers: {
+                  Authorization: `Bearer ${staticToken}`,
                 },
-              );
-              for (let k = 0; k < revisions.length; k++) {
-                const revision = revisions[k];
+                timeout: 30000,
+              },
+            );
 
-                let lastExecutionData = revision.data;
-                if (typeof lastExecutionData === 'string') {
+            if (!Array.isArray(flows) || flows.length === 0) {
+              job.status = 'completed';
+              job.finishedAt = new Date().toISOString();
+              return;
+            }
+
+            interface RemoteFlow {
+              id: string;
+              name?: string;
+              flow_manager_metadata_id?: {
+                id?: string;
+                flow_manager_success_counter?: number;
+                flow_manager_error_counter?: number;
+                flow_manager_run_counter?: number;
+              } | null;
+            }
+
+            interface RemoteRevision {
+              id?: number;
+              activity?: number | { id: number };
+              data?: unknown;
+            }
+
+            job.totalFlows = flows.length;
+
+            const persistRemoteMetadata = async (
+              flow: RemoteFlow,
+              payload: Record<string, unknown>,
+            ) => {
+              if (flow.flow_manager_metadata_id?.id) {
+                await axiosWithRetry({
+                  method: 'patch',
+                  url: `${remoteUrl}/items/flow_manager_metadata/${flow.flow_manager_metadata_id.id}`,
+                  data: payload,
+                  headers: { Authorization: `Bearer ${staticToken}` },
+                  timeout: 15000,
+                });
+              } else {
+                const { data: createdRes } = await axiosWithRetry({
+                  method: 'post',
+                  url: `${remoteUrl}/items/flow_manager_metadata`,
+                  data: payload,
+                  headers: { Authorization: `Bearer ${staticToken}` },
+                  timeout: 15000,
+                });
+                const createdData =
+                  (createdRes as { data?: { id: string }; id?: string })?.data ??
+                  (createdRes as { id?: string });
+                const metadataId = createdData?.id;
+                if (metadataId) {
+                  await axiosWithRetry({
+                    method: 'patch',
+                    url: `${remoteUrl}/flows/${flow.id}`,
+                    data: { flow_manager_metadata_id: metadataId },
+                    headers: { Authorization: `Bearer ${staticToken}` },
+                    timeout: 15000,
+                  });
+                  flow.flow_manager_metadata_id = { id: metadataId };
+                }
+              }
+            };
+
+            for (const flow of flows as RemoteFlow[]) {
+              if (job.cancelRequested) {
+                job.status = 'cancelled';
+                job.finishedAt = new Date().toISOString();
+                return;
+              }
+              job.currentFlowId = flow.id;
+              job.currentFlowName = flow.name || flow.id;
+              let totalCount = 0;
+              let latestActivityTimestamp: string | null = null;
+
+              try {
+                const { data: actRes } = await axiosWithRetry({
+                  method: 'get',
+                  url: `${remoteUrl}/activity?filter[_and][0][item][_eq]=${flow.id}&filter[_and][1][action][_eq]=run&filter[_and][2][collection][_eq]=directus_flows&fields[]=id&fields[]=timestamp&sort=-id&limit=1&meta=*`,
+                  headers: { Authorization: `Bearer ${staticToken}` },
+                  timeout: 15000,
+                });
+
+                const actObj = actRes as {
+                  data?: Array<{ timestamp?: string }>;
+                  meta?: { filter_count?: number; total_count?: number };
+                };
+                const initialActivities = actObj?.data ?? [];
+                latestActivityTimestamp = initialActivities[0]?.timestamp || null;
+
+                const remoteMeta = actObj?.meta;
+                const remoteCount = remoteMeta?.filter_count ?? remoteMeta?.total_count;
+
+                if (
+                  remoteCount !== undefined &&
+                  remoteCount !== null &&
+                  !Number.isNaN(Number(remoteCount))
+                ) {
+                  totalCount = Number(remoteCount);
+                } else {
+                  // Fallback to aggregate[count]=*
                   try {
-                    lastExecutionData = JSON.parse(lastExecutionData);
+                    const { data: aggRes } = await axiosWithRetry({
+                      method: 'get',
+                      url: `${remoteUrl}/activity?filter[_and][0][item][_eq]=${flow.id}&filter[_and][1][action][_eq]=run&filter[_and][2][collection][_eq]=directus_flows&aggregate[count]=*`,
+                      headers: { Authorization: `Bearer ${staticToken}` },
+                      timeout: 10000,
+                    });
+                    const countRows = (aggRes as { data?: unknown })?.data ?? aggRes;
+                    const countVal = Array.isArray(countRows)
+                      ? countRows[0]?.count
+                      : (countRows as { count?: unknown })?.count;
+                    const parsedCount =
+                      typeof countVal === 'object' && countVal !== null
+                        ? ((countVal as Record<string, unknown>).id ?? Object.values(countVal)[0])
+                        : countVal;
+                    if (
+                      parsedCount !== undefined &&
+                      parsedCount !== null &&
+                      !Number.isNaN(Number(parsedCount))
+                    ) {
+                      totalCount = Number(parsedCount);
+                    }
                   } catch {}
                 }
+              } catch {
+                totalCount = 0;
+              }
 
-                let lastStepStatus = '';
-                if (lastExecutionData) {
-                  const lastStep = lastExecutionData.steps?.[lastExecutionData.steps?.length - 1];
-                  lastStepStatus = lastStep?.status;
-                  if (lastStepStatus === 'reject') {
-                    // A rejected step does not always carry a $last payload. When it is
-                    // null, Array.isArray(null) is false, so the else branch used to read
-                    // .message off null and throw inside the action handler.
-                    const lastError = lastExecutionData.data?.$last;
-                    // last activity because we sorted it desc(id)
-                    if (j === 0 && k === 0) {
-                      if (Array.isArray(lastError)) {
-                        lastStepErrorMessage = lastError[0]?.message ?? '';
-                      } else {
-                        lastStepErrorMessage = lastError?.message ?? '';
+              job.totalActivities = totalCount;
+              job.processedActivities = 0;
+              job.evaluatedErrors = 0;
+              job.evaluatedSuccesses = 0;
+
+              let lastRunAt: string | null = latestActivityTimestamp;
+              let lastStepErrorMessage = '';
+              let lastStepOperation = '';
+              let evaluatedErrors = 0;
+              let evaluatedSuccesses = 0;
+              let isFirstActivity = true;
+              let lastSeenId: number | null = null;
+              let fallbackPage = 1;
+              let usePageFallback = false;
+
+              const CHUNK_SIZE = 100;
+
+              while (true) {
+                if (job.cancelRequested) {
+                  job.status = 'cancelled';
+                  job.finishedAt = new Date().toISOString();
+                  return;
+                }
+                let activities: Array<{ id: number; timestamp?: string }> = [];
+                let actUrl = `${remoteUrl}/activity?filter[_and][0][item][_eq]=${flow.id}&filter[_and][1][action][_eq]=run&filter[_and][2][collection][_eq]=directus_flows&fields[]=id&fields[]=timestamp&sort=-id&limit=${CHUNK_SIZE}`;
+                if (!usePageFallback && lastSeenId !== null) {
+                  actUrl += `&filter[_and][3][id][_lt]=${lastSeenId}`;
+                } else if (usePageFallback) {
+                  actUrl += `&page=${fallbackPage}`;
+                }
+
+                try {
+                  const { data: actPageRes } = await axiosWithRetry({
+                    method: 'get',
+                    url: actUrl,
+                    headers: { Authorization: `Bearer ${staticToken}` },
+                    timeout: 20000,
+                  });
+                  const pageObj = actPageRes as {
+                    data?: Array<{ id: number; timestamp?: string }>;
+                  };
+                  activities = pageObj?.data ?? (Array.isArray(actPageRes) ? actPageRes : []);
+                } catch {
+                  if (!usePageFallback && lastSeenId !== null) {
+                    usePageFallback = true;
+                    continue;
+                  }
+                  break;
+                }
+
+                if (!activities || activities.length === 0) {
+                  break;
+                }
+
+                const lastAct = activities[activities.length - 1];
+                if (lastAct?.id != null) {
+                  lastSeenId = lastAct.id;
+                }
+                fallbackPage++;
+
+                if (isFirstActivity) {
+                  lastRunAt = activities[0]?.timestamp || null;
+                }
+
+                const actIds = activities.map((a) => a.id);
+                let revisions: RemoteRevision[] = [];
+
+                // Batch query revisions for the chunk
+                try {
+                  const { data: revRes } = await axiosWithRetry({
+                    method: 'get',
+                    url: `${remoteUrl}/revisions?fields[]=id&fields[]=activity&fields[]=data&filter[activity][_in]=${actIds.join(
+                      ',',
+                    )}&sort=-id&limit=-1`,
+                    headers: { Authorization: `Bearer ${staticToken}` },
+                    timeout: 20000,
+                  });
+                  const rObj = revRes as { data?: RemoteRevision[] };
+                  revisions = Array.isArray(rObj?.data)
+                    ? rObj.data
+                    : Array.isArray(revRes)
+                      ? revRes
+                      : [];
+                } catch {
+                  try {
+                    const { data: revFallback } = await axiosWithRetry({
+                      method: 'get',
+                      url: `${remoteUrl}/revisions?fields[]=id&fields[]=activity&fields[]=data&filter[activity][id][_in]=${actIds.join(
+                        ',',
+                      )}&sort=-id&limit=-1`,
+                      headers: { Authorization: `Bearer ${staticToken}` },
+                      timeout: 20000,
+                    });
+                    const rObj = revFallback as { data?: RemoteRevision[] };
+                    revisions = Array.isArray(rObj?.data)
+                      ? rObj.data
+                      : Array.isArray(revFallback)
+                        ? revFallback
+                        : [];
+                  } catch {
+                    // Fallback to sub-batches of 20
+                    const subBatches = chunkArray(actIds, 20);
+                    for (const subBatch of subBatches) {
+                      const revPromises = subBatch.map(async (actId) => {
+                        try {
+                          const { data: singleRevRes } = await axiosWithRetry({
+                            method: 'get',
+                            url: `${remoteUrl}/revisions?fields[]=id&fields[]=activity&fields[]=data&filter[activity][_eq]=${actId}&sort=-id&limit=1`,
+                            headers: { Authorization: `Bearer ${staticToken}` },
+                            timeout: 10000,
+                          });
+                          const sObj = singleRevRes as { data?: RemoteRevision[] };
+                          return Array.isArray(sObj?.data)
+                            ? sObj.data
+                            : Array.isArray(singleRevRes)
+                              ? (singleRevRes as RemoteRevision[])
+                              : [];
+                        } catch {
+                          return [];
+                        }
+                      });
+                      const batchResults = await Promise.all(revPromises);
+                      for (const rList of batchResults) {
+                        revisions.push(...rList);
                       }
-                      lastStepOperation = lastStep.operation;
                     }
                   }
                 }
 
-                if (lastStepStatus === 'reject') {
-                  errorCounter += 1;
-                } else if (lastStepStatus === 'resolve') {
-                  successCounter += 1;
+                const revisionsByActivity = new Map<number, RemoteRevision[]>();
+                for (const rev of revisions) {
+                  const actId =
+                    typeof rev.activity === 'object' && rev.activity !== null
+                      ? (rev.activity as { id: number }).id
+                      : Number(rev.activity);
+                  if (!isNaN(actId)) {
+                    if (!revisionsByActivity.has(actId)) {
+                      revisionsByActivity.set(actId, []);
+                    }
+                    revisionsByActivity.get(actId)!.push(rev);
+                  }
                 }
-              }
-            }
-          }
 
-          const payload = {
-            flow_manager_last_run_at: formatDirectusDateTime(lastRunAt),
-            flow_manager_success_counter: successCounter,
-            flow_manager_error_counter: errorCounter,
-            flow_manager_run_counter: successCounter + errorCounter,
-            flow_manager_last_run_message: lastStepErrorMessage,
-            flow_manager_last_run_operation: lastStepOperation,
-          };
-          if (flow.flow_manager_metadata_id?.id) {
-            await axios.patch(
-              `${remoteUrl}/items/flow_manager_metadata/${flow.flow_manager_metadata_id.id}`,
-              payload,
-              {
-                headers: {
-                  Authorization: `Bearer ${staticToken}`,
-                },
-              },
+                for (let j = 0; j < activities.length; j++) {
+                  const act = activities[j];
+                  if (!act) continue;
+
+                  const actRevs = revisionsByActivity.get(act.id) || [];
+                  let isReject = false;
+                  let stepErrorMessage = '';
+                  let stepOperation = '';
+
+                  for (let k = 0; k < actRevs.length; k++) {
+                    const revision = actRevs[k];
+                    if (!revision) continue;
+
+                    let lastExecutionData = revision.data;
+                    if (typeof lastExecutionData === 'string') {
+                      try {
+                        lastExecutionData = JSON.parse(lastExecutionData);
+                      } catch {}
+                    }
+
+                    if (lastExecutionData && typeof lastExecutionData === 'object') {
+                      const execObj = lastExecutionData as {
+                        steps?: Array<{ status?: string; operation?: string }>;
+                        data?: { $last?: { message?: string } | Array<{ message?: string }> };
+                      };
+                      const lastStep = execObj.steps?.[(execObj.steps?.length || 0) - 1];
+                      if (lastStep?.status === 'reject') {
+                        isReject = true;
+                        const lastError = execObj.data?.$last;
+                        stepErrorMessage = Array.isArray(lastError)
+                          ? (lastError[0]?.message ?? '')
+                          : (lastError?.message ?? '');
+                        stepOperation = lastStep?.operation || '';
+                        break;
+                      }
+                    }
+                  }
+
+                  if (isFirstActivity && j === 0) {
+                    if (isReject) {
+                      lastStepErrorMessage = stepErrorMessage;
+                      lastStepOperation = stepOperation;
+                    }
+                  }
+
+                  if (isReject) {
+                    evaluatedErrors += 1;
+                  } else {
+                    evaluatedSuccesses += 1;
+                  }
+                }
+
+                isFirstActivity = false;
+                job.processedActivities += activities.length;
+                job.evaluatedErrors = evaluatedErrors;
+                job.evaluatedSuccesses = evaluatedSuccesses;
+
+                // Periodic progress update every 1000 activities
+                if (job.processedActivities % 1000 === 0) {
+                  try {
+                    await persistRemoteMetadata(flow, {
+                      flow_manager_last_run_at: formatDirectusDateTime(lastRunAt),
+                      flow_manager_success_counter: evaluatedSuccesses,
+                      flow_manager_error_counter: evaluatedErrors,
+                      flow_manager_run_counter: evaluatedSuccesses + evaluatedErrors,
+                      flow_manager_last_run_message: lastStepErrorMessage,
+                      flow_manager_last_run_operation: lastStepOperation,
+                    });
+                  } catch (err) {
+                    logger.warn(
+                      `[flow-manager] Failed interim metadata update for ${flow.id}: ${err}`,
+                    );
+                  }
+                }
+
+                // Cooperative yield between chunks
+                await new Promise((resolve) => setTimeout(resolve, 10));
+              }
+
+              if (job.cancelRequested) {
+                job.status = 'cancelled';
+                job.finishedAt = new Date().toISOString();
+                return;
+              }
+
+              // Final persistence for this flow
+              try {
+                await persistRemoteMetadata(flow, {
+                  flow_manager_last_run_at: formatDirectusDateTime(lastRunAt),
+                  flow_manager_success_counter: evaluatedSuccesses,
+                  flow_manager_error_counter: evaluatedErrors,
+                  flow_manager_run_counter: Math.max(
+                    totalCount,
+                    evaluatedSuccesses + evaluatedErrors,
+                  ),
+                  flow_manager_last_run_message: lastStepErrorMessage,
+                  flow_manager_last_run_operation: lastStepOperation,
+                });
+              } catch (err) {
+                logger.error(`[flow-manager] Failed final metadata update for ${flow.id}: ${err}`);
+              }
+
+              job.completedFlows++;
+            }
+
+            job.status = 'completed';
+            job.finishedAt = new Date().toISOString();
+          } catch (err: unknown) {
+            logger.error(
+              `[flow-manager] Remote sync error: ${err instanceof Error ? err.message : String(err)}`,
             );
-          } else {
-            const { data: createdMetadata } = await axios.post(
-              `${remoteUrl}/items/flow_manager_metadata`,
-              payload,
-              {
-                headers: {
-                  Authorization: `Bearer ${staticToken}`,
-                },
-              },
-            );
-            await axios.patch(
-              `${remoteUrl}/flows/${flow.id}`,
-              {
-                flow_manager_metadata_id: createdMetadata.id,
-              },
-              {
-                headers: {
-                  Authorization: `Bearer ${staticToken}`,
-                },
-              },
-            );
+            job.status = 'failed';
+            job.finishedAt = new Date().toISOString();
+            job.error = err instanceof Error ? err.message : String(err);
           }
-        }
-        res.status(200).send({
-          flows,
         });
       } catch (e: unknown) {
-        const error = e as { message: string };
-        res.status(500).send({
-          error: error.message || 'Internal server error',
-        });
+        if (axios.isAxiosError(e)) {
+          res.status(500).send({
+            error: e.response?.data || e.message,
+            status: e.response?.status ?? e.status,
+          });
+        } else {
+          const error = e as { message: string };
+          res.status(500).send({
+            error: error.message || 'Internal server error',
+          });
+        }
       }
+    } else {
+      res.status(400).send({
+        error: 'Invalid synchronization type or missing credentials',
+      });
     }
   });
 

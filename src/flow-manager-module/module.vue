@@ -19,6 +19,87 @@
     </template>
 
     <template v-if="isDatabaseUpdated">
+      <!-- Background Sync Progress Banner -->
+      <div v-if="activeSyncJob && activeSyncJob.status === 'running'" class="sync-progress-banner">
+        <v-notice type="info" icon="sync">
+          <div class="sync-notice-content">
+            <div class="sync-notice-header">
+              <v-progress-circular indeterminate small class="sync-spinner" />
+              <span class="sync-notice-title">
+                Recalculating Execution Counters in Background
+              </span>
+              <span v-if="activeSyncJob.currentFlowName" class="sync-flow-badge">
+                <v-icon name="bolt" small class="mr-1" />
+                {{ activeSyncJob.currentFlowName }}
+              </span>
+              <div class="sync-header-actions">
+                <span v-if="activeSyncJob.totalActivities > 0" class="sync-percentage">
+                  {{
+                    Math.min(
+                      100,
+                      Math.round(
+                        (activeSyncJob.processedActivities / activeSyncJob.totalActivities) * 100,
+                      ),
+                    )
+                  }}%
+                </span>
+                <v-button
+                  v-tooltip.bottom="'Cancel background sync'"
+                  x-small
+                  secondary
+                  class="sync-cancel-btn"
+                  :loading="isCancellingSync"
+                  @click="showCancelConfirmDialog = true"
+                >
+                  <v-icon name="close" x-small class="mr-1" />
+                  Cancel
+                </v-button>
+              </div>
+            </div>
+            <div class="sync-notice-details">
+              <span v-if="activeSyncJob.currentFlowName" class="sync-detail-stat sync-flow-stat">
+                Current Flow: <strong>{{ activeSyncJob.currentFlowName }}</strong>
+              </span>
+              <span v-if="activeSyncJob.currentFlowName" class="sync-detail-divider">•</span>
+              <span class="sync-detail-stat">
+                Processed: <strong>{{ activeSyncJob.processedActivities.toLocaleString() }}</strong>
+                <template v-if="activeSyncJob.totalActivities > 0">
+                  / {{ activeSyncJob.totalActivities.toLocaleString() }}
+                </template>
+              </span>
+              <span class="sync-detail-divider">•</span>
+              <span class="sync-detail-stat sync-success-stat">
+                Successes: <strong>{{ activeSyncJob.evaluatedSuccesses.toLocaleString() }}</strong>
+              </span>
+              <span class="sync-detail-divider">•</span>
+              <span class="sync-detail-stat sync-error-stat">
+                Errors: <strong>{{ activeSyncJob.evaluatedErrors.toLocaleString() }}</strong>
+              </span>
+              <template v-if="activeSyncJob.totalFlows > 1">
+                <span class="sync-detail-divider">•</span>
+                <span class="sync-detail-stat">
+                  Flows:
+                  <strong
+                    >{{ activeSyncJob.completedFlows }} / {{ activeSyncJob.totalFlows }}</strong
+                  >
+                </span>
+              </template>
+            </div>
+            <div v-if="activeSyncJob.totalActivities > 0" class="sync-progress-bar-container">
+              <div
+                class="sync-progress-bar-fill"
+                :style="{
+                  width: `${Math.min(
+                    100,
+                    (activeSyncJob.processedActivities / activeSyncJob.totalActivities) * 100,
+                  )}%`,
+                }"
+              />
+            </div>
+          </div>
+        </v-notice>
+      </div>
+
       <FlowBatchActions
         v-if="viewMode === 'LIST' || viewMode === 'TABLE'"
         v-model:show-select="showSelect"
@@ -221,6 +302,19 @@
         </template>
 
         <v-list>
+          <v-list-item
+            clickable
+            :disabled="isSyncingCounters || isSyncPolling"
+            @click="showSyncConfirmDialog = true"
+          >
+            <v-list-item-icon>
+              <v-icon name="sync" :class="{ 'spin-icon': isSyncPolling }" />
+            </v-list-item-icon>
+            <v-list-item-content>{{
+              isSyncPolling ? 'Syncing...' : 'Sync Counters'
+            }}</v-list-item-content>
+          </v-list-item>
+
           <v-list-item clickable :disabled="isReloading" @click="reload">
             <v-list-item-icon>
               <v-icon :name="isReloading ? 'sync' : 'refresh'" />
@@ -437,6 +531,60 @@
       @close="recipeExportDialog = false"
     />
 
+    <!-- Confirm Counter Sync Dialog -->
+    <v-dialog
+      :model-value="showSyncConfirmDialog"
+      max-width="500"
+      @update:model-value="showSyncConfirmDialog = false"
+    >
+      <v-card>
+        <v-card-title>Confirm Counter Synchronization</v-card-title>
+        <v-card-text>
+          <p>
+            Are you sure you want to synchronize execution counters for all flows on
+            <strong>{{
+              selectedCredential === 'local'
+                ? 'Local Directus'
+                : credentials.find((c) => c.id === selectedCredential)?.name || 'Remote Directus'
+            }}</strong
+            >?
+          </p>
+          <p class="mt-2 text-subdued">
+            This will scan historical execution logs in the background and recalculate success and
+            failure counters.
+          </p>
+        </v-card-text>
+        <v-card-actions class="justify-end dialog-footer">
+          <v-button secondary @click="showSyncConfirmDialog = false">Cancel</v-button>
+          <v-button :loading="isSyncingCounters" @click="confirmSyncCounters">Start Sync</v-button>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Confirm Cancel Sync Dialog -->
+    <v-dialog
+      :model-value="showCancelConfirmDialog"
+      max-width="480"
+      @update:model-value="showCancelConfirmDialog = false"
+    >
+      <v-card>
+        <v-card-title>Cancel Counter Synchronization?</v-card-title>
+        <v-card-text>
+          <p>Are you sure you want to cancel the counter recalculation?</p>
+          <p class="mt-2 text-subdued">
+            The process will stop gracefully. Execution counters processed up to this point will be
+            preserved.
+          </p>
+        </v-card-text>
+        <v-card-actions class="justify-end dialog-footer">
+          <v-button secondary @click="showCancelConfirmDialog = false">Keep Syncing</v-button>
+          <v-button kind="danger" :loading="isCancellingSync" @click="confirmCancelSync">
+            Cancel Sync
+          </v-button>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <v-overlay :value="true" />
   </private-view>
 </template>
@@ -448,6 +596,7 @@ import {
   defineComponent,
   nextTick,
   onMounted,
+  onBeforeUnmount,
   provide,
   ref,
   toRefs,
@@ -463,9 +612,28 @@ import type {
   IFlow,
   IFlowOptions,
   IFolder,
+  ISyncFlowCounter,
   ProcessingItem,
 } from '../types';
 import { ENDPOINT_EXTENSION_NAME, TRIGGER_TYPES } from '../constants';
+
+interface SyncJob {
+  id: string;
+  type: 'local' | 'remote';
+  targetFlowId?: string;
+  status: 'running' | 'completed' | 'failed' | 'cancelled';
+  startedAt: string;
+  finishedAt?: string;
+  totalFlows: number;
+  completedFlows: number;
+  currentFlowId?: string;
+  currentFlowName?: string;
+  processedActivities: number;
+  totalActivities: number;
+  evaluatedErrors: number;
+  evaluatedSuccesses: number;
+  error?: string;
+}
 
 import { formatDate, formatDateLong } from '../utils/date.util';
 import { maskingText } from '../utils/string.util';
@@ -1740,12 +1908,164 @@ export default defineComponent({
       viewMode.value = 'TIMELINE';
     }
 
+    const isSyncingCounters = ref(false);
+    const activeSyncJob = ref<SyncJob | null>(null);
+    const isSyncPolling = ref(false);
+    const showSyncConfirmDialog = ref(false);
+    const isCancellingSync = ref(false);
+    const showCancelConfirmDialog = ref(false);
+    let syncPollTimer: ReturnType<typeof setInterval> | null = null;
+
+    async function checkSyncStatus() {
+      try {
+        const res = await api.get(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/sync-status`);
+        const jobs = res.data?.jobs as SyncJob[] | undefined;
+        const runningJob = jobs?.find((j) => {
+          if (j.status !== 'running') return false;
+          if (selectedCredential.value === 'local') {
+            return j.type === 'local';
+          }
+          return j.type === 'remote';
+        });
+
+        if (runningJob) {
+          activeSyncJob.value = runningJob;
+          if (!syncPollTimer) {
+            startSyncPolling();
+          }
+        } else {
+          if (activeSyncJob.value && activeSyncJob.value.status === 'running') {
+            const matchingJob = jobs?.find((j) => j.id === activeSyncJob.value?.id);
+            if (matchingJob?.status === 'cancelled') {
+              notify.info(
+                notificationsStore,
+                'Sync Cancelled',
+                'Flow counter recalculation was cancelled.',
+              );
+            } else if (matchingJob?.status === 'failed') {
+              notify.error(
+                notificationsStore,
+                'Sync Failed',
+                matchingJob.error || 'Flow counter recalculation failed.',
+              );
+            } else {
+              notify.success(
+                notificationsStore,
+                'Sync Complete',
+                'Background flow counter recalculation has finished.',
+              );
+            }
+            await reloadFlow();
+            await reloadTabularFlow();
+          }
+          activeSyncJob.value = null;
+          stopSyncPolling();
+        }
+      } catch {
+        stopSyncPolling();
+      }
+    }
+
+    function startSyncPolling() {
+      if (syncPollTimer) return;
+      isSyncPolling.value = true;
+      syncPollTimer = setInterval(checkSyncStatus, 2500);
+    }
+
+    function stopSyncPolling() {
+      if (syncPollTimer) {
+        clearInterval(syncPollTimer);
+        syncPollTimer = null;
+      }
+      isSyncPolling.value = false;
+    }
+
+    async function syncCounters() {
+      if (isSyncingCounters.value || isSyncPolling.value) return;
+      isSyncingCounters.value = true;
+      try {
+        let payload: ISyncFlowCounter = {
+          type: 'local',
+        };
+        if (selectedCredential.value !== 'local') {
+          const cred = credentials.value.find((c) => c.id === selectedCredential.value);
+          if (!cred) {
+            throw new Error('Credential not found');
+          }
+          payload = {
+            type: 'remote',
+            url: cred.url,
+            staticToken: cred.staticToken,
+          };
+        }
+
+        const syncRes = await api.post(
+          `/${ENDPOINT_EXTENSION_NAME}/flow-manager/sync-counters`,
+          payload,
+          { timeout: 300000 },
+        );
+        const isBackground = syncRes?.data?.syncing;
+        notify.success(
+          notificationsStore,
+          isBackground ? 'Sync Started' : 'Counters Synchronized',
+          syncRes?.data?.message || 'Execution counters recalculation started in background.',
+        );
+        await checkSyncStatus();
+        startSyncPolling();
+        await reloadFlow();
+        await reloadTabularFlow();
+      } catch (err: unknown) {
+        const errorMsg = formatConnectionError(err, 'Failed to synchronize flow counters.');
+        notify.error(notificationsStore, 'Sync Failed', errorMsg);
+      } finally {
+        isSyncingCounters.value = false;
+      }
+    }
+
+    function confirmSyncCounters() {
+      showSyncConfirmDialog.value = false;
+      syncCounters();
+    }
+
+    async function cancelSync() {
+      if (isCancellingSync.value) return;
+      isCancellingSync.value = true;
+      try {
+        const jobId = activeSyncJob.value?.id;
+        await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/cancel-sync`, { jobId });
+        notify.info(
+          notificationsStore,
+          'Sync Cancelled',
+          'Flow counter recalculation was stopped.',
+        );
+        activeSyncJob.value = null;
+        stopSyncPolling();
+        await reloadFlow();
+        await reloadTabularFlow();
+      } catch (err: unknown) {
+        const errorMsg = formatConnectionError(err, 'Failed to cancel synchronization.');
+        notify.error(notificationsStore, 'Cancel Failed', errorMsg);
+      } finally {
+        isCancellingSync.value = false;
+        showCancelConfirmDialog.value = false;
+      }
+    }
+
+    function confirmCancelSync() {
+      cancelSync();
+    }
+
     onMounted(async () => {
       getServerInfo();
+      checkSyncStatus();
       await ensureDatabase();
       if (!flowFieldConfiguration.value.isConfigured || !isSettingFieldConfigured.value) {
         settingDialog.value = true;
       }
+    });
+
+    onBeforeUnmount(() => {
+      stopSyncPolling();
     });
 
     return {
@@ -1908,6 +2228,16 @@ export default defineComponent({
       activateSelectedItems,
       deactivateSelectedItems,
       onProceedBatchStatus,
+      activeSyncJob,
+      isSyncPolling,
+      isSyncingCounters,
+      syncCounters,
+      showSyncConfirmDialog,
+      confirmSyncCounters,
+      isCancellingSync,
+      showCancelConfirmDialog,
+      cancelSync,
+      confirmCancelSync,
     };
   },
 });
@@ -2108,5 +2438,135 @@ export default defineComponent({
 
 code {
   color: coral;
+}
+
+.sync-progress-banner {
+  margin-bottom: 20px;
+
+  .sync-notice-content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .sync-notice-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    .sync-spinner {
+      --v-progress-circular-color: var(--theme--primary);
+    }
+
+    .sync-notice-title {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--theme--foreground);
+    }
+
+    .sync-flow-badge {
+      display: inline-flex;
+      align-items: center;
+      background: var(--theme--primary-background, rgba(var(--primary-rgb, 100, 116, 139), 0.12));
+      color: var(--theme--primary);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      max-width: 240px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .sync-header-actions {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .sync-percentage {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--theme--primary);
+    }
+
+    .sync-cancel-btn {
+      --v-button-color: var(--theme--danger, #ef4444);
+      --v-button-background-color-hover: rgba(239, 68, 68, 0.1);
+      font-weight: 600;
+    }
+  }
+
+  .sync-notice-details {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--theme--foreground-subdued);
+
+    .sync-detail-divider {
+      opacity: 0.5;
+    }
+
+    .sync-flow-stat strong {
+      color: var(--theme--primary);
+    }
+
+    .sync-success-stat strong {
+      color: var(--theme--success, #10b981);
+    }
+
+    .sync-error-stat strong {
+      color: var(--theme--danger, #ef4444);
+    }
+  }
+
+  .sync-progress-bar-container {
+    width: 100%;
+    height: 6px;
+    background-color: var(--theme--border-color-subdued, rgba(0, 0, 0, 0.08));
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 4px;
+  }
+
+  .sync-progress-bar-fill {
+    height: 100%;
+    background-color: var(--theme--primary);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+  }
+}
+
+.spin-icon {
+  animation: spin-kf 1.2s linear infinite;
+}
+
+@keyframes spin-kf {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.dialog-footer {
+  padding: 16px 24px;
+  gap: 8px;
+}
+
+.text-subdued {
+  color: var(--theme--foreground-subdued);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.mt-2 {
+  margin-top: 8px;
 }
 </style>

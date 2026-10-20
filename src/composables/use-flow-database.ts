@@ -496,8 +496,20 @@ export function useFlowDatabase(options: UseFlowDatabaseOptions) {
       }
     }
     try {
-      await api.post(`/${ENDPOINT_EXTENSION_NAME}/flow-manager/sync-counters`, payload);
-      notify.success(notificationsStore, 'Flow counters synced successfully');
+      const syncRes = (await api.post(
+        `/${ENDPOINT_EXTENSION_NAME}/flow-manager/sync-counters`,
+        payload,
+      )) as {
+        data?: { syncing?: boolean; message?: string };
+      };
+      const isBackground = syncRes?.data?.syncing;
+      notify.success(
+        notificationsStore,
+        syncRes?.data?.message ||
+          (isBackground
+            ? 'Flow counters sync started in background'
+            : 'Flow counters synced successfully'),
+      );
       reloadFlow();
       reloadTabularFlow();
       settingDialog.value = false;

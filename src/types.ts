@@ -330,6 +330,7 @@ export interface ISyncFlowCounter {
   type: 'local' | 'remote';
   url?: string;
   staticToken?: string;
+  flowId?: string;
 }
 
 export interface FlowManagerUtilsContext {
